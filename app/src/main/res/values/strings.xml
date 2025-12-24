@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">ZTOESchedule</string>
+
+    <!-- Widget strings -->
+    <string name="widget_power_status_description">Компактний віджет статусу світла</string>
+    <string name="widget_detailed_schedule_description">Детальний віджет з графіком відключень</string>
+    <string name="widget_not_configured">Налаштуйте адресу в додатку</string>
+    <string name="widget_loading">Завантаження…</string>
+    <string name="widget_error">Помилка завантаження</string>
+</resources>
