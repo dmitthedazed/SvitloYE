@@ -1,21 +1,24 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# --- Android & Compose ---
+-keepattributes SourceFile,LineNumberTable
+-keep class androidx.compose.** { *; }
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# --- Retrofit ---
+-keepattributes Signature
+-keepattributes Exceptions
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# --- GSON & Data Models ---
+# Prevent R8 from stripping serialization/deserialization code
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+-keepattributes *Annotation*
+-keepattributes Signature
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep all data classes used by GSON
+-keep class com.occaecat.ztoeschedule.data.model.** { *; }
+
+# --- WorkManager ---
+-keep class androidx.work.Worker { *; }
+-keep class androidx.work.ListenableWorker { *; }
