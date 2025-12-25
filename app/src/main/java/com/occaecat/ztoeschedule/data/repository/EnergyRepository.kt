@@ -10,6 +10,7 @@ import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.FontScale
+import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 import com.occaecat.ztoeschedule.data.network.GpvApiService
 import com.occaecat.ztoeschedule.domain.ScheduleDomainLogic
 import kotlinx.coroutines.async
@@ -424,8 +425,6 @@ class EnergyRepository(
     suspend fun clearPreferences(): Unit {
         preferencesManager.clearPreferences()
     }
-
-import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 
     // ========== Theme Settings ==========
 
