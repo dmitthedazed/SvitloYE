@@ -26,7 +26,7 @@ class StatusNotificationService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "power_status_channel"
-        private const val CHANNEL_NAME = "Статус Електропостачання"
+        private const val CHANNEL_NAME = "СвітлоЄ? Статус"
         private const val NOTIFICATION_ID = 2001
         private const val UPDATE_INTERVAL_MS = 60_000L // 1 minute
 
@@ -81,7 +81,7 @@ class StatusNotificationService : Service() {
     private fun createNotificationChannel() {
         val importance = NotificationManager.IMPORTANCE_LOW
         val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
-            description = "Постійне відображення статусу електропостачання"
+            description = "Постійне відображення наявності світла"
             setShowBadge(false)
         }
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SvitloYe Zhytomyr"
+rootProject.name = "SvitloYe-ZT"
 include(":app")
  

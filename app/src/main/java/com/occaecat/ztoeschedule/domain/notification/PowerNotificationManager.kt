@@ -20,7 +20,7 @@ class PowerNotificationManager(private val context: Context) {
 
     companion object {
         private const val CHANNEL_ID = "power_schedule_channel"
-        private const val CHANNEL_NAME = "Графік Електропостачання"
+        private const val CHANNEL_NAME = "СвітлоЄ? Сповіщення"
         private const val NOTIFICATION_ID = 1001
     }
 

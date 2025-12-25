@@ -28,7 +28,7 @@ class NotificationWorker(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "Статус оновлення",
+                "СвітлоЄ? Оновлення",
                 NotificationManager.IMPORTANCE_LOW
             )
             val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
