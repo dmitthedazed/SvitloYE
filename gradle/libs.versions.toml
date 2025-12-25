@@ -18,9 +18,9 @@ hilt = "2.51.1"
 ksp = "2.0.21-1.0.27"
 hiltNavigationCompose = "1.2.0"
 hiltWork = "1.2.0"
-googleServices = "4.4.0"
+googleServices = "4.4.4"
 firebaseCrashlyticsPlugin = "2.9.9"
-firebaseBom = "32.7.0"
+firebaseBom = "34.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
