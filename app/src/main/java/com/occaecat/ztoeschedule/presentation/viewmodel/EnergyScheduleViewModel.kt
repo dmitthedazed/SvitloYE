@@ -20,11 +20,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.TimeZone
 
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
 /**
  * ViewModel for managing energy outage schedule state.
  * Optimized to prevent infinite network loops during priority changes.
  */
-class EnergyScheduleViewModel(
+@HiltViewModel
+class EnergyScheduleViewModel @Inject constructor(
     private val repository: EnergyRepository,
     private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver
 ) : ViewModel() {

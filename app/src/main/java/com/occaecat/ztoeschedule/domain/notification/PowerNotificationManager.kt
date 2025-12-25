@@ -13,10 +13,13 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.occaecat.ztoeschedule.MainActivity
 
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+
 /**
  * Manages notifications for power outage alerts
  */
-class PowerNotificationManager(private val context: Context) {
+class PowerNotificationManager @Inject constructor(@ApplicationContext private val context: Context) {
 
     companion object {
         private const val CHANNEL_ID = "power_schedule_channel"

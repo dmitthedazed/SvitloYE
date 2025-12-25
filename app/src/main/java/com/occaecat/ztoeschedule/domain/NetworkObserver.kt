@@ -10,10 +10,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+
 /**
  * Observes network connectivity changes.
  */
-class NetworkObserver(context: Context) {
+class NetworkObserver @Inject constructor(@ApplicationContext context: Context) {
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 

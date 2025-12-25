@@ -31,16 +31,15 @@ import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModelFactory
 import kotlinx.coroutines.delay
 
+import androidx.hilt.navigation.compose.hiltViewModel
+
 /**
  * New main screen with bottom navigation and history-based back navigation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
-    val context = LocalContext.current
-    val viewModel: EnergyScheduleViewModel = viewModel(
-        factory = EnergyScheduleViewModelFactory(context)
-    )
+    val viewModel: EnergyScheduleViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
 

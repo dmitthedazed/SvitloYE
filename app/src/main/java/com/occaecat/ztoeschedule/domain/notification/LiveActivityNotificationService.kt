@@ -36,10 +36,14 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.TimeZone
 
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
 /**
  * Service providing a "Live Activity" style notification for Android.
  * Locked to Europe/Kyiv timezone for accurate schedule representation.
  */
+@AndroidEntryPoint
 class LiveActivityNotificationService : Service() {
 
     companion object {
@@ -64,16 +68,15 @@ class LiveActivityNotificationService : Service() {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private lateinit var preferencesManager: EnergyPreferencesManager
-    private lateinit var repository: EnergyRepository
+    
+    @Inject lateinit var preferencesManager: EnergyPreferencesManager
+    @Inject lateinit var repository: EnergyRepository
+    
     private var updateJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
-        preferencesManager = EnergyPreferencesManager(applicationContext)
-        val addressStorage = com.occaecat.ztoeschedule.data.local.AddressStorage(applicationContext)
-        repository = EnergyRepository(RetrofitClient.apiService, preferencesManager, addressStorage)
-
+        
         createNotificationChannel()
         
         try {

@@ -49,4 +49,5 @@ captures/
 # Secrets and keys
 *.jks
 *.keystore
+keystore.properties
 google-services.json

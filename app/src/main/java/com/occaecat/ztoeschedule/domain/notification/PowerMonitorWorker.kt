@@ -12,22 +12,22 @@ import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.TimeZone
 
+import androidx.hilt.work.HiltWorker
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+
 /**
  * Background worker that checks power schedule and sends notifications.
  * Uses Europe/Kyiv timezone for all internal logic to match the utility provider.
  */
-class PowerMonitorWorker(
-    context: Context,
-    params: WorkerParameters
+@HiltWorker
+class PowerMonitorWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters,
+    private val preferencesManager: EnergyPreferencesManager,
+    private val repository: EnergyRepository,
+    private val notificationManager: PowerNotificationManager
 ) : CoroutineWorker(context, params) {
-
-    private val preferencesManager = EnergyPreferencesManager(applicationContext)
-    private val repository = EnergyRepository(
-        RetrofitClient.apiService, 
-        preferencesManager, 
-        com.occaecat.ztoeschedule.data.local.AddressStorage(applicationContext)
-    )
-    private val notificationManager = PowerNotificationManager(applicationContext)
 
     override suspend fun doWork(): Result {
         try {

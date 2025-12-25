@@ -9,9 +9,14 @@ import android.app.NotificationManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 
-class NotificationWorker(
-    context: Context,
-    params: WorkerParameters
+import androidx.hilt.work.HiltWorker
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+
+@HiltWorker
+class NotificationWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
