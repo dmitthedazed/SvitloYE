@@ -7,6 +7,9 @@ import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Schedule
 import com.occaecat.ztoeschedule.data.model.ScheduleMessagePart
 import com.occaecat.ztoeschedule.data.model.Street
+import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
+import com.occaecat.ztoeschedule.data.model.FontScale
 import com.occaecat.ztoeschedule.data.network.GpvApiService
 import com.occaecat.ztoeschedule.domain.ScheduleDomainLogic
 import kotlinx.coroutines.async
@@ -418,13 +421,11 @@ class EnergyRepository(
     /**
      * Clear all saved preferences
      */
-    suspend fun clearPreferences() {
+    suspend fun clearPreferences(): Unit {
         preferencesManager.clearPreferences()
     }
 
-import com.occaecat.ztoeschedule.data.model.ColorTheme
-import com.occaecat.ztoeschedule.data.model.DisplayMode
-import com.occaecat.ztoeschedule.data.model.FontScale
+import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 
     // ========== Theme Settings ==========
 
@@ -440,6 +441,10 @@ import com.occaecat.ztoeschedule.data.model.FontScale
         return preferencesManager.fontScaleFlow
     }
 
+    fun getSmartNotificationSettingsFlow(): Flow<SmartNotificationSettings> {
+        return preferencesManager.smartNotificationSettingsFlow
+    }
+
     suspend fun setDisplayMode(mode: DisplayMode) {
         preferencesManager.setDisplayMode(mode)
     }
@@ -450,6 +455,10 @@ import com.occaecat.ztoeschedule.data.model.FontScale
 
     suspend fun setFontScale(scale: FontScale) {
         preferencesManager.setFontScale(scale)
+    }
+
+    suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) {
+        preferencesManager.saveSmartNotificationSettings(settings)
     }
 
     // ========== Notification Settings ==========
@@ -529,4 +538,3 @@ data class ParsedHouseNumber(
     val pidcherga: Int,
     val originalAddressId: String
 )
-

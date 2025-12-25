@@ -252,6 +252,18 @@ class EnergyScheduleViewModel @Inject constructor(
         _uiState.update { it.copy(isTimeOutOfSync = false) }
     }
 
+import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
+
+/**
+ * ViewModel for managing energy outage schedule state.
+ * Optimized to prevent infinite network loops during priority changes.
+ */
+@HiltViewModel
+class EnergyScheduleViewModel @Inject constructor(
+    private val repository: EnergyRepository,
+    private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver
+) : ViewModel() {
+// ... existing code ...
     // ========== Onboarding & Settings ========== 
 
     private fun loadNotificationSettings() {
@@ -276,8 +288,27 @@ class EnergyScheduleViewModel @Inject constructor(
                     _uiState.update { it.copy(liveActivityEnabled = enabled) }
                 }
             }
+            launch {
+                repository.getSmartNotificationSettingsFlow().collect { settings ->
+                    _uiState.update { it.copy(smartNotificationSettings = settings) }
+                }
+            }
         }
     }
+
+    // ... existing setters ...
+
+    fun setSmartNotificationSettings(settings: SmartNotificationSettings) {
+        viewModelScope.launch { repository.saveSmartNotificationSettings(settings) }
+    }
+// ... existing code ...
+data class UiState(
+    // ... existing fields ...
+    val displayMode: DisplayMode = DisplayMode.COMFORTABLE,
+    val colorTheme: ColorTheme = ColorTheme.SYSTEM,
+    val fontScale: FontScale = FontScale.NORMAL,
+    val smartNotificationSettings: SmartNotificationSettings = SmartNotificationSettings()
+)
 
     // ========== Theme Settings ==========
 
@@ -515,5 +546,6 @@ data class UiState(
     val lastLoadFailed: Boolean = false,
     val displayMode: DisplayMode = DisplayMode.COMFORTABLE,
     val colorTheme: ColorTheme = ColorTheme.SYSTEM,
-    val fontScale: FontScale = FontScale.NORMAL
+    val fontScale: FontScale = FontScale.NORMAL,
+    val smartNotificationSettings: SmartNotificationSettings = SmartNotificationSettings()
 )

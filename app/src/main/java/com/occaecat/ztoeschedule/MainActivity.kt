@@ -20,6 +20,10 @@ import javax.inject.Inject
 
 import com.occaecat.ztoeschedule.data.model.FontScale
 
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+
 /**
  * Main Activity for ZTOE Schedule Application
  *
@@ -34,6 +38,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Setup dynamic app shortcuts
+        setupAppShortcuts()
 
         // Schedule notification monitoring
         NotificationScheduler.schedulePowerMonitoring(this)
@@ -55,5 +62,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun setupAppShortcuts() {
+        val shortcut = ShortcutInfoCompat.Builder(this, "check_status")
+            .setShortLabel("Перевірити статус")
+            .setLongLabel("Перевірити статус електропостачання")
+            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_bolt))
+            .setIntent(
+                Intent(this, MainActivity::class.java).apply {
+                    action = Intent.ACTION_VIEW
+                    putExtra("shortcut_id", "check_status")
+                }
+            )
+            .build()
+
+        ShortcutManagerCompat.addDynamicShortcuts(this, listOf(shortcut))
     }
 }

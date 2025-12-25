@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.map
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.FontScale
+import com.occaecat.ztoeschedule.data.model.NotificationModelsKt
+import com.occaecat.ztoeschedule.data.model.PriorityMode
+import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 
 /**
  * Extension property to create DataStore instance
@@ -50,6 +53,12 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KEY_STATUS_NOTIFICATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("status_notification_enabled")
         private val KEY_LIVE_ACTIVITY_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("live_activity_enabled")
 
+        // Smart Notification Settings
+        private val KEY_NOTIF_QUIET_START = intPreferencesKey("notif_quiet_start")
+        private val KEY_NOTIF_QUIET_END = intPreferencesKey("notif_quiet_end")
+        private val KEY_NOTIF_WORKDAY = androidx.datastore.preferences.core.booleanPreferencesKey("notif_workday")
+        private val KEY_NOTIF_PRIORITY = intPreferencesKey("notif_priority")
+
         // Theme settings
         private val KEY_DISPLAY_MODE = intPreferencesKey("display_mode")
         private val KEY_COLOR_THEME = intPreferencesKey("color_theme")
@@ -84,6 +93,31 @@ class EnergyPreferencesManager(private val context: Context) {
         val ordinal = preferences[KEY_FONT_SCALE] ?: FontScale.NORMAL.ordinal
         FontScale.entries.getOrElse(ordinal) { FontScale.NORMAL }
     }.distinctUntilChanged()
+
+    /**
+     * Flow that emits smart notification settings
+     */
+    val smartNotificationSettingsFlow: Flow<SmartNotificationSettings> = context.dataStore.data.map { preferences ->
+        val start = preferences[KEY_NOTIF_QUIET_START] ?: 22
+        val end = preferences[KEY_NOTIF_QUIET_END] ?: 7
+        val workday = preferences[KEY_NOTIF_WORKDAY] ?: false
+        val priorityOrdinal = preferences[KEY_NOTIF_PRIORITY] ?: PriorityMode.SMART.ordinal
+        val priority = PriorityMode.entries.getOrElse(priorityOrdinal) { PriorityMode.SMART }
+
+        SmartNotificationSettings(start, end, workday, priority)
+    }.distinctUntilChanged()
+
+    /**
+     * Save smart notification settings
+     */
+    suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_NOTIF_QUIET_START] = settings.quietHoursStart
+            preferences[KEY_NOTIF_QUIET_END] = settings.quietHoursEnd
+            preferences[KEY_NOTIF_WORKDAY] = settings.workdayMode
+            preferences[KEY_NOTIF_PRIORITY] = settings.priorityMode.ordinal
+        }
+    }
 
     /**
      * Save display mode
