@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">СвітлоЄ? Житомир</string>
+    <string name="package_name">com.occaecat.svitloye</string>
 
     <!-- Widget strings -->
     <string name="widget_power_status_description">Компактний віджет статусу світла</string>
