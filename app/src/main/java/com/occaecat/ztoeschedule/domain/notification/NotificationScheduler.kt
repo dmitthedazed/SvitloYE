@@ -3,6 +3,7 @@ package com.occaecat.ztoeschedule.domain.notification
 import android.content.Context
 import android.util.Log
 import androidx.work.*
+import com.occaecat.ztoeschedule.BuildConfig
 import java.util.concurrent.TimeUnit
 
 /**
@@ -41,7 +42,9 @@ object NotificationScheduler {
                 workRequest
             )
 
-        Log.d(TAG, "Power monitoring scheduled")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Power monitoring scheduled")
+        }
     }
 
     /**
@@ -51,7 +54,9 @@ object NotificationScheduler {
         WorkManager.getInstance(context)
             .cancelUniqueWork(WORK_NAME)
 
-        Log.d(TAG, "Power monitoring cancelled")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Power monitoring cancelled")
+        }
     }
 
     /**
@@ -82,7 +87,9 @@ object NotificationScheduler {
         WorkManager.getInstance(context)
             .enqueue(workRequest)
 
-        Log.d(TAG, "Immediate power check triggered")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Immediate power check triggered")
+        }
     }
 }
 
