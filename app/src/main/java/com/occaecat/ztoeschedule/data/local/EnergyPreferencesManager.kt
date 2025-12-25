@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.map
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.FontScale
-import com.occaecat.ztoeschedule.data.model.NotificationModelsKt
 import com.occaecat.ztoeschedule.data.model.PriorityMode
 import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 
@@ -63,6 +62,9 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KEY_DISPLAY_MODE = intPreferencesKey("display_mode")
         private val KEY_COLOR_THEME = intPreferencesKey("color_theme")
         private val KEY_FONT_SCALE = intPreferencesKey("font_scale")
+        
+        // Cache
+        private val KEY_LAST_SCHEDULE_HASH = stringPreferencesKey("last_schedule_hash")
 
         // Default values
         private const val DEFAULT_CHERGA = 0
@@ -106,6 +108,22 @@ class EnergyPreferencesManager(private val context: Context) {
 
         SmartNotificationSettings(start, end, workday, priority)
     }.distinctUntilChanged()
+
+    /**
+     * Flow that emits the last known schedule hash
+     */
+    val lastScheduleHashFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_LAST_SCHEDULE_HASH]
+    }.distinctUntilChanged()
+
+    /**
+     * Save last schedule hash
+     */
+    suspend fun saveLastScheduleHash(hash: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_LAST_SCHEDULE_HASH] = hash
+        }
+    }
 
     /**
      * Save smart notification settings

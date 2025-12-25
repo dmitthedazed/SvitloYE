@@ -13,6 +13,7 @@ import java.util.Calendar
 import java.util.TimeZone
 
 import androidx.hilt.work.HiltWorker
+import com.occaecat.ztoeschedule.data.model.PriorityMode
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -45,6 +46,23 @@ class PowerMonitorWorker @AssistedInject constructor(
 
             result.onSuccess { data ->
                 val groupedSchedules = ScheduleMapper.getGroupedSchedule(data.schedules)
+                
+                // Check for schedule updates
+                val currentHash = data.schedules.hashCode().toString()
+                val lastHash = preferencesManager.lastScheduleHashFlow.first()
+                
+                if (lastHash != null && lastHash != currentHash) {
+                    notificationManager.sendPowerChangeNotification(
+                        "📢 Графік оновлено",
+                        "Житомиробленерго оновило розклад відключень",
+                        false
+                    )
+                }
+                
+                if (lastHash != currentHash) {
+                    preferencesManager.saveLastScheduleHash(currentHash)
+                }
+
                 val currentStatus = getCurrentGroupedStatus(groupedSchedules)
                 if (currentStatus != null) {
                     checkAndNotify(currentStatus, advanceMinutes)
@@ -85,8 +103,6 @@ class PowerMonitorWorker @AssistedInject constructor(
             parts[0].toInt() * 60 + parts[1].toInt()
         } catch (e: Exception) { null }
     }
-
-import com.occaecat.ztoeschedule.data.model.PriorityMode
 
     private suspend fun checkAndNotify(currentStatus: GroupedSchedule, advanceMinutes: Int) {
         val settings = preferencesManager.smartNotificationSettingsFlow.first()

@@ -1,5 +1,7 @@
 package com.occaecat.ztoeschedule.presentation.ui.home
 
+import android.content.Intent
+import android.provider.CalendarContract
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
@@ -15,20 +17,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.model.Schedule
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import com.occaecat.ztoeschedule.domain.TimeUtils
-import java.util.Calendar
-import java.util.TimeZone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-import androidx.compose.ui.res.stringResource
-import com.occaecat.ztoeschedule.R
+import java.util.Calendar
+import java.util.TimeZone
 
 /**
  * Home tab - shows current status, address, and schedule.
@@ -315,9 +318,6 @@ private fun calculateTimeRemainingAbsolute(group: GroupedSchedule, nowMs: Long):
     } catch (e: Exception) { "—" }
 }
 
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-
 @Composable
 private fun AddressInfoCard(
     cityName: String,
@@ -414,10 +414,6 @@ private fun formatScheduleForSharing(
     }
     append("Сгенеровано додатком СвітлоЄ? Житомир")
 }
-
-import android.content.Intent
-import android.provider.CalendarContract
-import androidx.compose.ui.platform.LocalContext
 
 @Composable
 private fun ScheduleListItemSimple(

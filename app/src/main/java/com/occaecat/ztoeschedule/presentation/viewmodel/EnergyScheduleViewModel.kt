@@ -4,14 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.occaecat.ztoeschedule.data.model.Address
 import com.occaecat.ztoeschedule.data.model.City
+import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
+import com.occaecat.ztoeschedule.data.model.FontScale
 import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Schedule
 import com.occaecat.ztoeschedule.data.model.ScheduleMessagePart
+import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
+import com.occaecat.ztoeschedule.domain.model.getUserMessage
+import com.occaecat.ztoeschedule.domain.model.toAppError
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,13 +26,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.TimeZone
-
-import com.occaecat.ztoeschedule.data.model.ColorTheme
-import com.occaecat.ztoeschedule.data.model.DisplayMode
-import com.occaecat.ztoeschedule.data.model.FontScale
-import com.occaecat.ztoeschedule.domain.model.getUserMessage
-import com.occaecat.ztoeschedule.domain.model.toAppError
-import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 /**
@@ -97,12 +97,12 @@ class EnergyScheduleViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 // Global initialization error handler
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
                         isInitialLoadComplete = true,
                         lastLoadFailed = true,
                         error = e.toAppError().getUserMessage()
-                    ) 
+                    )
                 }
                 startRetryTimer()
             }
@@ -110,13 +110,13 @@ class EnergyScheduleViewModel @Inject constructor(
     }
 
     fun retryLoading() {
-        _uiState.update { 
+        _uiState.update {
             it.copy(
                 retryCountdown = 0, 
                 lastLoadFailed = false, 
                 isInitialLoadComplete = false,
                 isLoading = true 
-            ) 
+            )
         }
         val cherga = _uiState.value.savedCherga
         val pidcherga = _uiState.value.savedPidcherga
@@ -252,18 +252,6 @@ class EnergyScheduleViewModel @Inject constructor(
         _uiState.update { it.copy(isTimeOutOfSync = false) }
     }
 
-import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
-
-/**
- * ViewModel for managing energy outage schedule state.
- * Optimized to prevent infinite network loops during priority changes.
- */
-@HiltViewModel
-class EnergyScheduleViewModel @Inject constructor(
-    private val repository: EnergyRepository,
-    private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver
-) : ViewModel() {
-// ... existing code ...
     // ========== Onboarding & Settings ========== 
 
     private fun loadNotificationSettings() {
@@ -296,21 +284,7 @@ class EnergyScheduleViewModel @Inject constructor(
         }
     }
 
-    // ... existing setters ...
-
-    fun setSmartNotificationSettings(settings: SmartNotificationSettings) {
-        viewModelScope.launch { repository.saveSmartNotificationSettings(settings) }
-    }
-// ... existing code ...
-data class UiState(
-    // ... existing fields ...
-    val displayMode: DisplayMode = DisplayMode.COMFORTABLE,
-    val colorTheme: ColorTheme = ColorTheme.SYSTEM,
-    val fontScale: FontScale = FontScale.NORMAL,
-    val smartNotificationSettings: SmartNotificationSettings = SmartNotificationSettings()
-)
-
-    // ========== Theme Settings ==========
+    // ========== Theme Settings ========== 
 
     private fun loadThemeSettings() {
         viewModelScope.launch {
@@ -358,6 +332,10 @@ data class UiState(
 
     fun setLiveActivityEnabled(enabled: Boolean) {
         viewModelScope.launch { repository.setLiveActivityEnabled(enabled) }
+    }
+
+    fun setSmartNotificationSettings(settings: SmartNotificationSettings) {
+        viewModelScope.launch { repository.saveSmartNotificationSettings(settings) }
     }
 
     fun completeOnboarding() {
