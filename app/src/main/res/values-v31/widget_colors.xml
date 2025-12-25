@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_background_neutral">@android:color/system_neutral1_100</color>
+    <color name="widget_background_accent">@android:color/system_accent1_100</color>
+    <color name="widget_text_primary">@android:color/system_neutral1_900</color>
+    <color name="widget_text_secondary">@android:color/system_neutral1_600</color>
+    
+    <!-- Dynamic status colors (approximated mappings) -->
+    <!-- We use fixed pastel colors for status to ensure semantic meaning (Green/Red) 
+         preserving Material You tonal palettes if possible, but Red/Green is semantic.
+         We can mix system colors with semantic meaning. -->
+    <color name="widget_status_positive">@android:color/system_accent3_200</color> <!-- Often greenish -->
+    <color name="widget_status_negative">@android:color/system_accent1_200</color> <!-- Often reddish/purple -->
+    <color name="widget_status_warning">@android:color/system_accent2_200</color>
+    <color name="widget_on_status">@android:color/system_neutral1_900</color>
+</resources>

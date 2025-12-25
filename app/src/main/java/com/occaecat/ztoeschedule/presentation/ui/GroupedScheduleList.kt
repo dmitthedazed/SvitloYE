@@ -10,9 +10,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
+import com.occaecat.ztoeschedule.domain.TimeUtils
 
 /**
  * Компонент для отображения сгруппированного графика отключений
@@ -41,6 +43,10 @@ private fun GroupedScheduleItem(
     schedule: GroupedSchedule,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val systemStart = TimeUtils.formatToSystemTime(context, schedule.startTime)
+    val systemEnd = TimeUtils.formatToSystemTime(context, schedule.endTime)
+
     val indicatorColor = if (schedule.isLightOn) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -65,7 +71,6 @@ private fun GroupedScheduleItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Вертикальная цветная полоса
             Box(
                 modifier = Modifier
                     .width(4.dp)
@@ -76,20 +81,17 @@ private fun GroupedScheduleItem(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Основная информация
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                // Временной диапазон
                 Text(
-                    text = "${schedule.startTime} — ${schedule.endTime}",
+                    text = "$systemStart — $systemEnd",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Статус
                 Text(
                     text = schedule.displayText,
                     style = MaterialTheme.typography.bodyMedium,
@@ -97,7 +99,6 @@ private fun GroupedScheduleItem(
                 )
             }
 
-            // Продолжительность
             if (schedule.formattedDuration.isNotEmpty()) {
                 Column(
                     horizontalAlignment = Alignment.End
@@ -128,6 +129,10 @@ fun GroupedScheduleItemWithCircle(
     schedule: GroupedSchedule,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val systemStart = TimeUtils.formatToSystemTime(context, schedule.startTime)
+    val systemEnd = TimeUtils.formatToSystemTime(context, schedule.endTime)
+
     val indicatorColor = if (schedule.isLightOn) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -143,7 +148,6 @@ fun GroupedScheduleItemWithCircle(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Круглый индикатор
             Surface(
                 modifier = Modifier.size(16.dp),
                 shape = CircleShape,
@@ -152,7 +156,6 @@ fun GroupedScheduleItemWithCircle(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Временной диапазон и статус
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -160,7 +163,7 @@ fun GroupedScheduleItemWithCircle(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = schedule.startTime,
+                        text = systemStart,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -170,7 +173,7 @@ fun GroupedScheduleItemWithCircle(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = schedule.endTime,
+                        text = systemEnd,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -213,6 +216,10 @@ fun CompactGroupedScheduleItem(
     schedule: GroupedSchedule,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val systemStart = TimeUtils.formatToSystemTime(context, schedule.startTime)
+    val systemEnd = TimeUtils.formatToSystemTime(context, schedule.endTime)
+
     val indicatorColor = if (schedule.isLightOn) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -225,7 +232,6 @@ fun CompactGroupedScheduleItem(
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Маленький индикатор
         Box(
             modifier = Modifier
                 .size(8.dp)
@@ -235,15 +241,13 @@ fun CompactGroupedScheduleItem(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Время
         Text(
-            text = "${schedule.startTime} — ${schedule.endTime}",
+            text = "$systemStart — $systemEnd",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f)
         )
 
-        // Продолжительность
         if (schedule.formattedDuration.isNotEmpty()) {
             Text(
                 text = schedule.formattedDuration,
@@ -254,4 +258,3 @@ fun CompactGroupedScheduleItem(
         }
     }
 }
-

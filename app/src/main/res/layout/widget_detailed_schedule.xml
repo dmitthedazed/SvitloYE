@@ -1,106 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 4x2 Detailed Schedule Widget -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/transparent"
+    android:background="@drawable/widget_background_status_dynamic"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="16dp">
 
-    <!-- Card container with rounded corners -->
+    <!-- Header -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/widget_card_green"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <!-- Status Header -->
+        <ImageView
+            android:id="@+id/widget_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_launcher_foreground"
+            android:contentDescription="@null"
+            android:tint="@color/widget_on_status" />
+
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <!-- Status icon -->
-            <LinearLayout
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/widget_icon_circle"
-                android:gravity="center"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/widget_status_icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="✓"
-                    android:textColor="@color/widget_power_on"
-                    android:textSize="20sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/widget_status_container"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/widget_status_text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Світло є"
-                    android:textColor="@color/white"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/widget_address_text"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:alpha="0.85"
-                    android:text="вул. Шевченка, 25"
-                    android:textColor="@color/white"
-                    android:textSize="11sp" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- Divider -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="12dp"
-            android:alpha="0.2"
-            android:background="@color/white" />
-
-        <!-- Schedule Title -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="📋 Графік на сьогодні"
-            android:textColor="@color/white"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-
-        <!-- Schedule List -->
-        <TextView
-            android:id="@+id/widget_schedule_text"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
             android:layout_weight="1"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="top"
-            android:lineSpacingExtra="4dp"
-            android:text="Є 00:00-08:00\nНемає 08:00-12:00\nЄ 12:00-16:00"
-            android:textColor="@color/white"
-            android:textSize="12sp" />
+            android:layout_marginStart="12dp"
+            android:orientation="vertical">
 
+            <TextView
+                android:id="@+id/widget_status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Status"
+                android:textColor="@color/widget_on_status"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_address_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Address"
+                android:textColor="@color/widget_on_status"
+                android:alpha="0.85"
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
     </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginVertical="12dp"
+        android:background="@color/widget_on_status"
+        android:alpha="0.2" />
+
+    <!-- Schedule List -->
+    <TextView
+        android:id="@+id/widget_schedule_text"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fontFamily="sans-serif"
+        android:lineSpacingExtra="4dp"
+        android:text="Schedule..."
+        android:textColor="@color/widget_on_status"
+        android:textSize="13sp" />
 
 </LinearLayout>

@@ -15,50 +15,235 @@ import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.TimeZone
 
 /**
- * ViewModel for managing energy outage schedule state
- *
- * Follows MVVM architecture pattern, maintaining UI state and coordinating
- * with the repository for data operations.
+ * ViewModel for managing energy outage schedule state.
+ * Optimized to prevent infinite network loops during priority changes.
  */
 class EnergyScheduleViewModel(
-    private val repository: EnergyRepository
+    private val repository: EnergyRepository,
+    private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver
 ) : ViewModel() {
 
-    // Private mutable state
     private val _uiState = MutableStateFlow(UiState())
-
-    // Public immutable state for UI observation
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    // Guard to prevent redundant network calls during preference sync
+    private var lastLoadedAddressId: String? = null
+
     init {
-        // Load saved selection on initialization
-        loadSavedSelection()
-        // Load onboarding status
-        loadOnboardingStatus()
-        // Load notification settings
-        loadNotificationSettings()
-    }
-
-    // ========== Onboarding ==========
-
-    /**
-     * Load onboarding completion status
-     */
-    private fun loadOnboardingStatus() {
         viewModelScope.launch {
-            repository.getOnboardingCompletedFlow().collect { completed ->
-                _uiState.update { it.copy(onboardingCompleted = completed) }
+            try {
+                // Observe network status
+                launch {
+                    networkObserver.isConnected.collect { connected ->
+                        val wasOffline = !_uiState.value.isConnected
+                        _uiState.update { it.copy(isConnected = connected) }
+                        
+                        // Auto-retry if we were offline and now connected
+                        if (connected && wasOffline) {
+                            retryLoading()
+                        }
+                    }
+                }
+
+                // Start loading peripheral settings
+                launch { loadNotificationSettings() }
+                launch { loadSavedAddresses() }
+                launch { checkTimeSync() }
+                
+                // Wait for critical data
+                launch {
+                    combine(
+                        repository.getOnboardingCompletedFlow(),
+                        repository.getSavedSelectionFlow()
+                    ) { completed, selection ->
+                        Pair(completed, selection)
+                    }.collect { (completed, selection) ->
+                        _uiState.update {
+                            it.copy(
+                                onboardingCompleted = completed,
+                                hasSavedSelection = selection != null,
+                                savedRemName = selection?.remName ?: "",
+                                savedCityName = selection?.cityName ?: "",
+                                savedStreetName = selection?.streetName ?: "",
+                                savedAddressName = selection?.addressName ?: "",
+                                savedCherga = selection?.cherga ?: 0,
+                                savedPidcherga = selection?.pidcherga ?: 0,
+                                isInitialLoadComplete = true
+                            )
+                        }
+                        
+                        // CRITICAL: Only load if Address ID changed or it's the first load
+                        if (selection != null && selection.addressId != lastLoadedAddressId) {
+                            lastLoadedAddressId = selection.addressId
+                            loadScheduleWithMessages(selection.cherga, selection.pidcherga)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Global initialization error handler
+                _uiState.update { 
+                    it.copy(
+                        isInitialLoadComplete = true,
+                        lastLoadFailed = true,
+                        error = "Помилка ініціалізації: ${e.message}"
+                    ) 
+                }
+                startRetryTimer()
             }
         }
     }
 
-    /**
-     * Load notification settings
-     */
+    fun retryLoading() {
+        _uiState.update { 
+            it.copy(
+                retryCountdown = 0, 
+                lastLoadFailed = false, 
+                isInitialLoadComplete = false,
+                isLoading = true 
+            ) 
+        }
+        val cherga = _uiState.value.savedCherga
+        val pidcherga = _uiState.value.savedPidcherga
+        
+        if (cherga > 0) {
+            loadScheduleWithMessages(cherga, pidcherga)
+        } else {
+            // If no address selected, try reloading basic lists
+            loadRemList()
+            loadSavedAddresses()
+            checkTimeSync()
+        }
+    }
+
+    private var retryJob: kotlinx.coroutines.Job? = null
+
+    private fun startRetryTimer() {
+        if (retryJob?.isActive == true) return
+        
+        retryJob = viewModelScope.launch {
+            _uiState.update { it.copy(lastLoadFailed = true) }
+            for (i in 30 downTo 1) {
+                _uiState.update { it.copy(retryCountdown = i) }
+                kotlinx.coroutines.delay(1000)
+            }
+            if (_uiState.value.lastLoadFailed) {
+                retryLoading()
+            }
+        }
+    }
+
+    private fun checkTimeSync() {
+        viewModelScope.launch {
+            repository.getServerTime().onSuccess { serverMs ->
+                val deviceMs = System.currentTimeMillis()
+                val diffMinutes = Math.abs(serverMs - deviceMs) / 60000
+                if (diffMinutes > 5) {
+                    _uiState.update { it.copy(isTimeOutOfSync = true) }
+                }
+                _uiState.update { it.copy(lastLoadFailed = false) }
+            }.onFailure {
+                startRetryTimer()
+            }
+        }
+    }
+
+    // ========== Address Management ========== 
+
+    fun loadSavedAddresses() {
+        viewModelScope.launch {
+            val addresses = repository.getSavedAddresses()
+            val sorted = addresses.sortedBy { it.priority }
+            
+            val currentAddressIds = _uiState.value.savedAddresses.map { "${it.cherga}_${it.pidcherga}" }
+            val newAddressIds = sorted.map { "${it.cherga}_${it.pidcherga}" }
+            
+            _uiState.update { it.copy(savedAddresses = sorted) }
+            
+            // Only refresh statuses if the set of queues/sub-queues has changed
+            // or if the status map is empty.
+            if (newAddressIds != currentAddressIds || _uiState.value.addressStatuses.isEmpty()) {
+                refreshAllStatuses(sorted)
+            }
+        }
+    }
+
+    private fun refreshAllStatuses(addresses: List<com.occaecat.ztoeschedule.data.model.SavedAddress>) {
+        if (addresses.isEmpty()) {
+            _uiState.update { it.copy(addressStatuses = emptyMap()) }
+            return
+        }
+        
+        viewModelScope.launch {
+            val statusMap = mutableMapOf<String, GroupedSchedule?>()
+            // Launch status updates sequentially or with controlled parallelism to avoid quota issues
+            addresses.forEach { address ->
+                repository.getSchedule(address.cherga, address.pidcherga).onSuccess { schedules ->
+                    val grouped = ScheduleMapper.getGroupedSchedule(schedules)
+                    statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(grouped)
+                }
+            }
+            _uiState.update { it.copy(addressStatuses = statusMap) }
+        }
+    }
+
+    fun addSavedAddress(
+        name: String, iconName: String, remId: String, remName: String,
+        cityId: String, cityName: String, streetId: String, streetName: String,
+        addressId: String, addressName: String, cherga: Int, pidcherga: Int
+    ) {
+        viewModelScope.launch {
+            val currentAddresses = repository.getSavedAddresses()
+            if (currentAddresses.any { it.addressId == addressId }) {
+                _uiState.update { it.copy(error = "Ця адреса вже додана", isAddingNewAddress = false) }
+                return@launch
+            }
+
+            val address = com.occaecat.ztoeschedule.data.model.SavedAddress(
+                name = name, iconName = iconName, priority = currentAddresses.size + 1,
+                remId = remId, remName = remName, cityId = cityId, cityName = cityName,
+                streetId = streetId, streetName = streetName, addressId = addressId,
+                addressName = addressName, cherga = cherga, pidcherga = pidcherga
+            )
+            repository.saveNewAddress(address)
+            loadSavedAddresses()
+            _uiState.update { it.copy(isAddingNewAddress = false) }
+        }
+    }
+
+    fun updateAddressesOrder(list: List<com.occaecat.ztoeschedule.data.model.SavedAddress>) {
+        viewModelScope.launch {
+            repository.reorderAddresses(list)
+            loadSavedAddresses()
+        }
+    }
+
+    fun deleteSavedAddress(id: String) {
+        viewModelScope.launch {
+            repository.deleteAddress(id)
+            loadSavedAddresses()
+        }
+    }
+
+    fun startAddingAddress() {
+        _uiState.update { it.copy(isAddingNewAddress = true) }
+    }
+
+    fun cancelAddingAddress() {
+        _uiState.update { it.copy(isAddingNewAddress = false) }
+    }
+
+    fun dismissTimeSyncWarning() {
+        _uiState.update { it.copy(isTimeOutOfSync = false) }
+    }
+
+    // ========== Onboarding & Settings ========== 
+
     private fun loadNotificationSettings() {
         viewModelScope.launch {
             launch {
@@ -71,12 +256,35 @@ class EnergyScheduleViewModel(
                     _uiState.update { it.copy(notificationAdvanceMinutes = minutes) }
                 }
             }
+            launch {
+                repository.getStatusNotificationEnabledFlow().collect { enabled ->
+                    _uiState.update { it.copy(statusNotificationEnabled = enabled) }
+                }
+            }
+            launch {
+                repository.getLiveActivityEnabledFlow().collect { enabled ->
+                    _uiState.update { it.copy(liveActivityEnabled = enabled) }
+                }
+            }
         }
     }
 
-    /**
-     * Mark onboarding as completed
-     */
+    fun setNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.setNotificationsEnabled(enabled) }
+    }
+
+    fun setNotificationAdvanceMinutes(minutes: Int) {
+        viewModelScope.launch { repository.setNotificationAdvanceMinutes(minutes) }
+    }
+
+    fun setStatusNotificationEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.setStatusNotificationEnabled(enabled) }
+    }
+
+    fun setLiveActivityEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.setLiveActivityEnabled(enabled) }
+    }
+
     fun completeOnboarding() {
         viewModelScope.launch {
             repository.setOnboardingCompleted()
@@ -84,9 +292,6 @@ class EnergyScheduleViewModel(
         }
     }
 
-    /**
-     * Reset onboarding to allow user to go through setup again
-     */
     fun resetOnboarding() {
         viewModelScope.launch {
             repository.resetOnboarding()
@@ -94,277 +299,121 @@ class EnergyScheduleViewModel(
         }
     }
 
-    // ========== Selection Chain Methods ==========
+    // ========== Data Loading ========== 
 
-    /**
-     * Load list of REMs (first step in selection chain)
-     */
     fun loadRemList() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-
-            repository.getRemList()
-                .onSuccess { rems ->
-                    _uiState.update { it.copy(remList = rems, isLoading = false) }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(error = error.message, isLoading = false) }
-                }
+            repository.getRemList().onSuccess { rems ->
+                _uiState.update { it.copy(remList = rems, isLoading = false, lastLoadFailed = false) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                startRetryTimer()
+            }
         }
     }
 
-    /**
-     * Load list of cities for selected REM
-     */
     fun loadCityList(remId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-
-            repository.getCityList(remId)
-                .onSuccess { cities ->
-                    _uiState.update { it.copy(cityList = cities, isLoading = false) }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(error = error.message, isLoading = false) }
-                }
+            repository.getCityList(remId).onSuccess { cities ->
+                _uiState.update { it.copy(cityList = cities, isLoading = false, lastLoadFailed = false) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                startRetryTimer()
+            }
         }
     }
 
-    /**
-     * Load list of streets for selected city
-     */
     fun loadStreetList(cityId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-
-            repository.getStreetList(cityId)
-                .onSuccess { streets ->
-                    _uiState.update { it.copy(streetList = streets, isLoading = false) }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(error = error.message, isLoading = false) }
-                }
+            repository.getStreetList(cityId).onSuccess { streets ->
+                _uiState.update { it.copy(streetList = streets, isLoading = false, lastLoadFailed = false) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                startRetryTimer()
+            }
         }
     }
 
-    /**
-     * Load list of addresses for selected street
-     */
     fun loadAddressList(streetId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-
-            repository.getAddressList(streetId)
-                .onSuccess { addresses ->
-                    // Parse all house numbers for the UI
-                    val parsedHouses = repository.getAllParsedHouseNumbers(addresses)
-                    _uiState.update {
-                        it.copy(
-                            addressList = addresses,
-                            parsedHouseNumbers = parsedHouses,
-                            filteredHouseNumbers = parsedHouses,
-                            isLoading = false
-                        )
-                    }
+            repository.getAddressList(streetId).onSuccess { addresses ->
+                val parsedHouses = repository.getAllParsedHouseNumbers(addresses)
+                _uiState.update {
+                    it.copy(addressList = addresses, parsedHouseNumbers = parsedHouses, filteredHouseNumbers = parsedHouses, isLoading = false, lastLoadFailed = false)
                 }
-                .onFailure { error ->
-                    _uiState.update { it.copy(error = error.message, isLoading = false) }
-                }
-        }
-    }
-
-    /**
-     * Filter house numbers based on search query
-     * @param query The search text to filter by
-     */
-    fun filterHouseNumbers(query: String) {
-        _uiState.update { state ->
-            val filtered = if (query.isBlank()) {
-                state.parsedHouseNumbers
-            } else {
-                state.parsedHouseNumbers.filter {
-                    it.houseNumber.contains(query, ignoreCase = true)
-                }
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                startRetryTimer()
             }
-            state.copy(
-                houseNumberSearchQuery = query,
-                filteredHouseNumbers = filtered
-            )
         }
     }
 
-    /**
-     * Clear house number search
-     */
+    fun filterHouseNumbers(query: String) {
+        _uiState.update {
+            val filtered = if (query.isBlank()) it.parsedHouseNumbers else it.parsedHouseNumbers.filter { it.houseNumber.contains(query, ignoreCase = true) }
+            it.copy(houseNumberSearchQuery = query, filteredHouseNumbers = filtered)
+        }
+    }
+
     fun clearHouseNumberSearch() {
-        _uiState.update { state ->
-            state.copy(
-                houseNumberSearchQuery = "",
-                filteredHouseNumbers = state.parsedHouseNumbers
-            )
-        }
+        _uiState.update { it.copy(houseNumberSearchQuery = "", filteredHouseNumbers = it.parsedHouseNumbers) }
     }
 
-    // ========== Message Processing Methods ==========
-
-    /**
-     * Process message parts into a formatted string
-     * - Sorts by ID
-     * - Joins with newlines
-     * - Cleans HTML entities
-     *
-     * @param messages List of ScheduleMessagePart from API
-     * @return Formatted string ready for display
-     */
-    fun formatMessages(messages: List<ScheduleMessagePart>): String {
-        if (messages.isEmpty()) return ""
-
-        return messages
-            .sortedBy { it.id }
-            .joinToString("\n") { it.text }
-            .cleanHtmlEntities()
-    }
-
-    /**
-     * Clean HTML entities from string
-     * Replaces common HTML entities with their actual characters
-     */
-    private fun String.cleanHtmlEntities(): String {
-        return this
-            .replace("&quot;", "\"")
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&nbsp;", " ")
-            .replace("&#39;", "'")
-            .replace("&apos;", "'")
-    }
-
-    // ========== Schedule Methods ==========
-
-    /**
-     * Load schedule and messages for the given queue identifiers
-     * Fetches both data sources simultaneously using coroutines
-     */
     fun loadScheduleWithMessages(cherga: Int, pidcherga: Int) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-
-            repository.getScheduleWithMessages(cherga, pidcherga)
-                .onSuccess { data ->
-                    val currentStatus = repository.getCurrentStatus(data.schedules)
-                    val formattedMessage = formatMessages(data.messages)
-                    val groupedSchedule = ScheduleMapper.getGroupedSchedule(data.schedules)
-
-                    _uiState.update {
-                        it.copy(
-                            scheduleList = data.schedules,
-                            groupedSchedule = groupedSchedule,
-                            infoMessages = data.messages,
-                            formattedMessage = formattedMessage,
-                            currentStatus = currentStatus,
-                            isLoading = false
-                        )
-                    }
-                    // Save the queue identifiers
-                    repository.saveQueueIdentifiers(cherga, pidcherga)
+            repository.getScheduleWithMessages(cherga, pidcherga).onSuccess { data ->
+                val currentStatus = repository.getCurrentStatus(data.schedules)
+                val formattedMessage = formatMessages(data.messages)
+                val groupedSchedule = ScheduleMapper.getGroupedSchedule(data.schedules)
+                val now = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                
+                _uiState.update {
+                    it.copy(
+                        scheduleList = data.schedules,
+                        groupedSchedule = groupedSchedule,
+                        infoMessages = data.messages,
+                        formattedMessage = formattedMessage,
+                        currentStatus = currentStatus,
+                        lastUpdateTime = now,
+                        isLoading = false,
+                        lastLoadFailed = false,
+                        retryCountdown = 0,
+                        isInitialLoadComplete = true
+                    )
                 }
-                .onFailure { error ->
-                    _uiState.update { it.copy(error = error.message, isLoading = false) }
-                }
-        }
-    }
-
-    /**
-     * Refresh current status based on existing schedule data
-     * Useful for periodic updates without re-fetching data
-     */
-    fun refreshCurrentStatus() {
-        _uiState.update { state ->
-            val currentStatus = repository.getCurrentStatus(state.scheduleList)
-            state.copy(currentStatus = currentStatus)
-        }
-    }
-
-    /**
-     * Load saved selection and fetch schedule if available
-     * Automatically loads schedule on app start if user has saved selection
-     */
-    private fun loadSavedSelection() {
-        viewModelScope.launch {
-            repository.getSavedSelectionFlow().collect { savedSelection ->
-                savedSelection?.let { selection ->
-                    // Update UI state with saved selection info
-                    _uiState.update {
-                        it.copy(
-                            hasSavedSelection = true,
-                            savedRemName = selection.remName ?: "",
-                            savedCityName = selection.cityName ?: "",
-                            savedStreetName = selection.streetName ?: "",
-                            savedAddressName = selection.addressName,
-                            savedCherga = selection.cherga,
-                            savedPidcherga = selection.pidcherga
-                        )
-                    }
-
-                    // Auto-load schedule with saved data
-                    if (selection.cherga > 0 && selection.pidcherga > 0) {
-                        loadScheduleWithMessages(selection.cherga, selection.pidcherga)
-                    }
-                } ?: run {
-                    _uiState.update { it.copy(hasSavedSelection = false) }
-                }
+                repository.saveQueueIdentifiers(cherga, pidcherga)
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.message, isLoading = false) }
+                if (!_uiState.value.isConnected) startRetryTimer()
             }
         }
     }
 
-    /**
-     * Save complete selection chain
-     * Call this when user selects an address
-     */
-    fun saveSelection(
-        remId: String?,
-        remName: String?,
-        cityId: String?,
-        cityName: String?,
-        streetId: String?,
-        streetName: String?,
-        addressId: String,
-        addressName: String,
-        cherga: Int,
-        pidcherga: Int
-    ) {
+    fun formatMessages(messages: List<ScheduleMessagePart>): String {
+        if (messages.isEmpty()) return ""
+        return messages.sortedBy { it.id }.joinToString("\n") { it.text }.cleanHtmlEntities()
+    }
+
+    private fun String.cleanHtmlEntities(): String = this.replace("&quot;", "\"").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ").replace("&#39;", "'").replace("&apos;", "'")
+
+    fun saveSelection(remId: String?, remName: String?, cityId: String?, cityName: String?, streetId: String?, streetName: String?, addressId: String, addressName: String, cherga: Int, pidcherga: Int, customName: String = "Дім", iconName: String = "home") {
         viewModelScope.launch {
-            repository.saveCompleteSelection(
-                remId = remId,
-                remName = remName,
-                cityId = cityId,
-                cityName = cityName,
-                streetId = streetId,
-                streetName = streetName,
-                addressId = addressId,
-                addressName = addressName,
-                cherga = cherga,
-                pidcherga = pidcherga
-            )
-            // Update UiState with saved address info
-            _uiState.update {
-                it.copy(
-                    hasSavedSelection = true,
-                    savedRemName = remName ?: "",
-                    savedCityName = cityName ?: "",
-                    savedStreetName = streetName ?: "",
-                    savedAddressName = addressName,
-                    savedCherga = cherga,
-                    savedPidcherga = pidcherga
-                )
+            repository.saveCompleteSelection(remId, remName, cityId, cityName, streetId, streetName, addressId, addressName, cherga, pidcherga)
+            val currentAddresses = repository.getSavedAddresses()
+            if (!currentAddresses.any { it.addressId == addressId }) {
+                val newAddr = com.occaecat.ztoeschedule.data.model.SavedAddress(name = customName, iconName = iconName, priority = currentAddresses.size + 1, remId = remId ?: "", remName = remName ?: "", cityId = cityId ?: "", cityName = cityName ?: "", streetId = streetId ?: "", streetName = streetName ?: "", addressId = addressId, addressName = addressName, cherga = cherga, pidcherga = pidcherga)
+                repository.saveNewAddress(newAddr)
+                loadSavedAddresses()
             }
+            _uiState.update { it.copy(hasSavedSelection = true, savedRemName = remName ?: "", savedCityName = cityName ?: "", savedStreetName = streetName ?: "", savedAddressName = addressName, savedCherga = cherga, savedPidcherga = pidcherga) }
         }
     }
 
-    /**
-     * Clear all data and reset to initial state
-     */
     fun clearData() {
         viewModelScope.launch {
             repository.clearPreferences()
@@ -372,72 +421,52 @@ class EnergyScheduleViewModel(
         }
     }
 
-    /**
-     * Clear error message
-     */
+    fun refreshCurrentStatus() {
+        _uiState.update { state ->
+            val currentStatus = repository.getCurrentStatus(state.scheduleList)
+            state.copy(currentStatus = currentStatus)
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
-
-    // ========== Notification Settings ==========
-
-    /**
-     * Update notifications enabled status
-     */
-    fun setNotificationsEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            repository.setNotificationsEnabled(enabled)
-        }
-    }
-
-    /**
-     * Update notification advance time in minutes
-     */
-    fun setNotificationAdvanceMinutes(minutes: Int) {
-        viewModelScope.launch {
-            repository.setNotificationAdvanceMinutes(minutes)
-        }
-    }
 }
 
-/**
- * UI State data class representing the complete state of the screen
- */
 data class UiState(
-    // Selection chain data
     val remList: List<Rem> = emptyList(),
     val cityList: List<City> = emptyList(),
     val streetList: List<Street> = emptyList(),
     val addressList: List<Address> = emptyList(),
-
-    // Parsed house numbers for grid display
+    val savedAddresses: List<com.occaecat.ztoeschedule.data.model.SavedAddress> = emptyList(),
+    val isAddingNewAddress: Boolean = false,
+    val addressStatuses: Map<String, GroupedSchedule?> = emptyMap(),
     val parsedHouseNumbers: List<ParsedHouseNumber> = emptyList(),
     val filteredHouseNumbers: List<ParsedHouseNumber> = emptyList(),
     val houseNumberSearchQuery: String = "",
-
-    // Saved address information
     val savedRemName: String = "",
     val savedCityName: String = "",
     val savedStreetName: String = "",
     val savedAddressName: String = "",
     val savedCherga: Int = 0,
     val savedPidcherga: Int = 0,
-
-    // Schedule data
     val scheduleList: List<Schedule> = emptyList(),
     val groupedSchedule: List<GroupedSchedule> = emptyList(),
     val infoMessages: List<ScheduleMessagePart> = emptyList(),
     val formattedMessage: String = "",
     val currentStatus: Schedule? = null,
-
-    // UI state flags
+    val lastUpdateTime: String = "",
     val isLoading: Boolean = false,
+    val isInitialLoadComplete: Boolean = false,
+    val isTimeOutOfSync: Boolean = false,
     val error: String? = null,
     val hasSavedSelection: Boolean = false,
     val onboardingCompleted: Boolean = false,
-
-    // Notification settings
     val notificationsEnabled: Boolean = true,
-    val notificationAdvanceMinutes: Int = 15
+    val notificationAdvanceMinutes: Int = 15,
+    val statusNotificationEnabled: Boolean = false,
+    val liveActivityEnabled: Boolean = false,
+    val isConnected: Boolean = true,
+    val retryCountdown: Int = 0,
+    val lastLoadFailed: Boolean = false
 )
-

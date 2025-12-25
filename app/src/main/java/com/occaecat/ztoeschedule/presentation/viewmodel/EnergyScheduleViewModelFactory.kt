@@ -20,9 +20,11 @@ class EnergyScheduleViewModelFactory(
             // Create dependencies
             val apiService = RetrofitClient.apiService
             val preferencesManager = EnergyPreferencesManager(context)
-            val repository = EnergyRepository(apiService, preferencesManager)
+            val addressStorage = com.occaecat.ztoeschedule.data.local.AddressStorage(context)
+            val repository = EnergyRepository(apiService, preferencesManager, addressStorage)
+            val networkObserver = com.occaecat.ztoeschedule.domain.NetworkObserver(context)
 
-            return EnergyScheduleViewModel(repository) as T
+            return EnergyScheduleViewModel(repository, networkObserver) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }

@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ZTOESchedule"
+rootProject.name = "SvitloYe Zhytomyr"
 include(":app")
  

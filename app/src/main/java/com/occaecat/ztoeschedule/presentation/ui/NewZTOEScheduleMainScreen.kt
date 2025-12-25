@@ -16,7 +16,7 @@ import kotlinx.coroutines.delay
  * Главный экран приложения с новым дизайном
  */
 @Composable
-fun NewZTOEScheduleMainScreen() {
+fun NewSvitloYeZhytomyrMainScreen() {
     val context = LocalContext.current
     val viewModel: EnergyScheduleViewModel = viewModel(
         factory = EnergyScheduleViewModelFactory(context)

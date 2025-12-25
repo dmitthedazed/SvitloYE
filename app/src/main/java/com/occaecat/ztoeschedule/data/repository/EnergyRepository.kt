@@ -21,8 +21,88 @@ import kotlinx.coroutines.flow.Flow
  */
 class EnergyRepository(
     private val apiService: GpvApiService,
-    private val preferencesManager: EnergyPreferencesManager
+    private val preferencesManager: EnergyPreferencesManager,
+    private val addressStorage: com.occaecat.ztoeschedule.data.local.AddressStorage
 ) {
+
+    // ========== Address Management Methods ==========
+
+    suspend fun getSavedAddresses(): List<com.occaecat.ztoeschedule.data.model.SavedAddress> {
+        return addressStorage.getAddresses()
+    }
+
+    suspend fun saveNewAddress(address: com.occaecat.ztoeschedule.data.model.SavedAddress) {
+        addressStorage.addAddress(address)
+        // If this is the first address (priority 1), sync it to DataStore
+        if (address.priority == 1) {
+            syncAddressToPreferences(address)
+        }
+    }
+
+    suspend fun deleteAddress(id: String) {
+        addressStorage.deleteAddress(id)
+        // Check if we deleted the primary address. If so, sync the new primary.
+        val addresses = addressStorage.getAddresses()
+        if (addresses.isNotEmpty()) {
+            val primary = addresses.find { it.priority == 1 } ?: addresses.first()
+            syncAddressToPreferences(primary)
+        } else {
+            preferencesManager.clearPreferences()
+        }
+    }
+
+    /**
+     * Sets the given address as the active/primary one.
+     * Updates the list order and the DataStore for widgets/main screen.
+     */
+    suspend fun setPrimaryAddress(id: String) {
+        val updatedList = addressStorage.setAsPrimary(id)
+        val newPrimary = updatedList.find { it.priority == 1 }
+        if (newPrimary != null) {
+            syncAddressToPreferences(newPrimary)
+        }
+    }
+
+    /**
+     * Updates the entire list of addresses with new order and priorities.
+     */
+    suspend fun reorderAddresses(list: List<com.occaecat.ztoeschedule.data.model.SavedAddress>) {
+        val updatedList = list.mapIndexed { index, savedAddress ->
+            savedAddress.copy(priority = index + 1)
+        }
+        addressStorage.updateAll(updatedList)
+        
+        // Sync the new primary if it changed
+        updatedList.firstOrNull()?.let { syncAddressToPreferences(it) }
+    }
+
+    /**
+     * Swaps priority between two addresses.
+     */
+    suspend fun swapAddressPriority(id1: String, id2: String) {
+        addressStorage.swapPriorities(id1, id2)
+        // Check if the primary address changed
+        val addresses = addressStorage.getAddresses()
+        val primary = addresses.find { it.priority == 1 }
+        if (primary != null) {
+            syncAddressToPreferences(primary)
+        }
+    }
+
+    private suspend fun syncAddressToPreferences(address: com.occaecat.ztoeschedule.data.model.SavedAddress) {
+        preferencesManager.saveCompleteSelection(
+            remId = address.remId,
+            remName = address.remName,
+            cityId = address.cityId,
+            cityName = address.cityName,
+            streetId = address.streetId,
+            streetName = address.streetName,
+            addressId = address.addressId,
+            addressName = address.addressName,
+            cherga = address.cherga,
+            pidcherga = address.pidcherga
+        )
+    }
 
     // ========== Selection Chain Methods ==========
 
@@ -154,20 +234,24 @@ class EnergyRepository(
     suspend fun getScheduleWithMessages(
         cherga: Int,
         pidcherga: Int
-    ): Result<ScheduleWithMessages> = coroutineScope {
-        try {
-            // Launch both API calls simultaneously
+    ): Result<ScheduleWithMessages> = try {
+        coroutineScope {
+            // Launch both API calls simultaneously using supervisor or individual try-catches
             val scheduleDeferred = async { apiService.getSchedule(cherga, pidcherga) }
             val messagesDeferred = async { apiService.getMessages() }
 
             // Await both results
-            val schedules = scheduleDeferred.await()
-            val messages = messagesDeferred.await()
+            val schedules = try { scheduleDeferred.await() } catch (e: Exception) { emptyList() }
+            val messages = try { messagesDeferred.await() } catch (e: Exception) { emptyList() }
 
-            Result.success(ScheduleWithMessages(schedules, messages))
-        } catch (e: Exception) {
-            Result.failure(e)
+            if (schedules.isEmpty() && messages.isEmpty()) {
+                Result.failure(Exception("Не вдалося завантажити дані"))
+            } else {
+                Result.success(ScheduleWithMessages(schedules, messages))
+            }
         }
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     /**
@@ -192,6 +276,30 @@ class EnergyRepository(
         return try {
             val messages = apiService.getMessages()
             Result.success(messages)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Fetch server time from HTTP 'Date' header
+     * @return Result with Time in milliseconds or failure
+     */
+    suspend fun getServerTime(): Result<Long> {
+        return try {
+            val response = apiService.getHeaders()
+            if (response.isSuccessful) {
+                val dateHeader = response.headers().get("Date")
+                if (dateHeader != null) {
+                    val format = java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US)
+                    val serverDate = format.parse(dateHeader)
+                    Result.success(serverDate?.time ?: System.currentTimeMillis())
+                } else {
+                    Result.failure(Exception("No Date header"))
+                }
+            } else {
+                Result.failure(Exception("HTTP error: ${response.code()}"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -342,6 +450,34 @@ class EnergyRepository(
      */
     suspend fun setNotificationAdvanceMinutes(minutes: Int) {
         preferencesManager.setNotificationAdvanceMinutes(minutes)
+    }
+
+    /**
+     * Set status notification enabled
+     */
+    suspend fun setStatusNotificationEnabled(enabled: Boolean) {
+        preferencesManager.setStatusNotificationEnabled(enabled)
+    }
+
+    /**
+     * Get status notification enabled flow
+     */
+    fun getStatusNotificationEnabledFlow(): Flow<Boolean> {
+        return preferencesManager.statusNotificationEnabledFlow
+    }
+
+    /**
+     * Get live activity enabled flow
+     */
+    fun getLiveActivityEnabledFlow(): Flow<Boolean> {
+        return preferencesManager.liveActivityEnabledFlow
+    }
+
+    /**
+     * Set live activity enabled
+     */
+    suspend fun setLiveActivityEnabled(enabled: Boolean) {
+        preferencesManager.setLiveActivityEnabled(enabled)
     }
 }
 

@@ -21,12 +21,20 @@ object ScheduleDomainLogic {
     fun getCurrentStatus(schedules: List<Schedule>): Schedule? {
         if (schedules.isEmpty()) return null
 
-        val currentTime = Calendar.getInstance()
-        val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = currentTime.get(Calendar.MINUTE)
+        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+        val now = Calendar.getInstance(kyivZone)
+        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+        dateFormat.timeZone = kyivZone
+        val currentDateStr = dateFormat.format(now.time)
+        
+        val currentHour = now.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = now.get(Calendar.MINUTE)
         val currentTimeInMinutes = currentHour * 60 + currentMinute
 
-        return schedules.firstOrNull { schedule ->
+        // First try to find a schedule for TODAY in Kyiv
+        val todaySchedules = schedules.filter { it.date == currentDateStr }
+        
+        return todaySchedules.firstOrNull { schedule ->
             val timeRange = parseTimeSpan(schedule.span)
             timeRange?.let { (startMinutes, endMinutes) ->
                 isTimeInRange(currentTimeInMinutes, startMinutes, endMinutes)

@@ -5,7 +5,10 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.os.Build
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 import com.occaecat.ztoeschedule.MainActivity
 import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
@@ -44,7 +47,8 @@ class DetailedScheduleWidget : AppWidgetProvider() {
         scope.launch {
             try {
                 val preferencesManager = EnergyPreferencesManager(context)
-                val repository = EnergyRepository(RetrofitClient.apiService, preferencesManager)
+                val addressStorage = com.occaecat.ztoeschedule.data.local.AddressStorage(context)
+                val repository = EnergyRepository(RetrofitClient.apiService, preferencesManager, addressStorage)
 
                 // Get saved address
                 val savedSelection = preferencesManager.savedSelectionFlow.first()
@@ -58,7 +62,8 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                         isPowerOn = false,
                         statusText = "Налаштуйте адресу",
                         scheduleText = "Відкрийте додаток для налаштування",
-                        addressText = ""
+                        addressText = "",
+                        status = "gray"
                     )
                     return@launch
                 }
@@ -72,11 +77,12 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                 result.onSuccess { data ->
                     val currentStatus = ScheduleDomainLogic.getCurrentStatus(data.schedules)
                     val isPowerOn = currentStatus?.color?.lowercase() != "red"
+                    val statusColor = currentStatus?.color?.lowercase() ?: "gray"
 
-                    val statusText = if (isPowerOn) "✓ Світло є" else "✗ Відключення"
+                    val statusText = if (isPowerOn) "Світло є" else "Відключення"
 
                     // Format schedule for today
-                    val scheduleText = formatScheduleList(data.schedules)
+                    val scheduleText = formatScheduleList(context, data.schedules)
 
                     // Format address
                     val addressText = formatAddress(savedSelection!!)
@@ -89,7 +95,8 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                         isPowerOn = isPowerOn,
                         statusText = statusText,
                         scheduleText = scheduleText,
-                        addressText = addressText
+                        addressText = addressText,
+                        status = statusColor
                     )
                 }.onFailure {
                     updateWidgetView(
@@ -98,9 +105,10 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                         appWidgetId,
                         isConfigured = true,
                         isPowerOn = false,
-                        statusText = "Помилка завантаження",
+                        statusText = "Помилка",
                         scheduleText = "Не вдалося завантажити графік",
-                        addressText = ""
+                        addressText = "",
+                        status = "gray"
                     )
                 }
             } catch (e: Exception) {
@@ -112,7 +120,8 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                     isPowerOn = false,
                     statusText = "Помилка",
                     scheduleText = e.message ?: "Невідома помилка",
-                    addressText = ""
+                    addressText = "",
+                    status = "gray"
                 )
             }
         }
@@ -126,7 +135,8 @@ class DetailedScheduleWidget : AppWidgetProvider() {
         isPowerOn: Boolean,
         statusText: String,
         scheduleText: String,
-        addressText: String
+        addressText: String,
+        status: String
     ) {
         val views = RemoteViews(context.packageName, R.layout.widget_detailed_schedule)
 
@@ -136,16 +146,15 @@ class DetailedScheduleWidget : AppWidgetProvider() {
         views.setTextViewText(R.id.widget_address_text, addressText)
 
         // Set icon
-        val icon = if (isPowerOn) "✓" else "✗"
-        views.setTextViewText(R.id.widget_status_icon, icon)
-
-        // Set background drawable based on status
-        val backgroundDrawable = when {
-            !isConfigured -> R.drawable.widget_card_gray
-            isPowerOn -> R.drawable.widget_card_green
-            else -> R.drawable.widget_card_red
+        val iconRes = if (isPowerOn) android.R.drawable.presence_online else android.R.drawable.presence_busy
+        if (!isConfigured) {
+             views.setImageViewResource(R.id.widget_icon, R.drawable.ic_launcher_foreground)
+        } else {
+             views.setImageViewResource(R.id.widget_icon, iconRes)
         }
-        views.setInt(R.id.widget_container, "setBackgroundResource", backgroundDrawable)
+
+        // Set Colors
+        setWidgetColor(context, views, status)
 
         // Set click action to open app
         val intent = Intent(context, MainActivity::class.java)
@@ -160,21 +169,45 @@ class DetailedScheduleWidget : AppWidgetProvider() {
         // Update widget
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
+    
+    private fun setWidgetColor(context: Context, views: RemoteViews, status: String) {
+        val colorRes = when (status.lowercase()) {
+            "red" -> R.color.widget_status_negative
+            "green", "white" -> R.color.widget_status_positive
+            "yellow" -> R.color.widget_status_warning
+            else -> R.color.widget_text_secondary
+        }
+        
+        if (Build.VERSION.SDK_INT >= 31) {
+             val color = ContextCompat.getColor(context, colorRes)
+             views.setInt(R.id.widget_container, "setBackgroundTintList", ColorStateList.valueOf(color).defaultColor)
+        }
+    }
 
-    private fun formatScheduleList(schedules: List<com.occaecat.ztoeschedule.data.model.Schedule>): String {
+    private fun formatScheduleList(context: Context, schedules: List<com.occaecat.ztoeschedule.data.model.Schedule>): String {
         if (schedules.isEmpty()) return "Немає графіку"
 
-        return schedules.take(3).joinToString("\n") { schedule ->
-            val status = if (schedule.color.lowercase() != "red") "✓" else "✗"
-            "$status ${schedule.span}"
-        } + if (schedules.size > 3) "\n..." else ""
+        // Grouping logic for display could be good, but simple list is fine too
+        // Let's use simple formatting for the widget list to keep it dense
+        return schedules.joinToString("\n") { schedule ->
+            val emoji = when (schedule.color.lowercase()) {
+                "red" -> "🔴" // Red Circle
+                "green", "white" -> "🟢" // Green Circle
+                "yellow" -> "🟡" // Yellow Circle
+                else -> "⚪"
+            }
+            val systemSpan = com.occaecat.ztoeschedule.domain.TimeUtils.formatSpanToSystem(context, schedule.span)
+            "$emoji $systemSpan"
+        }
     }
 
     private fun formatAddress(selection: com.occaecat.ztoeschedule.data.local.SavedSelection): String {
         return buildString {
             if (selection.streetName != null) {
                 append(selection.streetName)
-                append(", ${selection.addressName}")
+                if (selection.addressName.isNotEmpty()) {
+                    append(", ${selection.addressName}")
+                }
             } else {
                 append("Адреса не вибрана")
             }
