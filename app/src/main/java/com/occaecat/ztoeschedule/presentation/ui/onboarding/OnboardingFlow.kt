@@ -27,6 +27,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
+import androidx.compose.ui.res.stringResource
+import com.occaecat.ztoeschedule.R
+
 /**
  * Modern Onboarding Flow using a step-based approach instead of Pager for better stability.
  */
@@ -87,13 +90,13 @@ fun OnboardingFlow(
                 title = {
                     Text(
                         text = when (step) {
-                            0 -> "Ласкаво просимо"
-                            1 -> "Сповіщення"
-                            2 -> "Вибір РЕМ"
-                            3 -> "Вибір міста"
-                            4 -> "Вибір вулиці"
-                            5 -> "Вибір будинку"
-                            6 -> "Налаштування"
+                            0 -> stringResource(R.string.step_welcome)
+                            1 -> stringResource(R.string.step_notifications)
+                            2 -> stringResource(R.string.step_rem)
+                            3 -> stringResource(R.string.step_city)
+                            4 -> stringResource(R.string.step_street)
+                            5 -> stringResource(R.string.step_house)
+                            6 -> stringResource(R.string.step_customize)
                             else -> ""
                         },
                         style = MaterialTheme.typography.titleLarge,
@@ -318,7 +321,7 @@ private fun WelcomePage(onStart: () -> Unit) {
         Spacer(modifier = Modifier.height(32.dp))
         
         Text(
-            text = "Світло під контролем",
+            text = stringResource(R.string.onboarding_welcome_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
@@ -327,7 +330,7 @@ private fun WelcomePage(onStart: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "Давайте налаштуємо вашу адресу, щоб ви завжди знали актуальний графік відключень",
+            text = stringResource(R.string.onboarding_welcome_desc),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -340,7 +343,7 @@ private fun WelcomePage(onStart: () -> Unit) {
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = MaterialTheme.shapes.medium
         ) {
-            Text("Почати налаштування", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.onboarding_start_btn), style = MaterialTheme.typography.titleMedium)
         }
     }
 }

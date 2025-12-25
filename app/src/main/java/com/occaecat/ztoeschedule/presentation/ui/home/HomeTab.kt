@@ -27,6 +27,9 @@ import java.util.TimeZone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.res.stringResource
+import com.occaecat.ztoeschedule.R
+
 /**
  * Home tab - shows current status, address, and schedule.
  * Optimized for Kyiv timezone and grouped progress bars.
@@ -114,7 +117,7 @@ fun HomeTab(
                 
                 if (lastUpdateTime.isNotEmpty()) {
                     Text(
-                        text = "Оновлено: $lastUpdateTime",
+                        text = stringResource(R.string.home_last_updated, lastUpdateTime),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.padding(start = 8.dp)
@@ -201,7 +204,7 @@ private fun CurrentStatusCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = activeGroup?.displayText ?: currentStatus?.displayText ?: "Немає даних",
+                text = activeGroup?.displayText ?: currentStatus?.displayText ?: stringResource(R.string.home_no_data),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
@@ -220,7 +223,8 @@ private fun CurrentStatusCard(
                     val nextChangeTime = if (rawNextTime != "—") TimeUtils.formatToSystemTime(context, rawNextTime) else "—"
 
                     Text(
-                        text = if (hasElectricity) "⏰ Відключення о $nextChangeTime" else "⏰ Увімкнення о $nextChangeTime",
+                        text = if (hasElectricity) stringResource(R.string.home_next_outage, nextChangeTime) 
+                               else stringResource(R.string.home_next_restore, nextChangeTime),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.alpha(0.8f)
                     )
@@ -248,7 +252,8 @@ private fun CurrentStatusCard(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = if (hasElectricity) "До відключення: $timeRemaining" else "До увімкнення: $timeRemaining",
+                            text = if (hasElectricity) stringResource(R.string.home_time_to_outage, timeRemaining) 
+                                   else stringResource(R.string.home_time_to_restore, timeRemaining),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -379,7 +384,7 @@ private fun ScheduleListItemSimple(
             {
                 SuggestionChip(
                     onClick = { },
-                    label = { Text("Зараз") },
+                    label = { Text(stringResource(R.string.home_status_now)) },
                     colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer, labelColor = MaterialTheme.colorScheme.onPrimaryContainer),
                     border = null
                 )

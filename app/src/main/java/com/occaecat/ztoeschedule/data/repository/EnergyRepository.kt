@@ -422,6 +422,36 @@ class EnergyRepository(
         preferencesManager.clearPreferences()
     }
 
+import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
+import com.occaecat.ztoeschedule.data.model.FontScale
+
+    // ========== Theme Settings ==========
+
+    fun getDisplayModeFlow(): Flow<DisplayMode> {
+        return preferencesManager.displayModeFlow
+    }
+
+    fun getColorThemeFlow(): Flow<ColorTheme> {
+        return preferencesManager.colorThemeFlow
+    }
+
+    fun getFontScaleFlow(): Flow<FontScale> {
+        return preferencesManager.fontScaleFlow
+    }
+
+    suspend fun setDisplayMode(mode: DisplayMode) {
+        preferencesManager.setDisplayMode(mode)
+    }
+
+    suspend fun setColorTheme(theme: ColorTheme) {
+        preferencesManager.setColorTheme(theme)
+    }
+
+    suspend fun setFontScale(scale: FontScale) {
+        preferencesManager.setFontScale(scale)
+    }
+
     // ========== Notification Settings ==========
 
     /**
