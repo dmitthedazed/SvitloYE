@@ -1,17 +1,17 @@
-name: Build and Release APK
+name: Auto Release APK
 
 on:
-  workflow_dispatch: # Allows manual triggering
   push:
-    tags:
-      - 'v*'
+    branches: [ "master" ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: Build and Release
+  build_and_release:
+    # Prevent infinite loops by skipping commits made by this workflow
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Needed to commit the version bump and create releases
+      contents: write
 
     steps:
       - name: Checkout code
@@ -32,33 +32,33 @@ jobs:
       - name: Increment Version
         id: bump_version
         run: |
-          # Read current version name from build.gradle.kts
+          # Read current version name
           CURRENT_VERSION=$(grep 'versionName =' app/build.gradle.kts | sed 's/.*= "//;s/".*//')
           echo "Current Version: $CURRENT_VERSION"
           
-          # Increment by 0.1 using awk
+          # Increment by 0.1
           NEW_VERSION=$(echo $CURRENT_VERSION | awk '{printf "%.1f", $1 + 0.1}')
           echo "New Version: $NEW_VERSION"
           
           # Update build.gradle.kts
           sed -i "s/versionName = \"$CURRENT_VERSION\"/versionName = \"$NEW_VERSION\"/" app/build.gradle.kts
           
-          # Export to GITHUB_OUTPUT
+          # Output for next steps
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Commit and Push Version Bump
+      - name: Commit Version Bump
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add app/build.gradle.kts
-          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
-          git push origin HEAD:main || echo "Push failed, continuing with build..."
+          # Add [skip ci] to prevent infinite loop
+          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }} [skip ci]"
+          git push origin HEAD:master
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.bump_version.outputs.new_version }}
