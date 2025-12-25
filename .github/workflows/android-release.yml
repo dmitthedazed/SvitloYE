@@ -29,6 +29,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Decode Keystore
+        id: decode_keystore
+        uses: timheuer/base64-to-file@v1.2
+        with:
+          fileName: 'release-key.jks'
+          encodedString: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Create keystore.properties
+        run: |
+          echo "storeFile=release-key.jks" > keystore.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> keystore.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> keystore.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
+
       - name: Increment Version
         id: bump_version
         run: |
@@ -55,8 +69,8 @@ jobs:
           git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }} [skip ci]"
           git push origin HEAD:master
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Build Release APK & Bundle
+        run: ./gradlew assembleRelease bundleRelease
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -66,6 +80,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -44,7 +44,7 @@ class LiveActivityNotificationService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "live_activity_channel"
-        private const val CHANNEL_NAME = "Live Activity Status"
+        private const val CHANNEL_NAME = "СвітлоЄ? Таймер"
         private const val NOTIFICATION_ID = 2002
         private const val UPDATE_INTERVAL_MS = 60_000L // 1 minute
 
@@ -107,7 +107,7 @@ class LiveActivityNotificationService : Service() {
             CHANNEL_NAME,
             importance
         ).apply {
-            description = "Rich persistent status notification"
+            description = "Відображення часу до зміни статусу"
             setShowBadge(false)
             setSound(null, null)
         }
