@@ -22,13 +22,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.stringResource
+import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.presentation.ui.addresses.MyAddressesTab
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
 import com.occaecat.ztoeschedule.presentation.ui.notifications.NotificationsTab
 import com.occaecat.ztoeschedule.presentation.ui.onboarding.OnboardingFlow
 import com.occaecat.ztoeschedule.presentation.ui.settings.SettingsTab
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
-import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModelFactory
 import kotlinx.coroutines.delay
 
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -164,6 +165,13 @@ fun MainScreen() {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val showMainChrome = !(selectedTab == 2 && uiState.isAddingNewAddress)
 
+    val navItems = listOf(
+        BottomNavItem(stringResource(R.string.nav_home), Icons.Filled.Home, Icons.Outlined.Home),
+        BottomNavItem(stringResource(R.string.nav_notifications), Icons.Filled.Notifications, Icons.Outlined.Notifications),
+        BottomNavItem(stringResource(R.string.nav_addresses), Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
+        BottomNavItem(stringResource(R.string.nav_settings), Icons.Filled.Settings, Icons.Outlined.Settings)
+    )
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
@@ -171,7 +179,7 @@ fun MainScreen() {
                 TopAppBar(
                     title = { 
                         AnimatedContent(
-                            targetState = bottomNavItems[selectedTab].label,
+                            targetState = navItems[selectedTab].label,
                             transitionSpec = { fadeIn() togetherWith fadeOut() },
                             modifier = Modifier.offset(x = 4.dp), // Nudge slightly right
                             label = "title_animation"
@@ -187,7 +195,7 @@ fun MainScreen() {
         bottomBar = {
             if (showMainChrome) {
                 NavigationBar {
-                    bottomNavItems.forEachIndexed { index, item ->
+                    navItems.forEachIndexed { index, item ->
                         NavigationBarItem(
                             icon = { Icon(imageVector = if (selectedTab == index) item.selectedIcon else item.unselectedIcon, contentDescription = item.label) },
                             label = { Text(item.label) },
@@ -270,10 +278,16 @@ fun MainScreen() {
                         statusNotificationEnabled = uiState.statusNotificationEnabled,
                         liveActivityEnabled = uiState.liveActivityEnabled,
                         lastUpdateTime = uiState.lastUpdateTime,
+                        displayMode = uiState.displayMode,
+                        colorTheme = uiState.colorTheme,
+                        fontScale = uiState.fontScale,
                         onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
                         onNotificationAdvanceMinutesChange = { viewModel.setNotificationAdvanceMinutes(it) },
                         onStatusNotificationEnabledChange = { viewModel.setStatusNotificationEnabled(it) },
                         onLiveActivityEnabledChange = { viewModel.setLiveActivityEnabled(it) },
+                        onDisplayModeChange = { viewModel.setDisplayMode(it) },
+                        onColorThemeChange = { viewModel.setColorTheme(it) },
+                        onFontScaleChange = { viewModel.setFontScale(it) },
                         onResetOnboarding = { viewModel.resetOnboarding() },
                         onClearData = { viewModel.clearData() },
                         modifier = Modifier.fillMaxSize(),
@@ -334,7 +348,7 @@ private fun NoConnectionScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = if (isLoading) "Оновлення даних..." else "Немає зв'язку з сервером",
+                        text = if (isLoading) stringResource(R.string.error_update_data) else stringResource(R.string.error_no_connection),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
@@ -342,8 +356,8 @@ private fun NoConnectionScreen(
                     )
                     
                     Text(
-                        text = if (isLoading) "Будь ласка, зачекайте, ми намагаємось отримати графік." 
-                               else "Будь ласка, перевірте підключення, щоб завантажити актуальний графік.",
+                        text = if (isLoading) stringResource(R.string.error_wait_msg) 
+                               else stringResource(R.string.error_check_conn_msg),
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -368,7 +382,7 @@ private fun NoConnectionScreen(
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                text = "Повторна спроба через $countdown сек...",
+                                text = stringResource(R.string.error_retry_countdown, countdown),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
@@ -387,11 +401,11 @@ private fun NoConnectionScreen(
                     )
                 ) {
                     if (isLoading) {
-                        Text("Зачекайте...", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.error_wait_btn), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     } else {
                         Icon(Icons.Default.Refresh, null)
                         Spacer(Modifier.width(12.dp))
-                        Text("Спробувати зараз", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.error_retry_now), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -400,10 +414,3 @@ private fun NoConnectionScreen(
 }
 
 private data class BottomNavItem(val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)
-
-private val bottomNavItems = listOf(
-    BottomNavItem("Головна", Icons.Filled.Home, Icons.Outlined.Home),
-    BottomNavItem("Повідомлення", Icons.Filled.Notifications, Icons.Outlined.Notifications),
-    BottomNavItem("Мої адреси", Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
-    BottomNavItem("Налаштування", Icons.Filled.Settings, Icons.Outlined.Settings)
-)

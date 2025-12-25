@@ -26,6 +26,9 @@ import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
 import com.occaecat.ztoeschedule.presentation.ui.SearchField
 import com.occaecat.ztoeschedule.presentation.ui.SelectionListItem
 
+import androidx.compose.ui.res.stringResource
+import com.occaecat.ztoeschedule.R
+
 @Composable
 fun RemSelectionPage(
     rems: List<Rem>,
@@ -42,7 +45,7 @@ fun RemSelectionPage(
         SearchField(
             query = query,
             onQueryChange = { query = it },
-            placeholder = "Пошук РЕМ..."
+            placeholder = stringResource(R.string.search_rem_hint)
         )
 
         if (isLoading) {
@@ -81,7 +84,7 @@ fun CitySelectionPage(
         SearchField(
             query = query,
             onQueryChange = { query = it },
-            placeholder = "Пошук міста..."
+            placeholder = stringResource(R.string.search_city_hint)
         )
 
         if (isLoading) {
@@ -120,7 +123,7 @@ fun StreetSelectionPage(
         SearchField(
             query = query,
             onQueryChange = { query = it },
-            placeholder = "Пошук вулиці..."
+            placeholder = stringResource(R.string.search_street_hint)
         )
 
         if (isLoading) {
@@ -158,7 +161,7 @@ fun HouseNumberSelectionPage(
         SearchField(
             query = searchQuery,
             onQueryChange = onSearchQueryChange,
-            placeholder = "Пошук будинку..."
+            placeholder = stringResource(R.string.search_house_hint)
         )
 
         if (isLoading) {
@@ -168,7 +171,7 @@ fun HouseNumberSelectionPage(
         } else if (houseNumbers.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (searchQuery.isEmpty()) "Немає доступних будинків" else "Будинків не знайдено",
+                    text = if (searchQuery.isEmpty()) stringResource(R.string.house_empty) else stringResource(R.string.house_not_found),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

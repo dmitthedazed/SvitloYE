@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
+import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
+import com.occaecat.ztoeschedule.data.model.FontScale
+
 /**
  * Extension property to create DataStore instance
  */
@@ -46,10 +50,66 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KEY_STATUS_NOTIFICATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("status_notification_enabled")
         private val KEY_LIVE_ACTIVITY_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("live_activity_enabled")
 
+        // Theme settings
+        private val KEY_DISPLAY_MODE = intPreferencesKey("display_mode")
+        private val KEY_COLOR_THEME = intPreferencesKey("color_theme")
+        private val KEY_FONT_SCALE = intPreferencesKey("font_scale")
+
         // Default values
         private const val DEFAULT_CHERGA = 0
         private const val DEFAULT_PIDCHERGA = 0
         private const val DEFAULT_NOTIFICATION_ADVANCE_MINUTES = 15 // 15 minutes before
+    }
+
+    /**
+     * Flow that emits display mode preference
+     */
+    val displayModeFlow: Flow<DisplayMode> = context.dataStore.data.map { preferences ->
+        val ordinal = preferences[KEY_DISPLAY_MODE] ?: DisplayMode.COMFORTABLE.ordinal
+        DisplayMode.entries.getOrElse(ordinal) { DisplayMode.COMFORTABLE }
+    }.distinctUntilChanged()
+
+    /**
+     * Flow that emits color theme preference
+     */
+    val colorThemeFlow: Flow<ColorTheme> = context.dataStore.data.map { preferences ->
+        val ordinal = preferences[KEY_COLOR_THEME] ?: ColorTheme.SYSTEM.ordinal
+        ColorTheme.entries.getOrElse(ordinal) { ColorTheme.SYSTEM }
+    }.distinctUntilChanged()
+
+    /**
+     * Flow that emits font scale preference
+     */
+    val fontScaleFlow: Flow<FontScale> = context.dataStore.data.map { preferences ->
+        val ordinal = preferences[KEY_FONT_SCALE] ?: FontScale.NORMAL.ordinal
+        FontScale.entries.getOrElse(ordinal) { FontScale.NORMAL }
+    }.distinctUntilChanged()
+
+    /**
+     * Save display mode
+     */
+    suspend fun setDisplayMode(mode: DisplayMode) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_DISPLAY_MODE] = mode.ordinal
+        }
+    }
+
+    /**
+     * Save color theme
+     */
+    suspend fun setColorTheme(theme: ColorTheme) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_COLOR_THEME] = theme.ordinal
+        }
+    }
+
+    /**
+     * Save font scale
+     */
+    suspend fun setFontScale(scale: FontScale) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_FONT_SCALE] = scale.ordinal
+        }
     }
 
     /**

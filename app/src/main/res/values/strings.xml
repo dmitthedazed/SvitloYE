@@ -2,6 +2,69 @@
     <string name="app_name">СвітлоЄ? Житомир</string>
     <string name="package_name">com.occaecat.svitloye</string>
 
+    <!-- Navigation -->
+    <string name="nav_home">Головна</string>
+    <string name="nav_notifications">Повідомлення</string>
+    <string name="nav_addresses">Мої адреси</string>
+    <string name="nav_settings">Налаштування</string>
+
+    <!-- Home Screen -->
+    <string name="home_last_updated">Оновлено: %1$s</string>
+    <string name="home_no_data">Немає даних</string>
+    <string name="home_next_outage">⏰ Відключення о %1$s</string>
+    <string name="home_next_restore">⏰ Увімкнення о %1$s</string>
+    <string name="home_time_to_outage">До відключення: %1$s</string>
+    <string name="home_time_to_restore">До увімкнення: %1$s</string>
+    <string name="home_status_now">Зараз</string>
+
+    <!-- Onboarding & Address Selection -->
+    <string name="onboarding_welcome_title">Світло під контролем</string>
+    <string name="onboarding_welcome_desc">Давайте налаштуємо вашу адресу, щоб ви завжди знали актуальний графік відключень</string>
+    <string name="onboarding_start_btn">Почати налаштування</string>
+    
+    <string name="step_welcome">Ласкаво просимо</string>
+    <string name="step_notifications">Сповіщення</string>
+    <string name="step_rem">Вибір РЕМ</string>
+    <string name="step_city">Вибір міста</string>
+    <string name="step_street">Вибір вулиці</string>
+    <string name="step_house">Вибір будинку</string>
+    <string name="step_customize">Налаштування</string>
+
+    <string name="search_rem_hint">Пошук РЕМ...</string>
+    <string name="search_city_hint">Пошук міста...</string>
+    <string name="search_street_hint">Пошук вулиці...</string>
+    <string name="search_house_hint">Пошук будинку...</string>
+    
+    <string name="house_empty">Немає доступних будинків</string>
+    <string name="house_not_found">Будинків не знайдено</string>
+
+    <!-- Settings -->
+    <string name="settings_notifications_title">Сповіщення</string>
+    <string name="settings_status_notif">Постійне сповіщення статусу</string>
+    <string name="settings_status_notif_desc">Показувати поточний статус світла</string>
+    <string name="settings_live_activity">Live Activity (Rich Style)</string>
+    <string name="settings_live_activity_desc">Розширений стиль сповіщення (Android 12+)</string>
+    <string name="settings_change_notif">Сповіщення про зміни</string>
+    <string name="settings_change_notif_desc">Попереджати про вимкнення/увімкнення</string>
+    <string name="settings_warn_before">Попереджати за</string>
+    <string name="settings_change_btn">Змінити</string>
+    <string name="settings_test_notif">Тестове сповіщення</string>
+    
+    <string name="settings_app_section">Додаток</string>
+    <string name="settings_re_setup">Пройти налаштування знову</string>
+    <string name="settings_re_setup_desc">Перезапустити процес вибору адреси</string>
+    <string name="settings_clear_data">Очистити всі дані</string>
+    <string name="settings_clear_data_desc">Видалити збережені адреси та налаштування</string>
+
+    <!-- Errors & Connection -->
+    <string name="error_no_connection">Немає зв\'язку з сервером</string>
+    <string name="error_update_data">Оновлення даних...</string>
+    <string name="error_wait_msg">Будь ласка, зачекайте, ми намагаємось отримати графік.</string>
+    <string name="error_check_conn_msg">Будь ласка, перевірте підключення, щоб завантажити актуальний графік.</string>
+    <string name="error_retry_countdown">Повторна спроба через %1$d сек...</string>
+    <string name="error_retry_now">Спробувати зараз</string>
+    <string name="error_wait_btn">Зачекайте...</string>
+
     <!-- Widget strings -->
     <string name="widget_power_status_description">Компактний віджет статусу світла</string>
     <string name="widget_detailed_schedule_description">Детальний віджет з графіком відключень</string>

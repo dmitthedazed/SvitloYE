@@ -24,6 +24,13 @@ import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
 import com.occaecat.ztoeschedule.domain.notification.PowerNotificationManager
 import com.occaecat.ztoeschedule.domain.notification.StatusNotificationService
 
+import androidx.compose.ui.res.stringResource
+import com.occaecat.ztoeschedule.R
+import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
+
+import com.occaecat.ztoeschedule.data.model.FontScale
+
 /**
  * Settings tab with notification settings
  */
@@ -34,10 +41,16 @@ fun SettingsTab(
     statusNotificationEnabled: Boolean = false,
     liveActivityEnabled: Boolean = false,
     lastUpdateTime: String = "",
+    displayMode: DisplayMode = DisplayMode.COMFORTABLE,
+    colorTheme: ColorTheme = ColorTheme.SYSTEM,
+    fontScale: FontScale = FontScale.NORMAL,
     onNotificationsEnabledChange: (Boolean) -> Unit = {},
     onNotificationAdvanceMinutesChange: (Int) -> Unit = {},
     onStatusNotificationEnabledChange: (Boolean) -> Unit = {},
     onLiveActivityEnabledChange: (Boolean) -> Unit = {},
+    onDisplayModeChange: (DisplayMode) -> Unit = {},
+    onColorThemeChange: (ColorTheme) -> Unit = {},
+    onFontScaleChange: (FontScale) -> Unit = {},
     onResetOnboarding: () -> Unit,
     onClearData: () -> Unit,
     modifier: Modifier = Modifier,
@@ -50,6 +63,10 @@ fun SettingsTab(
     var showResetDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showAdvanceTimeDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+    var showDisplayModeDialog by remember { mutableStateOf(false) }
+    var showFontScaleDialog by remember { mutableStateOf(false) }
+    
     var localStatusNotification by remember { mutableStateOf(statusNotificationEnabled) }
     var localLiveActivity by remember { mutableStateOf(liveActivityEnabled) }
     var enableChangeNotifications by remember { mutableStateOf(notificationsEnabled) }
@@ -95,9 +112,55 @@ fun SettingsTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Personalization Section
+        Text(
+            text = "Персоналізація",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
+        )
+
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Column {
+                ListItem(
+                    headlineContent = { Text("Тема оформлення") },
+                    supportingContent = { Text(getColorThemeLabel(colorTheme)) },
+                    leadingContent = { Icon(Icons.Default.Palette, null) },
+                    modifier = Modifier.clickable { showThemeDialog = true }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+
+                ListItem(
+                    headlineContent = { Text("Розмір шрифту") },
+                    supportingContent = { Text(getFontScaleLabel(fontScale)) },
+                    leadingContent = { Icon(Icons.Default.TextFields, null) },
+                    modifier = Modifier.clickable { showFontScaleDialog = true }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+
+                ListItem(
+                    headlineContent = { Text("Режим відображення") },
+                    supportingContent = { Text(getDisplayModeLabel(displayMode)) },
+                    leadingContent = { Icon(Icons.Default.ViewAgenda, null) },
+                    modifier = Modifier.clickable { showDisplayModeDialog = true }
+                )
+            }
+        }
+
         // Notification settings section
         Text(
-            text = "Сповіщення",
+            text = stringResource(R.string.settings_notifications_title),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
@@ -110,8 +173,8 @@ fun SettingsTab(
             Column {
                 // Static status notification
                 ListItem(
-                    headlineContent = { Text("Постійне сповіщення статусу") },
-                    supportingContent = { Text("Показувати поточний статус світла") },
+                    headlineContent = { Text(stringResource(R.string.settings_status_notif)) },
+                    supportingContent = { Text(stringResource(R.string.settings_status_notif_desc)) },
                     leadingContent = { 
                         Icon(Icons.Outlined.Notifications, null) 
                     },
@@ -143,8 +206,8 @@ fun SettingsTab(
                 // Live Activity Toggle
                 AnimatedVisibility(visible = localStatusNotification) {
                     ListItem(
-                        headlineContent = { Text("Live Activity (Rich Style)") },
-                        supportingContent = { Text("Розширений стиль сповіщення (Android 12+)") },
+                        headlineContent = { Text(stringResource(R.string.settings_live_activity)) },
+                        supportingContent = { Text(stringResource(R.string.settings_live_activity_desc)) },
                         leadingContent = { Spacer(Modifier.width(24.dp)) },
                         trailingContent = {
                             Switch(
@@ -176,9 +239,9 @@ fun SettingsTab(
 
                 // Change notifications
                 ListItem(
-                    headlineContent = { Text("Сповіщення про зміни") },
+                    headlineContent = { Text(stringResource(R.string.settings_change_notif)) },
                     supportingContent = { 
-                        Text(if (enableChangeNotifications) "Попереджати про вимкнення/увімкнення" else "Вимкнено") 
+                        Text(if (enableChangeNotifications) stringResource(R.string.settings_change_notif_desc) else "Вимкнено") 
                     },
                     leadingContent = { Icon(Icons.Default.NotificationsActive, null) },
                     trailingContent = {
@@ -206,12 +269,12 @@ fun SettingsTab(
                 // Advance time selection
                 AnimatedVisibility(visible = enableChangeNotifications) {
                     ListItem(
-                        headlineContent = { Text("Попереджати за") },
+                        headlineContent = { Text(stringResource(R.string.settings_warn_before)) },
                         supportingContent = { Text("$notificationAdvanceMinutes ${getMinutesLabel(notificationAdvanceMinutes)} до зміни") },
                         leadingContent = { Spacer(Modifier.width(24.dp)) },
                         trailingContent = {
                             TextButton(onClick = { showAdvanceTimeDialog = true }) {
-                                Text("Змінити")
+                                Text(stringResource(R.string.settings_change_btn))
                             }
                         },
                         colors = ListItemDefaults.colors(
@@ -240,7 +303,7 @@ fun SettingsTab(
                     ) {
                         Icon(Icons.Default.Notifications, null)
                         Spacer(Modifier.width(12.dp))
-                        Text("Тестове сповіщення")
+                        Text(stringResource(R.string.settings_test_notif))
                     }
                 }
             }
@@ -248,7 +311,7 @@ fun SettingsTab(
 
         // Info and Actions
         Text(
-            text = "Додаток",
+            text = stringResource(R.string.settings_app_section),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 4.dp)
@@ -260,9 +323,9 @@ fun SettingsTab(
         ) {
             Column {
                 ListItem(
-                    headlineContent = { Text("ZTOE Schedule") },
+                    headlineContent = { Text("СвітлоЄ? Житомир") },
                     supportingContent = { 
-                        Text("Версія 1.0.0" + if(lastUpdateTime.isNotEmpty()) " • Оновлено: $lastUpdateTime" else "") 
+                        Text("Версія 1.0.0" + if(lastUpdateTime.isNotEmpty()) " • " + stringResource(R.string.home_last_updated, lastUpdateTime) else "") 
                     },
                     leadingContent = { Icon(Icons.Default.Info, null) }
                 )
@@ -273,17 +336,17 @@ fun SettingsTab(
                 )
 
                 ListItem(
-                    headlineContent = { Text("Пройти налаштування знову") },
-                    supportingContent = { Text("Перезапустити процес вибору адреси") },
+                    headlineContent = { Text(stringResource(R.string.settings_re_setup)) },
+                    supportingContent = { Text(stringResource(R.string.settings_re_setup_desc)) },
                     leadingContent = { Icon(Icons.Default.SettingsBackupRestore, null) },
                     modifier = Modifier.clickable { showResetDialog = true }
                 )
 
                 ListItem(
                     headlineContent = { 
-                        Text("Очистити всі дані", color = MaterialTheme.colorScheme.error) 
+                        Text(stringResource(R.string.settings_clear_data), color = MaterialTheme.colorScheme.error) 
                     },
-                    supportingContent = { Text("Видалити збережені адреси та налаштування") },
+                    supportingContent = { Text(stringResource(R.string.settings_clear_data_desc)) },
                     leadingContent = { 
                         Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error) 
                     },
@@ -385,6 +448,132 @@ fun SettingsTab(
             }
         )
     }
+
+    // Theme Selection Dialog
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("Оберіть тему") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ColorTheme.entries.forEach { theme ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onColorThemeChange(theme)
+                                    showThemeDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = colorTheme == theme,
+                                onClick = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = getColorThemeLabel(theme),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text("Скасувати")
+                }
+            }
+        )
+    }
+
+    // Display Mode Selection Dialog
+    if (showDisplayModeDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisplayModeDialog = false },
+            title = { Text("Режим відображення") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DisplayMode.entries.forEach { mode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onDisplayModeChange(mode)
+                                    showDisplayModeDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = displayMode == mode,
+                                onClick = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = getDisplayModeLabel(mode),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = getDisplayModeDescription(mode),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDisplayModeDialog = false }) {
+                    Text("Скасувати")
+                }
+            }
+        )
+    }
+
+    // Font Scale Selection Dialog
+    if (showFontScaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showFontScaleDialog = false },
+            title = { Text("Розмір шрифту") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FontScale.entries.forEach { scale ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onFontScaleChange(scale)
+                                    showFontScaleDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = fontScale == scale,
+                                onClick = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = getFontScaleLabel(scale),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = MaterialTheme.typography.bodyLarge.fontSize * scale.multiplier
+                                )
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFontScaleDialog = false }) {
+                    Text("Скасувати")
+                }
+            }
+        )
+    }
 }
 
 /**
@@ -397,5 +586,41 @@ private fun getMinutesLabel(minutes: Int): String {
         minutes % 10 == 1 && minutes % 100 != 11 -> "хвилину"
         minutes % 10 in 2..4 && minutes % 100 !in 12..14 -> "хвилини"
         else -> "хвилин"
+    }
+}
+
+private fun getColorThemeLabel(theme: ColorTheme): String {
+    return when (theme) {
+        ColorTheme.SYSTEM -> "Системна"
+        ColorTheme.LIGHT -> "Світла"
+        ColorTheme.DARK -> "Темна"
+        ColorTheme.AMOLED -> "AMOLED (Чорна)"
+        ColorTheme.CONTRAST -> "Високий контраст"
+    }
+}
+
+private fun getDisplayModeLabel(mode: DisplayMode): String {
+    return when (mode) {
+        DisplayMode.COMPACT -> "Щільний"
+        DisplayMode.COMFORTABLE -> "Звичайний"
+        DisplayMode.SPACIOUS -> "Просторий"
+    }
+}
+
+private fun getFontScaleLabel(scale: FontScale): String {
+    return when (scale) {
+        FontScale.SMALL -> "Маленький"
+        FontScale.NORMAL -> "Звичайний"
+        FontScale.LARGE -> "Великий"
+        FontScale.XLARGE -> "Дуже великий"
+        FontScale.ACCESSIBILITY -> "Максимальний"
+    }
+}
+
+private fun getDisplayModeDescription(mode: DisplayMode): String {
+    return when (mode) {
+        DisplayMode.COMPACT -> "Більше інформації на екрані"
+        DisplayMode.COMFORTABLE -> "Збалансований вигляд"
+        DisplayMode.SPACIOUS -> "Великі елементи для зручності"
     }
 }

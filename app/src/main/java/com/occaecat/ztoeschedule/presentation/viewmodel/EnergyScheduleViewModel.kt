@@ -20,6 +20,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.TimeZone
 
+import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
+import com.occaecat.ztoeschedule.data.model.FontScale
+import com.occaecat.ztoeschedule.domain.model.getUserMessage
+import com.occaecat.ztoeschedule.domain.model.toAppError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -58,6 +63,7 @@ class EnergyScheduleViewModel @Inject constructor(
                 // Start loading peripheral settings
                 launch { loadNotificationSettings() }
                 launch { loadSavedAddresses() }
+                launch { loadThemeSettings() }
                 launch { checkTimeSync() }
                 
                 // Wait for critical data
@@ -95,7 +101,7 @@ class EnergyScheduleViewModel @Inject constructor(
                     it.copy(
                         isInitialLoadComplete = true,
                         lastLoadFailed = true,
-                        error = "Помилка ініціалізації: ${e.message}"
+                        error = e.toAppError().getUserMessage()
                     ) 
                 }
                 startRetryTimer()
@@ -273,6 +279,40 @@ class EnergyScheduleViewModel @Inject constructor(
         }
     }
 
+    // ========== Theme Settings ==========
+
+    private fun loadThemeSettings() {
+        viewModelScope.launch {
+            launch {
+                repository.getDisplayModeFlow().collect { mode ->
+                    _uiState.update { it.copy(displayMode = mode) }
+                }
+            }
+            launch {
+                repository.getColorThemeFlow().collect { theme ->
+                    _uiState.update { it.copy(colorTheme = theme) }
+                }
+            }
+            launch {
+                repository.getFontScaleFlow().collect { scale ->
+                    _uiState.update { it.copy(fontScale = scale) }
+                }
+            }
+        }
+    }
+
+    fun setDisplayMode(mode: DisplayMode) {
+        viewModelScope.launch { repository.setDisplayMode(mode) }
+    }
+
+    fun setColorTheme(theme: ColorTheme) {
+        viewModelScope.launch { repository.setColorTheme(theme) }
+    }
+
+    fun setFontScale(scale: FontScale) {
+        viewModelScope.launch { repository.setFontScale(scale) }
+    }
+
     fun setNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch { repository.setNotificationsEnabled(enabled) }
     }
@@ -311,7 +351,7 @@ class EnergyScheduleViewModel @Inject constructor(
             repository.getRemList().onSuccess { rems ->
                 _uiState.update { it.copy(remList = rems, isLoading = false, lastLoadFailed = false) }
             }.onFailure { error ->
-                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                _uiState.update { it.copy(error = error.toAppError().getUserMessage(), isLoading = false, lastLoadFailed = true) }
                 startRetryTimer()
             }
         }
@@ -323,7 +363,7 @@ class EnergyScheduleViewModel @Inject constructor(
             repository.getCityList(remId).onSuccess { cities ->
                 _uiState.update { it.copy(cityList = cities, isLoading = false, lastLoadFailed = false) }
             }.onFailure { error ->
-                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                _uiState.update { it.copy(error = error.toAppError().getUserMessage(), isLoading = false, lastLoadFailed = true) }
                 startRetryTimer()
             }
         }
@@ -335,7 +375,7 @@ class EnergyScheduleViewModel @Inject constructor(
             repository.getStreetList(cityId).onSuccess { streets ->
                 _uiState.update { it.copy(streetList = streets, isLoading = false, lastLoadFailed = false) }
             }.onFailure { error ->
-                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                _uiState.update { it.copy(error = error.toAppError().getUserMessage(), isLoading = false, lastLoadFailed = true) }
                 startRetryTimer()
             }
         }
@@ -350,7 +390,7 @@ class EnergyScheduleViewModel @Inject constructor(
                     it.copy(addressList = addresses, parsedHouseNumbers = parsedHouses, filteredHouseNumbers = parsedHouses, isLoading = false, lastLoadFailed = false)
                 }
             }.onFailure { error ->
-                _uiState.update { it.copy(error = error.message, isLoading = false, lastLoadFailed = true) }
+                _uiState.update { it.copy(error = error.toAppError().getUserMessage(), isLoading = false, lastLoadFailed = true) }
                 startRetryTimer()
             }
         }
@@ -392,7 +432,7 @@ class EnergyScheduleViewModel @Inject constructor(
                 }
                 repository.saveQueueIdentifiers(cherga, pidcherga)
             }.onFailure { error ->
-                _uiState.update { it.copy(error = error.message, isLoading = false) }
+                _uiState.update { it.copy(error = error.toAppError().getUserMessage(), isLoading = false) }
                 if (!_uiState.value.isConnected) startRetryTimer()
             }
         }
@@ -472,5 +512,8 @@ data class UiState(
     val liveActivityEnabled: Boolean = false,
     val isConnected: Boolean = true,
     val retryCountdown: Int = 0,
-    val lastLoadFailed: Boolean = false
+    val lastLoadFailed: Boolean = false,
+    val displayMode: DisplayMode = DisplayMode.COMFORTABLE,
+    val colorTheme: ColorTheme = ColorTheme.SYSTEM,
+    val fontScale: FontScale = FontScale.NORMAL
 )
