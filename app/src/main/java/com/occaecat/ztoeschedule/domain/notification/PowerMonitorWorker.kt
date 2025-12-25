@@ -86,11 +86,33 @@ class PowerMonitorWorker @AssistedInject constructor(
         } catch (e: Exception) { null }
     }
 
-    private fun checkAndNotify(currentStatus: GroupedSchedule, advanceMinutes: Int) {
+import com.occaecat.ztoeschedule.data.model.PriorityMode
+
+    private suspend fun checkAndNotify(currentStatus: GroupedSchedule, advanceMinutes: Int) {
+        val settings = preferencesManager.smartNotificationSettingsFlow.first()
+        
+        // 1. Quiet Hours Check
+        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+        val currentHour = Calendar.getInstance(kyivZone).get(Calendar.HOUR_OF_DAY)
+        if (settings.isQuietHour(currentHour)) return
+
+        // 2. Priority Check (SILENT)
+        if (settings.priorityMode == PriorityMode.SILENT) return
+
         val isPowerOn = currentStatus.isLightOn
         val endTimeStr = Regex("""(\d{2}:\d{2})""").findAll(currentStatus.span).lastOrNull()?.value ?: return
         val endTimeParts = endTimeStr.split(":")
         val minutesUntilChange = getMinutesUntilTime(Pair(endTimeParts[0].toInt(), endTimeParts[1].toInt()))
+
+        // Alert types
+        val isOutageAlert = isPowerOn // Warning: Light is ON, so next is OFF
+        val isRestoreAlert = !isPowerOn // Warning: Light is OFF, so next is ON
+        
+        // Apply Priority Filters
+        if (settings.priorityMode == PriorityMode.CRITICAL_ONLY || settings.priorityMode == PriorityMode.SMART) {
+            // Skip "Restore" alerts in Critical/Smart modes (focus on outages)
+            if (isRestoreAlert) return
+        }
 
         if (minutesUntilChange in (advanceMinutes - 5)..advanceMinutes) {
             val title = if (isPowerOn) "⚠️ Скоро відключення" else "✅ Скоро увімкнення"

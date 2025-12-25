@@ -112,7 +112,8 @@ fun HomeTab(
                     streetName = streetName,
                     addressName = addressName,
                     cherga = cherga,
-                    pidcherga = pidcherga
+                    pidcherga = pidcherga,
+                    groupedSchedule = groupedSchedule
                 )
                 
                 if (lastUpdateTime.isNotEmpty()) {
@@ -307,14 +308,20 @@ private fun calculateTimeRemainingAbsolute(group: GroupedSchedule, nowMs: Long):
     } catch (e: Exception) { "—" }
 }
 
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+
 @Composable
 private fun AddressInfoCard(
     cityName: String,
     streetName: String,
     addressName: String,
     cherga: Int,
-    pidcherga: Int
+    pidcherga: Int,
+    groupedSchedule: List<GroupedSchedule>
 ) {
+    val clipboardManager = LocalClipboardManager.current
+    
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         shape = MaterialTheme.shapes.large,
@@ -338,12 +345,30 @@ private fun AddressInfoCard(
                 append(addressName)
             }
 
-            Text(
-                text = fullAddress,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = fullAddress,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            IconButton(
+                onClick = {
+                    val text = formatScheduleForSharing(fullAddress, cherga, pidcherga, groupedSchedule)
+                    clipboardManager.setText(AnnotatedString(text))
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "Копіювати графік",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
 
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -359,6 +384,28 @@ private fun AddressInfoCard(
             }
         }
     }
+}
+
+private fun formatScheduleForSharing(
+    address: String,
+    cherga: Int,
+    pidcherga: Int,
+    schedules: List<GroupedSchedule>
+): String = buildString {
+    appendLine("📍 $address")
+    appendLine("⚡ Черга: $cherga.$pidcherga")
+    appendLine()
+    
+    val groupedByDate = schedules.groupBy { it.date }
+    groupedByDate.forEach { (date, items) ->
+        appendLine("🗓 $date:")
+        items.forEach { item ->
+            val icon = if (item.isLightOn) "🟢" else "🔴"
+            appendLine("$icon ${item.span} - ${item.displayText}")
+        }
+        appendLine()
+    }
+    append("Сгенеровано додатком СвітлоЄ? Житомир")
 }
 
 @Composable
