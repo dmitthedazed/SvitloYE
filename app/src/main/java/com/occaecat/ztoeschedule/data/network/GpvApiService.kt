@@ -64,5 +64,11 @@ interface GpvApiService {
      */
     @GET("api-message.php")
     suspend fun getMessages(): List<ScheduleMessagePart>
+
+    /**
+     * Fetch headers only to get server time from 'Date' header
+     */
+    @retrofit2.http.HEAD("api-message.php")
+    suspend fun getHeaders(): retrofit2.Response<Void>
 }
 

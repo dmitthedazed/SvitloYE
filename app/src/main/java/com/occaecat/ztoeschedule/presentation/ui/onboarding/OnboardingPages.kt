@@ -11,13 +11,20 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.data.model.City
 import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
+import com.occaecat.ztoeschedule.presentation.ui.SearchField
+import com.occaecat.ztoeschedule.presentation.ui.SelectionListItem
 
 @Composable
 fun RemSelectionPage(
@@ -25,25 +32,32 @@ fun RemSelectionPage(
     isLoading: Boolean,
     onRemSelected: (Rem) -> Unit
 ) {
-    if (isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(rems) { rem ->
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { onRemSelected(rem) }
-                ) {
-                    Text(
-                        text = rem.name,
-                        modifier = Modifier.padding(20.dp),
-                        style = MaterialTheme.typography.bodyLarge
+    var query by remember { mutableStateOf("") }
+    val filteredList = remember(query, rems) {
+        if (query.isBlank()) rems else rems.filter { it.name.contains(query, ignoreCase = true) }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Spacer(modifier = Modifier.height(16.dp))
+        SearchField(
+            query = query,
+            onQueryChange = { query = it },
+            placeholder = "Пошук РЕМ..."
+        )
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                items(filteredList) { rem ->
+                    SelectionListItem(
+                        title = rem.name,
+                        onClick = { onRemSelected(rem) }
                     )
                 }
             }
@@ -57,25 +71,32 @@ fun CitySelectionPage(
     isLoading: Boolean,
     onCitySelected: (City) -> Unit
 ) {
-    if (isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(cities) { city ->
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { onCitySelected(city) }
-                ) {
-                    Text(
-                        text = city.name,
-                        modifier = Modifier.padding(20.dp),
-                        style = MaterialTheme.typography.bodyLarge
+    var query by remember { mutableStateOf("") }
+    val filteredList = remember(query, cities) {
+        if (query.isBlank()) cities else cities.filter { it.name.contains(query, ignoreCase = true) }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Spacer(modifier = Modifier.height(16.dp))
+        SearchField(
+            query = query,
+            onQueryChange = { query = it },
+            placeholder = "Пошук міста..."
+        )
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                items(filteredList) { city ->
+                    SelectionListItem(
+                        title = city.name,
+                        onClick = { onCitySelected(city) }
                     )
                 }
             }
@@ -89,25 +110,32 @@ fun StreetSelectionPage(
     isLoading: Boolean,
     onStreetSelected: (Street) -> Unit
 ) {
-    if (isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(streets) { street ->
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { onStreetSelected(street) }
-                ) {
-                    Text(
-                        text = street.name,
-                        modifier = Modifier.padding(20.dp),
-                        style = MaterialTheme.typography.bodyLarge
+    var query by remember { mutableStateOf("") }
+    val filteredList = remember(query, streets) {
+        if (query.isBlank()) streets else streets.filter { it.name.contains(query, ignoreCase = true) }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Spacer(modifier = Modifier.height(16.dp))
+        SearchField(
+            query = query,
+            onQueryChange = { query = it },
+            placeholder = "Пошук вулиці..."
+        )
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                items(filteredList) { street ->
+                    SelectionListItem(
+                        title = street.name,
+                        onClick = { onStreetSelected(street) }
                     )
                 }
             }
@@ -126,25 +154,11 @@ fun HouseNumberSelectionPage(
     onHouseSelected: (ParsedHouseNumber) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        // Search bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            placeholder = { Text("Пошук будинку...") },
-            leadingIcon = {
-                Icon(Icons.Default.Search, "Пошук")
-            },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = onClearSearch) {
-                        Icon(Icons.Default.Clear, "Очистити")
-                    }
-                }
-            },
-            singleLine = true
+        Spacer(modifier = Modifier.height(16.dp))
+        SearchField(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChange,
+            placeholder = "Пошук будинку..."
         )
 
         if (isLoading) {
@@ -160,30 +174,33 @@ fun HouseNumberSelectionPage(
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 80.dp),
+                columns = GridCells.Adaptive(minSize = 100.dp),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(houseNumbers) { house ->
-                    FilterChip(
-                        selected = false,
+                    OutlinedCard(
                         onClick = { onHouseSelected(house) },
-                        label = {
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
                                 text = house.houseNumber,
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.bodyLarge
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                    )
+                        }
+                    }
                 }
             }
         }
     }
 }
-

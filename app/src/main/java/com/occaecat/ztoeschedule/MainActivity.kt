@@ -6,7 +6,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
 import com.occaecat.ztoeschedule.presentation.ui.MainScreen
-import com.occaecat.ztoeschedule.ui.theme.ZTOEScheduleTheme
+import com.occaecat.ztoeschedule.ui.theme.SvitloYeZhytomyrTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
 
 /**
  * Main Activity for ZTOE Schedule Application
@@ -23,8 +27,14 @@ class MainActivity : ComponentActivity() {
         NotificationScheduler.schedulePowerMonitoring(this)
 
         setContent {
-            ZTOEScheduleTheme {
-                MainScreen()
+            SvitloYeZhytomyrTheme {
+                // A surface container using the 'background' color from the theme
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    MainScreen()
+                }
             }
         }
     }

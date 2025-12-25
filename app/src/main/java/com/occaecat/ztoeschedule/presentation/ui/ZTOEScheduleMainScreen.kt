@@ -26,7 +26,7 @@ import kotlinx.coroutines.delay
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ZTOEScheduleMainScreen() {
+fun SvitloYeZhytomyrMainScreen() {
     val context = LocalContext.current
     val viewModel: EnergyScheduleViewModel = viewModel(
         factory = EnergyScheduleViewModelFactory(context)

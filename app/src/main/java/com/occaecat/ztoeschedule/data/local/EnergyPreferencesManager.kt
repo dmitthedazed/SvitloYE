@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /**
@@ -42,6 +43,8 @@ class EnergyPreferencesManager(private val context: Context) {
         // Notification settings
         private val KEY_NOTIFICATIONS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("notifications_enabled")
         private val KEY_NOTIFICATION_ADVANCE_MINUTES = intPreferencesKey("notification_advance_minutes")
+        private val KEY_STATUS_NOTIFICATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("status_notification_enabled")
+        private val KEY_LIVE_ACTIVITY_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("live_activity_enabled")
 
         // Default values
         private const val DEFAULT_CHERGA = 0
@@ -54,14 +57,14 @@ class EnergyPreferencesManager(private val context: Context) {
      */
     val chergaFlow: Flow<Int> = context.dataStore.data.map { preferences ->
         preferences[KEY_CHERGA] ?: DEFAULT_CHERGA
-    }
+    }.distinctUntilChanged()
 
     /**
      * Flow that emits the saved pidcherga value
      */
     val pidchergaFlow: Flow<Int> = context.dataStore.data.map { preferences ->
         preferences[KEY_PIDCHERGA] ?: DEFAULT_PIDCHERGA
-    }
+    }.distinctUntilChanged()
 
     /**
      * Flow that emits both cherga and pidcherga as a Pair
@@ -70,7 +73,7 @@ class EnergyPreferencesManager(private val context: Context) {
         val cherga = preferences[KEY_CHERGA] ?: DEFAULT_CHERGA
         val pidcherga = preferences[KEY_PIDCHERGA] ?: DEFAULT_PIDCHERGA
         Pair(cherga, pidcherga)
-    }
+    }.distinctUntilChanged()
 
     /**
      * Flow that emits saved selection chain
@@ -104,28 +107,42 @@ class EnergyPreferencesManager(private val context: Context) {
         } else {
             null
         }
-    }
+    }.distinctUntilChanged()
 
     /**
      * Flow that emits onboarding completion status
      */
     val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KEY_ONBOARDING_COMPLETED] ?: false
-    }
+    }.distinctUntilChanged()
 
     /**
      * Flow that emits notification enabled status
      */
     val notificationsEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KEY_NOTIFICATIONS_ENABLED] ?: true // Enabled by default
-    }
+    }.distinctUntilChanged()
 
     /**
      * Flow that emits notification advance time in minutes
      */
     val notificationAdvanceMinutesFlow: Flow<Int> = context.dataStore.data.map { preferences ->
         preferences[KEY_NOTIFICATION_ADVANCE_MINUTES] ?: DEFAULT_NOTIFICATION_ADVANCE_MINUTES
-    }
+    }.distinctUntilChanged()
+
+    /**
+     * Flow that emits status notification enabled status
+     */
+    val statusNotificationEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_STATUS_NOTIFICATION_ENABLED] ?: false
+    }.distinctUntilChanged()
+
+    /**
+     * Flow that emits live activity enabled status
+     */
+    val liveActivityEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_LIVE_ACTIVITY_ENABLED] ?: false
+    }.distinctUntilChanged()
 
     /**
      * Save notification enabled status
@@ -142,6 +159,24 @@ class EnergyPreferencesManager(private val context: Context) {
     suspend fun setNotificationAdvanceMinutes(minutes: Int) {
         context.dataStore.edit { preferences ->
             preferences[KEY_NOTIFICATION_ADVANCE_MINUTES] = minutes
+        }
+    }
+
+    /**
+     * Save status notification enabled status
+     */
+    suspend fun setStatusNotificationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_STATUS_NOTIFICATION_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save live activity enabled status
+     */
+    suspend fun setLiveActivityEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_LIVE_ACTIVITY_ENABLED] = enabled
         }
     }
 

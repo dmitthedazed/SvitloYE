@@ -1,20 +1,28 @@
 package com.occaecat.ztoeschedule.presentation.ui.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
 import com.occaecat.ztoeschedule.domain.notification.PowerNotificationManager
+import com.occaecat.ztoeschedule.domain.notification.StatusNotificationService
 
 /**
  * Settings tab with notification settings
@@ -23,212 +31,268 @@ import com.occaecat.ztoeschedule.domain.notification.PowerNotificationManager
 fun SettingsTab(
     notificationsEnabled: Boolean = true,
     notificationAdvanceMinutes: Int = 15,
+    statusNotificationEnabled: Boolean = false,
+    liveActivityEnabled: Boolean = false,
+    lastUpdateTime: String = "",
     onNotificationsEnabledChange: (Boolean) -> Unit = {},
     onNotificationAdvanceMinutesChange: (Int) -> Unit = {},
+    onStatusNotificationEnabledChange: (Boolean) -> Unit = {},
+    onLiveActivityEnabledChange: (Boolean) -> Unit = {},
     onResetOnboarding: () -> Unit,
     onClearData: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     val context = LocalContext.current
     val notificationManager = remember { PowerNotificationManager(context) }
+    val scrollState = rememberScrollState()
 
     var showResetDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showAdvanceTimeDialog by remember { mutableStateOf(false) }
+    var localStatusNotification by remember { mutableStateOf(statusNotificationEnabled) }
+    var localLiveActivity by remember { mutableStateOf(liveActivityEnabled) }
+    var enableChangeNotifications by remember { mutableStateOf(notificationsEnabled) }
+
+    // Sync local state with passed props
+    LaunchedEffect(statusNotificationEnabled) {
+        localStatusNotification = statusNotificationEnabled
+    }
+    LaunchedEffect(liveActivityEnabled) {
+        localLiveActivity = liveActivityEnabled
+    }
+    LaunchedEffect(notificationsEnabled) {
+        enableChangeNotifications = notificationsEnabled
+    }
+
+    // Notification permission launcher
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            enableChangeNotifications = true
+            onNotificationsEnabledChange(true)
+            NotificationScheduler.schedulePowerMonitoring(context)
+        }
+    }
+
+    // Request permission helper
+    fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            enableChangeNotifications = true
+            onNotificationsEnabledChange(true)
+            NotificationScheduler.schedulePowerMonitoring(context)
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(contentPadding)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Налаштування",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
         // Notification settings section
         Text(
             text = "Сповіщення",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
         )
 
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Enable/disable notifications
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Увімкнути сповіщення",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = if (notificationsEnabled) "Ви отримуватимете сповіщення" else "Вимкнено",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Column {
+                // Static status notification
+                ListItem(
+                    headlineContent = { Text("Постійне сповіщення статусу") },
+                    supportingContent = { Text("Показувати поточний статус світла") },
+                    leadingContent = { 
+                        Icon(Icons.Outlined.Notifications, null) 
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = localStatusNotification,
+                            onCheckedChange = { enabled ->
+                                if (enabled && !notificationManager.hasNotificationPermission()) {
+                                    requestNotificationPermission()
+                                } else {
+                                    localStatusNotification = enabled
+                                    onStatusNotificationEnabledChange(enabled)
+                                    if (enabled) {
+                                        if (localLiveActivity) {
+                                            com.occaecat.ztoeschedule.domain.notification.LiveActivityNotificationService.start(context)
+                                        } else {
+                                            StatusNotificationService.start(context)
+                                        }
+                                    } else {
+                                        StatusNotificationService.stop(context)
+                                        com.occaecat.ztoeschedule.domain.notification.LiveActivityNotificationService.stop(context)
+                                    }
+                                }
+                            }
                         )
                     }
-                    Switch(
-                        checked = notificationsEnabled,
-                        onCheckedChange = { enabled ->
-                            onNotificationsEnabledChange(enabled)
-                            if (enabled) {
-                                NotificationScheduler.schedulePowerMonitoring(context)
-                            } else {
-                                NotificationScheduler.cancelPowerMonitoring(context)
-                            }
-                        }
+                )
+
+                // Live Activity Toggle
+                AnimatedVisibility(visible = localStatusNotification) {
+                    ListItem(
+                        headlineContent = { Text("Live Activity (Rich Style)") },
+                        supportingContent = { Text("Розширений стиль сповіщення (Android 12+)") },
+                        leadingContent = { Spacer(Modifier.width(24.dp)) },
+                        trailingContent = {
+                            Switch(
+                                checked = localLiveActivity,
+                                onCheckedChange = { enabled ->
+                                    localLiveActivity = enabled
+                                    onLiveActivityEnabledChange(enabled)
+                                    if (enabled) {
+                                        StatusNotificationService.stop(context)
+                                        com.occaecat.ztoeschedule.domain.notification.LiveActivityNotificationService.start(context)
+                                    } else {
+                                        com.occaecat.ztoeschedule.domain.notification.LiveActivityNotificationService.stop(context)
+                                        StatusNotificationService.start(context)
+                                    }
+                                },
+                                modifier = Modifier.scale(0.85f)
+                            )
+                        },
+                        colors = ListItemDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                        )
                     )
                 }
 
-                HorizontalDivider()
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+
+                // Change notifications
+                ListItem(
+                    headlineContent = { Text("Сповіщення про зміни") },
+                    supportingContent = { 
+                        Text(if (enableChangeNotifications) "Попереджати про вимкнення/увімкнення" else "Вимкнено") 
+                    },
+                    leadingContent = { Icon(Icons.Default.NotificationsActive, null) },
+                    trailingContent = {
+                        Switch(
+                            checked = enableChangeNotifications,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    if (!notificationManager.hasNotificationPermission()) {
+                                        requestNotificationPermission()
+                                    } else {
+                                        enableChangeNotifications = true
+                                        onNotificationsEnabledChange(true)
+                                        NotificationScheduler.schedulePowerMonitoring(context)
+                                    }
+                                } else {
+                                    enableChangeNotifications = false
+                                    onNotificationsEnabledChange(false)
+                                    NotificationScheduler.cancelPowerMonitoring(context)
+                                }
+                            }
+                        )
+                    }
+                )
 
                 // Advance time selection
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Час до події",
-                            style = MaterialTheme.typography.bodyLarge
+                AnimatedVisibility(visible = enableChangeNotifications) {
+                    ListItem(
+                        headlineContent = { Text("Попереджати за") },
+                        supportingContent = { Text("$notificationAdvanceMinutes ${getMinutesLabel(notificationAdvanceMinutes)} до зміни") },
+                        leadingContent = { Spacer(Modifier.width(24.dp)) },
+                        trailingContent = {
+                            TextButton(onClick = { showAdvanceTimeDialog = true }) {
+                                Text("Змінити")
+                            }
+                        },
+                        colors = ListItemDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                         )
-                        Text(
-                            text = "За $notificationAdvanceMinutes ${getMinutesLabel(notificationAdvanceMinutes)} до зміни",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    FilledTonalButton(onClick = { showAdvanceTimeDialog = true }) {
-                        Text("Змінити")
-                    }
+                    )
                 }
 
-                HorizontalDivider()
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
 
                 // Test notification button
-                Button(
-                    onClick = { notificationManager.sendTestNotification() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Notifications, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Тестове сповіщення")
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // App info section
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "ZTOE Schedule",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Версія 1.0.0",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                Box(modifier = Modifier.padding(16.dp)) {
+                    Button(
+                        onClick = {
+                            if (!notificationManager.hasNotificationPermission()) {
+                                requestNotificationPermission()
+                            } else {
+                                notificationManager.sendTestNotification()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Notifications, null)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Тестове сповіщення")
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
+        // Info and Actions
         Text(
-            text = "Дії",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            text = "Додаток",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 4.dp)
         )
 
-        // Reset onboarding
-        Card(
+        ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
-            onClick = { showResetDialog = true }
+            shape = MaterialTheme.shapes.extraLarge
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+            Column {
+                ListItem(
+                    headlineContent = { Text("ZTOE Schedule") },
+                    supportingContent = { 
+                        Text("Версія 1.0.0" + if(lastUpdateTime.isNotEmpty()) " • Оновлено: $lastUpdateTime" else "") 
+                    },
+                    leadingContent = { Icon(Icons.Default.Info, null) }
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Пройти налаштування знову",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Text(
-                        text = "Перезапустити процес вибору адреси",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
+                
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
 
-        // Clear all data
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { showClearDialog = true }
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
+                ListItem(
+                    headlineContent = { Text("Пройти налаштування знову") },
+                    supportingContent = { Text("Перезапустити процес вибору адреси") },
+                    leadingContent = { Icon(Icons.Default.SettingsBackupRestore, null) },
+                    modifier = Modifier.clickable { showResetDialog = true }
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Очистити всі дані",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        text = "Видалити збережену адресу та налаштування",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+
+                ListItem(
+                    headlineContent = { 
+                        Text("Очистити всі дані", color = MaterialTheme.colorScheme.error) 
+                    },
+                    supportingContent = { Text("Видалити збережені адреси та налаштування") },
+                    leadingContent = { 
+                        Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error) 
+                    },
+                    modifier = Modifier.clickable { showClearDialog = true }
+                )
             }
         }
+        
+        Spacer(modifier = Modifier.height(24.dp))
     }
 
     // Reset onboarding dialog
@@ -277,6 +341,46 @@ fun SettingsTab(
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) {
                     Text("Скасувати")
+                }
+            }
+        )
+    }
+
+    // Advance time selection dialog
+    if (showAdvanceTimeDialog) {
+        val timeOptions = listOf(5, 10, 15, 30, 60)
+
+        AlertDialog(
+            onDismissRequest = { showAdvanceTimeDialog = false },
+            title = { Text("Попереджати за скільки хвилин?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    timeOptions.forEach { minutes ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = notificationAdvanceMinutes == minutes,
+                                onClick = {
+                                    onNotificationAdvanceMinutesChange(minutes)
+                                    showAdvanceTimeDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "$minutes ${getMinutesLabel(minutes)}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAdvanceTimeDialog = false }) {
+                    Text("Закрити")
                 }
             }
         )

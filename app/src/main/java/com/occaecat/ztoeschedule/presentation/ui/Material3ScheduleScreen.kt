@@ -17,8 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.data.model.Schedule
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
+import java.util.Calendar
 
 /**
  * Современный Material 3 экран графика отключений
@@ -358,55 +357,6 @@ private fun NavigationButtons(
 }
 
 /**
- * Элемент списка графика
- */
-@Composable
-private fun ScheduleListItem(schedule: Schedule) {
-    val isActive = schedule.color.lowercase() in listOf("white", "green")
-
-    val indicatorColor = if (isActive) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.error
-    }
-
-    OutlinedCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Индикатор
-            Surface(
-                modifier = Modifier.size(12.dp),
-                shape = CircleShape,
-                color = indicatorColor
-            ) {}
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Время
-            Text(
-                text = schedule.span,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Статус
-            Text(
-                text = schedule.displayText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-/**
  * Элемент сгруппированного графика с вертикальной цветной полосой
  */
 @Composable
@@ -498,17 +448,24 @@ private fun GroupedScheduleItemCard(
  */
 private fun calculateProgress(currentStatus: Schedule): Pair<Float, String> {
     try {
-        val now = LocalTime.now()
-        val formatter = DateTimeFormatter.ofPattern("HH:mm")
-
         val times = currentStatus.span.split("-")
         if (times.size != 2) return Pair(0f, "")
 
-        val start = LocalTime.parse(times[0].trim(), formatter)
-        val end = LocalTime.parse(times[1].trim(), formatter)
+        fun parse(s: String): Int {
+            val p = s.trim().split(":")
+            return p[0].toInt() * 60 + p[1].toInt()
+        }
 
-        val totalMinutes = java.time.Duration.between(start, end).toMinutes().toFloat()
-        val elapsedMinutes = java.time.Duration.between(start, now).toMinutes().toFloat()
+        val start = parse(times[0])
+        var end = parse(times[1])
+        if (end <= start) end += 1440
+
+        val now = Calendar.getInstance()
+        var current = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+        if (current < start && end > 1440) current += 1440
+
+        val totalMinutes = (end - start).toFloat()
+        val elapsedMinutes = (current - start).toFloat()
 
         val progress = (elapsedMinutes / totalMinutes).coerceIn(0f, 1f)
 
@@ -526,4 +483,3 @@ private fun calculateProgress(currentStatus: Schedule): Pair<Float, String> {
         return Pair(0f, "")
     }
 }
-

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_background_neutral">#FDFDFD</color>
+    <color name="widget_background_accent">#E8DEF8</color>
+    <color name="widget_text_primary">#1D1B20</color>
+    <color name="widget_text_secondary">#49454F</color>
+    <color name="widget_status_positive">#B8F397</color> <!-- Light Green -->
+    <color name="widget_status_negative">#F2B8B5</color> <!-- Light Red -->
+    <color name="widget_status_warning">#FFDDAE</color> <!-- Light Amber -->
+    <color name="widget_on_status">#000000</color>
+</resources>

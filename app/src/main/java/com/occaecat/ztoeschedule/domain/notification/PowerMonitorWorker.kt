@@ -6,13 +6,15 @@ import androidx.work.WorkerParameters
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.network.RetrofitClient
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
-import com.occaecat.ztoeschedule.domain.ScheduleDomainLogic
+import com.occaecat.ztoeschedule.domain.GroupedSchedule
+import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
+import java.util.TimeZone
 
 /**
- * Background worker that checks power schedule and sends notifications
- * Runs periodically to monitor upcoming power changes
+ * Background worker that checks power schedule and sends notifications.
+ * Uses Europe/Kyiv timezone for all internal logic to match the utility provider.
  */
 class PowerMonitorWorker(
     context: Context,
@@ -20,131 +22,94 @@ class PowerMonitorWorker(
 ) : CoroutineWorker(context, params) {
 
     private val preferencesManager = EnergyPreferencesManager(applicationContext)
-    private val repository = EnergyRepository(RetrofitClient.apiService, preferencesManager)
+    private val repository = EnergyRepository(
+        RetrofitClient.apiService, 
+        preferencesManager, 
+        com.occaecat.ztoeschedule.data.local.AddressStorage(applicationContext)
+    )
     private val notificationManager = PowerNotificationManager(applicationContext)
 
     override suspend fun doWork(): Result {
         try {
-            // Check if notifications are enabled
             val notificationsEnabled = preferencesManager.notificationsEnabledFlow.first()
-            if (!notificationsEnabled) {
-                return Result.success()
-            }
+            if (!notificationsEnabled) return Result.success()
 
-            // Get saved address
             val savedSelection = preferencesManager.savedSelectionFlow.first()
             if (savedSelection == null || savedSelection.cherga == 0 || savedSelection.pidcherga == 0) {
                 return Result.success()
             }
 
-            // Fetch schedule
-            val result = repository.getScheduleWithMessages(
-                savedSelection.cherga,
-                savedSelection.pidcherga
-            )
+            val advanceMinutes = preferencesManager.notificationAdvanceMinutesFlow.first()
+
+            val result = repository.getScheduleWithMessages(savedSelection.cherga, savedSelection.pidcherga)
 
             result.onSuccess { data ->
-                val currentStatus = ScheduleDomainLogic.getCurrentStatus(data.schedules)
-
+                val groupedSchedules = ScheduleMapper.getGroupedSchedule(data.schedules)
+                val currentStatus = getCurrentGroupedStatus(groupedSchedules)
                 if (currentStatus != null) {
-                    checkAndNotify(currentStatus)
+                    checkAndNotify(currentStatus, advanceMinutes)
                 }
             }
 
             return Result.success()
         } catch (e: Exception) {
-            // Retry on failure
-            return if (runAttemptCount < 3) {
-                Result.retry()
-            } else {
-                Result.failure()
-            }
+            return if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
     }
 
-    private fun checkAndNotify(currentStatus: com.occaecat.ztoeschedule.data.model.Schedule) {
-        val isPowerOn = currentStatus.color.lowercase() != "red"
+    private fun getCurrentGroupedStatus(schedules: List<GroupedSchedule>): GroupedSchedule? {
+        if (schedules.isEmpty()) return null
+        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+        val now = Calendar.getInstance(kyivZone)
+        val currentHour = now.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = now.get(Calendar.MINUTE)
+        val currentTimeInMinutes = currentHour * 60 + currentMinute
 
-        // Parse end time
-        val endTime = parseEndTime(currentStatus.span) ?: return
-        val minutesUntilChange = getMinutesUntilTime(endTime)
-
-        // Get notification advance time (default 15 minutes)
-        val advanceMinutes = 15 // TODO: Make this configurable
-
-        // Check if we should notify
-        // Notify if: time until change is between advanceMinutes and (advanceMinutes - 5)
-        // This 5-minute window prevents duplicate notifications
-        if (minutesUntilChange in (advanceMinutes - 5)..advanceMinutes) {
-            val title = if (isPowerOn) {
-                "⚠️ Скоро відключення"
-            } else {
-                "✅ Скоро увімкнення"
-            }
-
-            val message = if (isPowerOn) {
-                "Через $minutesUntilChange хв очікується відключення світла"
-            } else {
-                "Через $minutesUntilChange хв очікується увімкнення світла"
-            }
-
-            notificationManager.sendPowerChangeNotification(
-                title = title,
-                message = message,
-                isOutage = !isPowerOn // Will change TO outage if currently on
-            )
-        }
-
-        // Also notify on status change (within 2 minutes of change)
-        if (minutesUntilChange <= 2 && minutesUntilChange >= 0) {
-            val title = if (isPowerOn) {
-                "🔴 Відключення світла"
-            } else {
-                "🟢 Світло увімкнено"
-            }
-
-            val message = if (isPowerOn) {
-                "Зараз відбувається відключення електропостачання"
-            } else {
-                "Електропостачання відновлено"
-            }
-
-            notificationManager.sendPowerChangeNotification(
-                title = title,
-                message = message,
-                isOutage = !isPowerOn
-            )
+        return schedules.firstOrNull { schedule ->
+            val parts = schedule.span.split("-")
+            if (parts.size >= 2) {
+                val start = parseTime(parts[0].trim())
+                val end = parseTime(parts[1].trim())
+                if (start != null && end != null) {
+                    if (end >= start) currentTimeInMinutes in start until end
+                    else currentTimeInMinutes >= start || currentTimeInMinutes < end
+                } else false
+            } else false
         }
     }
 
-    private fun parseEndTime(span: String): Pair<Int, Int>? {
+    private fun parseTime(timeStr: String): Int? {
+        val parts = timeStr.split(":")
+        if (parts.size != 2) return null
         return try {
-            val parts = span.split("-")
-            if (parts.size != 2) return null
+            parts[0].toInt() * 60 + parts[1].toInt()
+        } catch (e: Exception) { null }
+    }
 
-            val endPart = parts[1].trim()
-            val timeParts = endPart.split(":")
-            if (timeParts.size != 2) return null
+    private fun checkAndNotify(currentStatus: GroupedSchedule, advanceMinutes: Int) {
+        val isPowerOn = currentStatus.isLightOn
+        val endTimeStr = Regex("""(\d{2}:\d{2})""").findAll(currentStatus.span).lastOrNull()?.value ?: return
+        val endTimeParts = endTimeStr.split(":")
+        val minutesUntilChange = getMinutesUntilTime(Pair(endTimeParts[0].toInt(), endTimeParts[1].toInt()))
 
-            val hour = timeParts[0].toInt()
-            val minute = timeParts[1].toInt()
-            Pair(hour, minute)
-        } catch (e: Exception) {
-            null
+        if (minutesUntilChange in (advanceMinutes - 5)..advanceMinutes) {
+            val title = if (isPowerOn) "⚠️ Скоро відключення" else "✅ Скоро увімкнення"
+            val message = if (isPowerOn) "Через $minutesUntilChange хв очікується відключення світла" else "Через $minutesUntilChange хв очікується увімкнення світла"
+            notificationManager.sendPowerChangeNotification(title, message, !isPowerOn)
+        }
+
+        if (minutesUntilChange in 0..2) {
+            val title = if (isPowerOn) "🔴 Відключення світла" else "🟢 Світло увімкнено"
+            val message = if (isPowerOn) "Зараз відбувається відключення електропостачання" else "Електропостачання відновлено"
+            notificationManager.sendPowerChangeNotification(title, message, !isPowerOn)
         }
     }
 
     private fun getMinutesUntilTime(targetTime: Pair<Int, Int>): Int {
-        val now = Calendar.getInstance()
+        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+        val now = Calendar.getInstance(kyivZone)
         val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
         val targetMinutes = targetTime.first * 60 + targetTime.second
-
-        return if (targetMinutes > currentMinutes) {
-            targetMinutes - currentMinutes
-        } else {
-            // Next day
-            (24 * 60 - currentMinutes) + targetMinutes
-        }
+        return if (targetMinutes > currentMinutes) targetMinutes - currentMinutes else (1440 - currentMinutes) + targetMinutes
     }
 }
-

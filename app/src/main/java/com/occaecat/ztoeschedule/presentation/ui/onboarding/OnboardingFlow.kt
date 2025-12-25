@@ -1,97 +1,113 @@
 package com.occaecat.ztoeschedule.presentation.ui.onboarding
 
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.data.model.*
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
-import kotlinx.coroutines.launch
+import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressCustomizationScreen
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 
 /**
- * Onboarding flow with address selection
- * 5 steps: Welcome → REM → City → Street → House Number
+ * Modern Onboarding Flow using a step-based approach instead of Pager for better stability.
  */
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingFlow(
-    // Data lists
     remList: List<Rem>,
     cityList: List<City>,
     streetList: List<Street>,
     houseNumbers: List<ParsedHouseNumber>,
     searchQuery: String,
     isLoading: Boolean,
-    
-    // Callbacks
     onLoadRem: () -> Unit,
     onLoadCity: (String) -> Unit,
     onLoadStreet: (String) -> Unit,
     onLoadAddress: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit,
+    onCancel: (() -> Unit)? = null,
+    showWelcome: Boolean = true,
     onComplete: (
-        remId: String?,
-        remName: String?,
-        cityId: String?,
-        cityName: String?,
-        streetId: String?,
-        streetName: String?,
-        addressId: String,
-        addressName: String,
-        cherga: Int,
-        pidcherga: Int
+        remId: String?, remName: String?, cityId: String?, cityName: String?,
+        streetId: String?, streetName: String?, addressId: String,
+        addressName: String, cherga: Int, pidcherga: Int,
+        customName: String, iconName: String
     ) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pagerState = rememberPagerState(pageCount = { 5 })
-    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    // Step 0: Welcome, 1: Permissions, 2: REM, 3: City, 4: Street, 5: House, 6: Customize
+    var step by remember { mutableIntStateOf(if (showWelcome) 0 else 2) }
     
     var selectedRem by remember { mutableStateOf<Rem?>(null) }
     var selectedCity by remember { mutableStateOf<City?>(null) }
     var selectedStreet by remember { mutableStateOf<Street?>(null) }
+    var selectedHouse by remember { mutableStateOf<ParsedHouseNumber?>(null) }
     
-    // Load initial data
-    LaunchedEffect(Unit) {
-        if (remList.isEmpty()) {
-            onLoadRem()
+    // Function to check if notification permission is granted
+    fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
         }
+    }
+
+    LaunchedEffect(Unit) {
+        if (remList.isEmpty()) onLoadRem()
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = when (pagerState.currentPage) {
+                        text = when (step) {
                             0 -> "Ласкаво просимо"
-                            1 -> "Крок 1: Оберіть РЕМ"
-                            2 -> "Крок 2: Оберіть місто"
-                            3 -> "Крок 3: Оберіть вулицю"
-                            4 -> "Крок 4: Оберіть будинок"
+                            1 -> "Сповіщення"
+                            2 -> "Вибір РЕМ"
+                            3 -> "Вибір міста"
+                            4 -> "Вибір вулиці"
+                            5 -> "Вибір будинку"
+                            6 -> "Налаштування"
                             else -> ""
-                        }
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
-                    if (pagerState.currentPage > 0) {
-                        IconButton(onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                            }
-                        }) {
+                    if (step > (if (showWelcome) 0 else 2)) {
+                        IconButton(onClick = { step-- }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
+                        }
+                    } else if (onCancel != null) {
+                        IconButton(onClick = onCancel) {
+                            Icon(Icons.Default.Close, "Закрити")
                         }
                     }
                 }
@@ -104,90 +120,93 @@ fun OnboardingFlow(
                 .padding(padding)
         ) {
             // Progress indicator
-            LinearProgressIndicator(
-                progress = { (pagerState.currentPage + 1) / 5f },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.weight(1f),
-                userScrollEnabled = false // Disable swipe, use buttons only
-            ) { page ->
-                when (page) {
-                    0 -> WelcomePage()
-                    1 -> RemSelectionPage(
-                        rems = remList,
-                        isLoading = isLoading,
-                        onRemSelected = { rem ->
-                            selectedRem = rem
-                            onLoadCity(rem.id)
-                            scope.launch {
-                                pagerState.animateScrollToPage(2)
-                            }
-                        }
-                    )
-                    2 -> CitySelectionPage(
-                        cities = cityList,
-                        isLoading = isLoading,
-                        onCitySelected = { city ->
-                            selectedCity = city
-                            onLoadStreet(city.id)
-                            scope.launch {
-                                pagerState.animateScrollToPage(3)
-                            }
-                        }
-                    )
-                    3 -> StreetSelectionPage(
-                        streets = streetList,
-                        isLoading = isLoading,
-                        onStreetSelected = { street ->
-                            selectedStreet = street
-                            onLoadAddress(street.id)
-                            scope.launch {
-                                pagerState.animateScrollToPage(4)
-                            }
-                        }
-                    )
-                    4 -> HouseNumberSelectionPage(
-                        houseNumbers = houseNumbers,
-                        searchQuery = searchQuery,
-                        isLoading = isLoading,
-                        onSearchQueryChange = onSearchQueryChange,
-                        onClearSearch = onClearSearch,
-                        onHouseSelected = { house ->
-                            onComplete(
-                                selectedRem?.id,
-                                selectedRem?.name,
-                                selectedCity?.id,
-                                selectedCity?.name,
-                                selectedStreet?.id,
-                                selectedStreet?.name,
-                                house.originalAddressId,
-                                house.houseNumber,
-                                house.cherga,
-                                house.pidcherga
-                            )
-                        }
-                    )
-                }
+            if (step > 0) {
+                LinearProgressIndicator(
+                    progress = { step / 6f },
+                    modifier = Modifier.fillMaxWidth(),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    strokeCap = StrokeCap.Round
+                )
             }
 
-            // Navigation button (only on welcome page)
-            if (pagerState.currentPage == 0) {
-                FilledTonalButton(
-                    onClick = {
-                        scope.launch {
-                            pagerState.animateScrollToPage(1)
-                        }
+            Box(modifier = Modifier.weight(1f)) {
+                AnimatedContent(
+                    targetState = step,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
+                        } else {
+                            (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
+                        }.using(SizeTransform(clip = false))
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text("Почати налаштування")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(20.dp))
+                    label = "onboarding_transition"
+                ) { targetStep ->
+                    when (targetStep) {
+                        0 -> WelcomePage(onStart = { 
+                            if (hasNotificationPermission()) {
+                                step = 2
+                            } else {
+                                step = 1
+                            }
+                        })
+                        1 -> NotificationPermissionPage(
+                            onGranted = { step = 2 },
+                            onSkip = { step = 2 }
+                        )
+                        2 -> RemSelectionPage(
+                            rems = remList,
+                            isLoading = isLoading,
+                            onRemSelected = {
+                                selectedRem = it
+                                onLoadCity(it.id)
+                                step = 3
+                            }
+                        )
+                        3 -> CitySelectionPage(
+                            cities = cityList,
+                            isLoading = isLoading,
+                            onCitySelected = {
+                                selectedCity = it
+                                onLoadStreet(it.id)
+                                step = 4
+                            }
+                        )
+                        4 -> StreetSelectionPage(
+                            streets = streetList,
+                            isLoading = isLoading,
+                            onStreetSelected = {
+                                selectedStreet = it
+                                onLoadAddress(it.id)
+                                step = 5
+                            }
+                        )
+                        5 -> HouseNumberSelectionPage(
+                            houseNumbers = houseNumbers,
+                            searchQuery = searchQuery,
+                            isLoading = isLoading,
+                            onSearchQueryChange = onSearchQueryChange,
+                            onClearSearch = onClearSearch,
+                            onHouseSelected = {
+                                selectedHouse = it
+                                step = 6
+                            }
+                        )
+                        6 -> AddressCustomizationScreen(
+                            onComplete = { name, icon ->
+                                onComplete(
+                                    selectedRem?.id, selectedRem?.name,
+                                    selectedCity?.id, selectedCity?.name,
+                                    selectedStreet?.id, selectedStreet?.name,
+                                    selectedHouse!!.originalAddressId,
+                                    selectedHouse!!.houseNumber,
+                                    selectedHouse!!.cherga,
+                                    selectedHouse!!.pidcherga,
+                                    name, icon
+                                )
+                            },
+                            onBack = { step = 5 }
+                        )
+                    }
                 }
             }
         }
@@ -195,7 +214,16 @@ fun OnboardingFlow(
 }
 
 @Composable
-private fun WelcomePage() {
+private fun NotificationPermissionPage(
+    onGranted: () -> Unit,
+    onSkip: () -> Unit
+) {
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) onGranted() else onSkip()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -203,17 +231,25 @@ private fun WelcomePage() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.Home,
-            contentDescription = null,
+        Surface(
             modifier = Modifier.size(120.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.secondaryContainer
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.NotificationsActive,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
         
         Spacer(modifier = Modifier.height(32.dp))
         
         Text(
-            text = "Ласкаво просимо до ZTOE Schedule!",
+            text = "Будьте в курсі змін",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
@@ -222,33 +258,89 @@ private fun WelcomePage() {
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "Давайте налаштуємо вашу адресу для перегляду графіків відключень",
+            text = "Ми будемо надсилати вам сповіщення перед відключенням та при зміні статусу світла",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(48.dp))
         
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
-            )
+        Button(
+            onClick = { 
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    onGranted()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = MaterialTheme.shapes.medium
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Це займе лише 4 кроки:",
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text("✓ Вибір РЕМ")
-                Text("✓ Вибір міста")
-                Text("✓ Вибір вулиці")
-                Text("✓ Вибір будинку")
-            }
+            Text("Дозволити сповіщення", style = MaterialTheme.typography.titleMedium)
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        TextButton(
+            onClick = onSkip,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Налаштувати пізніше", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
+@Composable
+private fun WelcomePage(onStart: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            modifier = Modifier.size(120.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.primaryContainer
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text(
+            text = "Світло під контролем",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Давайте налаштуємо вашу адресу, щоб ви завжди знали актуальний графік відключень",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Spacer(modifier = Modifier.height(48.dp))
+        
+        Button(
+            onClick = onStart,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Text("Почати налаштування", style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}

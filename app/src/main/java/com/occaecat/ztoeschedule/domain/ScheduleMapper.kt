@@ -1,42 +1,38 @@
 package com.occaecat.ztoeschedule.domain
 
 import com.occaecat.ztoeschedule.data.model.Schedule
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
+import java.util.Calendar
+import java.util.TimeZone
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 /**
- * Mapper для группировки интервалов графика
- * Объединяет последовательные интервалы одного цвета в один блок
+ * Mapper для группировки интервалов графика.
+ * Объединяет последовательные интервалы одного цвета в один блок, 
+ * поддерживая переходы между датами.
  */
 object ScheduleMapper {
 
-    /**
-     * Группирует последовательные интервалы с одинаковым цветом
-     *
-     * @param raw Исходный список интервалов по 30 минут
-     * @return Сгруппированный список с объединенными интервалами
-     */
     fun getGroupedSchedule(raw: List<Schedule>): List<GroupedSchedule> {
         if (raw.isEmpty()) return emptyList()
 
+        val sortedRaw = raw.sortedWith(compareBy({ it.date.split(".").reversed().joinToString("") }, { it.span.split("-")[0] }))
+
         val grouped = mutableListOf<GroupedSchedule>()
-        var currentGroup: MutableList<Schedule> = mutableListOf(raw[0])
+        var currentGroup: MutableList<Schedule> = mutableListOf(sortedRaw[0])
 
-        for (i in 1 until raw.size) {
-            val current = raw[i]
-            val previous = raw[i - 1]
+        for (i in 1 until sortedRaw.size) {
+            val current = sortedRaw[i]
+            val previous = sortedRaw[i - 1]
 
-            // Проверяем, одинаковый ли цвет и последовательны ли интервалы
-            if (current.color == previous.color && areConsecutive(previous.span, current.span)) {
+            if (current.color == previous.color && areConsecutive(previous, current)) {
                 currentGroup.add(current)
             } else {
-                // Завершаем текущую группу и начинаем новую
                 grouped.add(createGroupedSchedule(currentGroup))
                 currentGroup = mutableListOf(current)
             }
         }
 
-        // Добавляем последнюю группу
         if (currentGroup.isNotEmpty()) {
             grouped.add(createGroupedSchedule(currentGroup))
         }
@@ -44,97 +40,121 @@ object ScheduleMapper {
         return grouped
     }
 
-    /**
-     * Создает объединенный интервал из группы последовательных интервалов
-     */
     private fun createGroupedSchedule(group: List<Schedule>): GroupedSchedule {
         val first = group.first()
         val last = group.last()
 
         val startTime = first.span.split("-")[0].trim()
         val endTime = last.span.split("-")[1].trim()
-        val mergedSpan = "$startTime-$endTime"
+        
+        val mergedSpan = if (first.date != last.date) {
+            "$startTime (${first.date.substring(0, 5)}) - $endTime (${last.date.substring(0, 5)})"
+        } else {
+            "$startTime-$endTime"
+        }
 
-        val duration = calculateDuration(startTime, endTime)
+        val totalMinutes = calculateTotalMinutes(group)
+        val hours = totalMinutes / 60
+        val minutes = totalMinutes % 60
 
         return GroupedSchedule(
             date = first.date,
             span = mergedSpan,
+            startTime = startTime,
+            endTime = endTime,
             color = first.color,
             text = first.text,
             displayText = first.displayText,
-            durationHours = duration.first,
-            durationMinutes = duration.second,
+            durationHours = hours,
+            durationMinutes = minutes,
             intervalCount = group.size
         )
     }
 
-    /**
-     * Проверяет, являются ли два интервала последовательными
-     */
-    private fun areConsecutive(span1: String, span2: String): Boolean {
+    private fun calculateTotalMinutes(group: List<Schedule>): Int {
+        var total = 0
+        for (item in group) {
+            try {
+                val parts = item.span.split("-")
+                val start = parseTimeToMinutes(parts[0].trim())
+                val end = parseTimeToMinutes(parts[1].trim())
+                var duration = end - start
+                if (duration <= 0 && parts[1].trim() == "24:00") duration = 1440 - start
+                else if (duration < 0) duration += 1440
+                total += duration
+            } catch (e: Exception) {}
+        }
+        return total
+    }
+
+    private fun areConsecutive(s1: Schedule, s2: Schedule): Boolean {
         return try {
-            val end1 = span1.split("-")[1].trim()
-            val start2 = span2.split("-")[0].trim()
-            end1 == start2
+            val end1 = s1.span.split("-")[1].trim()
+            val start2 = s2.span.split("-")[0].trim()
+            if (s1.date == s2.date) {
+                end1 == start2
+            } else {
+                (end1 == "24:00" || end1 == "00:00") && start2 == "00:00"
+            }
         } catch (e: Exception) {
             false
         }
     }
 
     /**
-     * Вычисляет продолжительность интервала
-     *
-     * @return Pair<часы, минуты>
+     * Находит текущий активный сгруппированный интервал (абсолютное сравнение времени)
      */
-    private fun calculateDuration(startTime: String, endTime: String): Pair<Int, Int> {
-        return try {
-            val formatter = DateTimeFormatter.ofPattern("HH:mm")
-            val start = LocalTime.parse(startTime, formatter)
-            var end = LocalTime.parse(endTime, formatter)
+    fun getCurrentGroupedStatus(schedules: List<GroupedSchedule>): GroupedSchedule? {
+        if (schedules.isEmpty()) return null
 
-            // Обработка перехода через полночь (24:00 -> 00:00)
-            if (endTime == "24:00") {
-                end = LocalTime.of(23, 59)
+        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+        val now = Calendar.getInstance(kyivZone)
+        val nowMs = now.timeInMillis
+
+        val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.US)
+        sdf.timeZone = kyivZone
+
+        return schedules.firstOrNull { group ->
+            try {
+                val startCal = Calendar.getInstance(kyivZone)
+                val dateParts = group.date.split(".")
+                val timeParts = group.startTime.split(":")
+                startCal.set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), timeParts[0].toInt(), timeParts[1].toInt(), 0)
+                startCal.set(Calendar.MILLISECOND, 0)
+                
+                val startMs = startCal.timeInMillis
+                val durationMs = (group.durationHours * 60 + group.durationMinutes) * 60 * 1000L
+                val endMs = startMs + durationMs
+
+                nowMs >= startMs && nowMs < endMs
+            } catch (e: Exception) {
+                false
             }
-
-            var totalMinutes = if (end.isBefore(start)) {
-                // Переход через полночь
-                val minutesToMidnight = java.time.Duration.between(start, LocalTime.MAX).toMinutes()
-                val minutesFromMidnight = java.time.Duration.between(LocalTime.MIN, end).toMinutes()
-                (minutesToMidnight + minutesFromMidnight + 1).toInt()
-            } else {
-                java.time.Duration.between(start, end).toMinutes().toInt()
-            }
-
-            val hours = totalMinutes / 60
-            val minutes = totalMinutes % 60
-
-            Pair(hours, minutes)
-        } catch (e: Exception) {
-            Pair(0, 0)
         }
     }
 
-    /**
-     * Форматирует продолжительность для отображения
-     */
     fun formatDuration(hours: Int, minutes: Int): String {
         return when {
             hours > 0 && minutes > 0 -> "$hours год $minutes хв"
             hours > 0 -> "$hours год"
             minutes > 0 -> "$minutes хв"
-            else -> ""
+            else -> "0 хв"
         }
+    }
+
+    private fun parseTimeToMinutes(time: String): Int {
+        return try {
+            val parts = time.split(":")
+            parts[0].toInt() * 60 + parts[1].toInt()
+        } catch (e: Exception) { 0 }
     }
 }
 
-/**
- * Модель сгруппированного интервала графика
- */
 data class GroupedSchedule(
     val date: String,
     val span: String,
+    val startTime: String,
+    val endTime: String,
     val color: String,
     val text: String?,
     val displayText: String,
@@ -142,28 +162,9 @@ data class GroupedSchedule(
     val durationMinutes: Int,
     val intervalCount: Int
 ) {
-    /**
-     * Форматированная продолжительность
-     */
     val formattedDuration: String
         get() = ScheduleMapper.formatDuration(durationHours, durationMinutes)
 
-    /**
-     * Время начала
-     */
-    val startTime: String
-        get() = span.split("-")[0].trim()
-
-    /**
-     * Время окончания
-     */
-    val endTime: String
-        get() = span.split("-")[1].trim()
-
-    /**
-     * Статус активности (свет есть или нет)
-     */
     val isLightOn: Boolean
         get() = color.lowercase() in listOf("white", "green")
 }
-

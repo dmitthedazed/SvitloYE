@@ -1,0 +1,71 @@
+name: Build and Release APK
+
+on:
+  workflow_dispatch: # Allows manual triggering
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to commit the version bump and create releases
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Increment Version
+        id: bump_version
+        run: |
+          # Read current version name from build.gradle.kts
+          CURRENT_VERSION=$(grep 'versionName =' app/build.gradle.kts | sed 's/.*= "//;s/".*//')
+          echo "Current Version: $CURRENT_VERSION"
+          
+          # Increment by 0.1 using awk
+          NEW_VERSION=$(echo $CURRENT_VERSION | awk '{printf "%.1f", $1 + 0.1}')
+          echo "New Version: $NEW_VERSION"
+          
+          # Update build.gradle.kts
+          sed -i "s/versionName = \"$CURRENT_VERSION\"/versionName = \"$NEW_VERSION\"/" app/build.gradle.kts
+          
+          # Export to GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit and Push Version Bump
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add app/build.gradle.kts
+          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
+          git push origin HEAD:main || echo "Push failed, continuing with build..."
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.bump_version.outputs.new_version }}
+          name: Release v${{ steps.bump_version.outputs.new_version }}
+          draft: false
+          prerelease: false
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
