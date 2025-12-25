@@ -18,10 +18,14 @@ import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.TimeZone
 
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
 /**
  * Foreground service that displays persistent notification with current power status.
  * Uses Europe/Kyiv timezone for accurate tracking.
  */
+@AndroidEntryPoint
 class StatusNotificationService : Service() {
 
     companion object {
@@ -46,16 +50,15 @@ class StatusNotificationService : Service() {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private lateinit var preferencesManager: EnergyPreferencesManager
-    private lateinit var repository: EnergyRepository
+    
+    @Inject lateinit var preferencesManager: EnergyPreferencesManager
+    @Inject lateinit var repository: EnergyRepository
+    
     private var updateJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
-        preferencesManager = EnergyPreferencesManager(applicationContext)
-        val addressStorage = com.occaecat.ztoeschedule.data.local.AddressStorage(applicationContext)
-        repository = EnergyRepository(RetrofitClient.apiService, preferencesManager, addressStorage)
-
+        
         createNotificationChannel()
         try {
             startForeground(NOTIFICATION_ID, createNotification())

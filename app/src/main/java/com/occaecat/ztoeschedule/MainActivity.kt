@@ -12,12 +12,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 
+import dagger.hilt.android.AndroidEntryPoint
+
 /**
  * Main Activity for ZTOE Schedule Application
  *
  * Displays onboarding for new users, then shows the main app
  * with bottom navigation: Home, My Addresses, Settings
  */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
