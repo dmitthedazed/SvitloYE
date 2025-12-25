@@ -127,6 +127,12 @@ fun HomeTab(
             }
 
             // 3. Detailed Schedule List
+            val fullAddressString = buildString {
+                if (cityName.isNotEmpty()) append("$cityName, ")
+                if (streetName.isNotEmpty()) append("$streetName, ")
+                append(addressName)
+            }
+
             groupedByDate.forEach { (date, items) ->
                 Text(
                     text = "🗓 $date",
@@ -145,7 +151,8 @@ fun HomeTab(
                             
                             ScheduleListItemSimple(
                                 group = group,
-                                isActive = isActive
+                                isActive = isActive,
+                                address = fullAddressString
                             )
 
                             if (index < items.lastIndex) {
@@ -408,10 +415,15 @@ private fun formatScheduleForSharing(
     append("Сгенеровано додатком СвітлоЄ? Житомир")
 }
 
+import android.content.Intent
+import android.provider.CalendarContract
+import androidx.compose.ui.platform.LocalContext
+
 @Composable
 private fun ScheduleListItemSimple(
     group: GroupedSchedule,
-    isActive: Boolean
+    isActive: Boolean,
+    address: String
 ) {
     val context = LocalContext.current
     val hasElectricity = group.isLightOn
@@ -427,16 +439,69 @@ private fun ScheduleListItemSimple(
         leadingContent = {
             Surface(modifier = Modifier.size(4.dp, 32.dp), color = if (hasElectricity) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, shape = CircleShape) {}
         },
-        trailingContent = if (isActive) {
-            {
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text(stringResource(R.string.home_status_now)) },
-                    colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer, labelColor = MaterialTheme.colorScheme.onPrimaryContainer),
-                    border = null
-                )
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!hasElectricity) {
+                    IconButton(
+                        onClick = { addOutageToCalendar(context, group, address) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = "Додати в календар",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+                
+                if (isActive) {
+                    Spacer(Modifier.width(4.dp))
+                    SuggestionChip(
+                        onClick = { },
+                        label = { Text(stringResource(R.string.home_status_now)) },
+                        colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer, labelColor = MaterialTheme.colorScheme.onPrimaryContainer),
+                        border = null
+                    )
+                }
             }
-        } else null,
+        },
         colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
     )
+}
+
+private fun addOutageToCalendar(context: android.content.Context, group: GroupedSchedule, address: String) {
+    try {
+        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+        val dateParts = group.date.split(".")
+        
+        val startParts = group.startTime.split(":")
+        val startCal = Calendar.getInstance(kyivZone).apply {
+            set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), startParts[0].toInt(), startParts[1].toInt(), 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val endParts = group.endTime.split(":")
+        val endCal = Calendar.getInstance(kyivZone).apply {
+            set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), endParts[0].toInt(), endParts[1].toInt(), 0)
+            set(Calendar.MILLISECOND, 0)
+            if (group.endTime == "00:00" || timeInMillis <= startCal.timeInMillis) {
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+
+        val intent = Intent(Intent.ACTION_INSERT).apply {
+            data = CalendarContract.Events.CONTENT_URI
+            putExtra(CalendarContract.Events.TITLE, "Відключення світла 🔴")
+            putExtra(CalendarContract.Events.DESCRIPTION, "Заплановане відключення за адресою: $address")
+            putExtra(CalendarContract.Events.EVENT_LOCATION, address)
+            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startCal.timeInMillis)
+            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endCal.timeInMillis)
+            putExtra(CalendarContract.Events.ALL_DAY, false)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
 }
