@@ -38,7 +38,7 @@ object NotificationScheduler {
         WorkManager.getInstance(context)
             .enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP, // Keep existing if already scheduled
+                ExistingPeriodicWorkPolicy.UPDATE, // Update if settings changed
                 workRequest
             )
 

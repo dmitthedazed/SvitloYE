@@ -33,6 +33,7 @@ import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import kotlinx.coroutines.delay
 
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.occaecat.ztoeschedule.presentation.ui.more.MoreTab
 
 /**
  * New main screen with bottom navigation and history-based back navigation.
@@ -92,6 +93,7 @@ fun MainScreen() {
     // --- Navigation History and Back Handling ---
     var selectedTab by remember { mutableIntStateOf(0) }
     val navigationHistory = remember { mutableStateListOf(0) }
+    var moreTabScreen by remember { mutableStateOf("ROOT") } // ROOT, SETTINGS, STATS
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Time Sync Warning Dialog
@@ -118,11 +120,13 @@ fun MainScreen() {
     }
 
     // Logic to handle back navigation
-    val canGoBack = navigationHistory.size > 1 || uiState.isAddingNewAddress
+    val canGoBack = navigationHistory.size > 1 || uiState.isAddingNewAddress || (selectedTab == 3 && moreTabScreen != "ROOT")
     
     BackHandler(enabled = canGoBack) {
         if (uiState.isAddingNewAddress) {
             viewModel.cancelAddingAddress()
+        } else if (selectedTab == 3 && moreTabScreen != "ROOT") {
+            moreTabScreen = "ROOT"
         } else if (navigationHistory.size > 1) {
             navigationHistory.removeAt(navigationHistory.size - 1)
             selectedTab = navigationHistory.last()
@@ -133,6 +137,7 @@ fun MainScreen() {
     val onTabSelected: (Int) -> Unit = { index ->
         if (selectedTab != index) {
             selectedTab = index
+            if (index == 3) moreTabScreen = "ROOT" // Reset More tab to root
             navigationHistory.remove(index)
             navigationHistory.add(index)
         }
@@ -163,13 +168,13 @@ fun MainScreen() {
 
     // Main UI
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val showMainChrome = !(selectedTab == 2 && uiState.isAddingNewAddress)
+    val showMainChrome = !(selectedTab == 2 && uiState.isAddingNewAddress) && !(selectedTab == 3 && moreTabScreen != "ROOT")
 
     val navItems = listOf(
         BottomNavItem(stringResource(R.string.nav_home), Icons.Filled.Home, Icons.Outlined.Home),
         BottomNavItem(stringResource(R.string.nav_notifications), Icons.Filled.Notifications, Icons.Outlined.Notifications),
         BottomNavItem(stringResource(R.string.nav_addresses), Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
-        BottomNavItem(stringResource(R.string.nav_settings), Icons.Filled.Settings, Icons.Outlined.Settings)
+        BottomNavItem(stringResource(R.string.nav_more), Icons.Filled.Menu, Icons.Outlined.Menu)
     )
 
     Scaffold(
@@ -179,7 +184,7 @@ fun MainScreen() {
                 TopAppBar(
                     title = { 
                         AnimatedContent(
-                            targetState = navItems[selectedTab].label,
+                            targetState = if (selectedTab == 3 && moreTabScreen == "SETTINGS") stringResource(R.string.more_settings) else navItems[selectedTab].label,
                             transitionSpec = { fadeIn() togetherWith fadeOut() },
                             modifier = Modifier.offset(x = 4.dp), // Nudge slightly right
                             label = "title_animation"
@@ -236,7 +241,8 @@ fun MainScreen() {
                                 onRefresh = { viewModel.loadScheduleWithMessages(uiState.savedCherga, uiState.savedPidcherga) },
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = padding,
-                                lastUpdateTime = uiState.lastUpdateTime
+                                lastUpdateTime = uiState.lastUpdateTime,
+                                isOffline = uiState.isOffline
                             )
                         }
                     }
@@ -272,29 +278,40 @@ fun MainScreen() {
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = padding
                     )
-                    3 -> SettingsTab(
-                        notificationsEnabled = uiState.notificationsEnabled,
-                        notificationAdvanceMinutes = uiState.notificationAdvanceMinutes,
-                        statusNotificationEnabled = uiState.statusNotificationEnabled,
-                        liveActivityEnabled = uiState.liveActivityEnabled,
-                        lastUpdateTime = uiState.lastUpdateTime,
-                        displayMode = uiState.displayMode,
-                        colorTheme = uiState.colorTheme,
-                        fontScale = uiState.fontScale,
-                        smartNotificationSettings = uiState.smartNotificationSettings,
-                        onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
-                        onNotificationAdvanceMinutesChange = { viewModel.setNotificationAdvanceMinutes(it) },
-                        onStatusNotificationEnabledChange = { viewModel.setStatusNotificationEnabled(it) },
-                        onLiveActivityEnabledChange = { viewModel.setLiveActivityEnabled(it) },
-                        onDisplayModeChange = { viewModel.setDisplayMode(it) },
-                        onColorThemeChange = { viewModel.setColorTheme(it) },
-                        onFontScaleChange = { viewModel.setFontScale(it) },
-                        onSmartNotificationSettingsChange = { viewModel.setSmartNotificationSettings(it) },
-                        onResetOnboarding = { viewModel.resetOnboarding() },
-                        onClearData = { viewModel.clearData() },
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = padding
-                    )
+                    3 -> {
+                        AnimatedContent(targetState = moreTabScreen, label = "more_nav") { screen ->
+                            when (screen) {
+                                "ROOT" -> MoreTab(
+                                    onNavigateToSettings = { moreTabScreen = "SETTINGS" },
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = padding
+                                )
+                                "SETTINGS" -> SettingsTab(
+                                    notificationsEnabled = uiState.notificationsEnabled,
+                                    notificationAdvanceMinutes = uiState.notificationAdvanceMinutes,
+                                    statusNotificationEnabled = uiState.statusNotificationEnabled,
+                                    liveActivityEnabled = uiState.liveActivityEnabled,
+                                    lastUpdateTime = uiState.lastUpdateTime,
+                                    displayMode = uiState.displayMode,
+                                    colorTheme = uiState.colorTheme,
+                                    fontScale = uiState.fontScale,
+                                    smartNotificationSettings = uiState.smartNotificationSettings,
+                                    onNotificationsEnabledChange = { viewModel.setNotificationsEnabled(it) },
+                                    onNotificationAdvanceMinutesChange = { viewModel.setNotificationAdvanceMinutes(it) },
+                                    onStatusNotificationEnabledChange = { viewModel.setStatusNotificationEnabled(it) },
+                                    onLiveActivityEnabledChange = { viewModel.setLiveActivityEnabled(it) },
+                                    onDisplayModeChange = { viewModel.setDisplayMode(it) },
+                                    onColorThemeChange = { viewModel.setColorTheme(it) },
+                                    onFontScaleChange = { viewModel.setFontScale(it) },
+                                    onSmartNotificationSettingsChange = { viewModel.setSmartNotificationSettings(it) },
+                                    onResetOnboarding = { viewModel.resetOnboarding() },
+                                    onClearData = { viewModel.clearData() },
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = padding
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

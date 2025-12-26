@@ -174,17 +174,21 @@ class StatusNotificationService : Service() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        
+        val title = NotificationTextHelper.getStatusTitle(isPowerOn)
+        val easterEgg = NotificationTextHelper.getEasterEgg(isPowerOn)
+        
         val icon = if (isPowerOn) android.R.drawable.presence_online else android.R.drawable.presence_busy
-        val title = if (isPowerOn) "🟢 $statusText" else "🔴 $statusText"
         
         val rawEndTime = Regex("""(\d{2}:\d{2})""").findAll(timeSpan).lastOrNull()?.value ?: ""
         val endTime = TimeUtils.formatToSystemTime(this, rawEndTime)
-        val message = "До $endTime • $address"
+        val message = "До $endTime • $address\n$easterEgg"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(icon)
             .setContentTitle(title)
-            .setContentText(message)
+            .setContentText("До $endTime • $address")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setContentIntent(pendingIntent)

@@ -52,46 +52,10 @@ fun HomeTab(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    lastUpdateTime: String = ""
+    lastUpdateTime: String = "",
+    isOffline: Boolean = false
 ) {
-    var isRefreshing by remember { mutableStateOf(false) }
-    val scrollState = rememberScrollState()
-    val coroutineScope = rememberCoroutineScope()
-
-    // Ticker to force recomposition for time-sensitive UI (updates every second)
-    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            nowMs = System.currentTimeMillis()
-        }
-    }
-
-    // Identify the active grouped block based on CURRENT TIME
-    // We re-calculate this whenever 'groupedSchedule' changes or 'nowMs' updates (effectively every second)
-    val activeGroup = remember(groupedSchedule, nowMs) {
-        ScheduleMapper.getCurrentGroupedStatus(groupedSchedule)
-            ?: currentStatus?.let { status ->
-                groupedSchedule.find { it.date == status.date && it.span.contains(status.span.split("-")[0]) }
-            }
-    }
-
-    val groupedByDate = remember(groupedSchedule) {
-        groupedSchedule.groupBy { it.date }
-    }
-
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = {
-            isRefreshing = true
-            onRefresh()
-            coroutineScope.launch {
-                delay(1000)
-                isRefreshing = false
-            }
-        },
-        modifier = modifier
-    ) {
+// ... inside PullToRefreshBox ...
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -100,6 +64,27 @@ fun HomeTab(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (isOffline) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CloudOff, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            stringResource(R.string.error_offline_banner),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
             // 1. Current Status Card (Highest Priority)
             CurrentStatusCard(
                 activeGroup = activeGroup,

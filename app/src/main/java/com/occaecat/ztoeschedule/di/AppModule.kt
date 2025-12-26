@@ -1,8 +1,11 @@
 package com.occaecat.ztoeschedule.di
 
 import android.content.Context
+import com.google.gson.Gson
+import com.occaecat.ztoeschedule.BuildConfig
 import com.occaecat.ztoeschedule.data.local.AddressStorage
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
+import com.occaecat.ztoeschedule.data.local.dao.ScheduleDao
 import com.occaecat.ztoeschedule.data.network.GpvApiService
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import dagger.Module
@@ -17,11 +20,15 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
-import com.occaecat.ztoeschedule.BuildConfig
-
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+
+    @Provides
+    @Singleton
+    fun provideGson(): Gson {
+        return Gson()
+    }
 
     @Provides
     @Singleton
@@ -74,8 +81,10 @@ object AppModule {
     fun provideRepository(
         apiService: GpvApiService,
         preferencesManager: EnergyPreferencesManager,
-        addressStorage: AddressStorage
+        addressStorage: AddressStorage,
+        scheduleDao: ScheduleDao,
+        gson: Gson
     ): EnergyRepository {
-        return EnergyRepository(apiService, preferencesManager, addressStorage)
+        return EnergyRepository(apiService, preferencesManager, addressStorage, scheduleDao, gson)
     }
 }

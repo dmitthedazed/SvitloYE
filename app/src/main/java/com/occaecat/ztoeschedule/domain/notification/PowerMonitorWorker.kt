@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
-import com.occaecat.ztoeschedule.data.network.RetrofitClient
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
@@ -16,6 +15,10 @@ import androidx.hilt.work.HiltWorker
 import com.occaecat.ztoeschedule.data.model.PriorityMode
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
+import com.occaecat.ztoeschedule.widget.glance.LightWidget
 
 /**
  * Background worker that checks power schedule and sends notifications.
@@ -33,8 +36,7 @@ class PowerMonitorWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         try {
             val notificationsEnabled = preferencesManager.notificationsEnabledFlow.first()
-            if (!notificationsEnabled) return Result.success()
-
+            
             val savedSelection = preferencesManager.savedSelectionFlow.first()
             if (savedSelection == null || savedSelection.cherga == 0 || savedSelection.pidcherga == 0) {
                 return Result.success()
@@ -65,13 +67,34 @@ class PowerMonitorWorker @AssistedInject constructor(
 
                 val currentStatus = getCurrentGroupedStatus(groupedSchedules)
                 if (currentStatus != null) {
-                    checkAndNotify(currentStatus, advanceMinutes)
+                    if (notificationsEnabled) {
+                        checkAndNotify(currentStatus, advanceMinutes)
+                    }
+                    
+                    // Update Widget
+                    updateGlanceWidgets(currentStatus, savedSelection.addressName)
                 }
             }
 
             return Result.success()
         } catch (e: Exception) {
             return if (runAttemptCount < 3) Result.retry() else Result.failure()
+        }
+    }
+
+    private suspend fun updateGlanceWidgets(status: GroupedSchedule, address: String) {
+        val manager = GlanceAppWidgetManager(applicationContext)
+        val widget = LightWidget()
+        val glanceIds = manager.getGlanceIds(widget.javaClass)
+        
+        glanceIds.forEach { glanceId ->
+            updateAppWidgetState(applicationContext, glanceId) { prefs ->
+                prefs[LightWidget.KEY_STATUS] = status.color.lowercase()
+                prefs[LightWidget.KEY_NEXT_EVENT] = status.endTime
+                prefs[LightWidget.KEY_ADDRESS] = address
+                prefs[LightWidget.KEY_UPDATED] = System.currentTimeMillis()
+            }
+            widget.update(applicationContext, glanceId)
         }
     }
 
@@ -131,14 +154,16 @@ class PowerMonitorWorker @AssistedInject constructor(
         }
 
         if (minutesUntilChange in (advanceMinutes - 5)..advanceMinutes) {
-            val title = if (isPowerOn) "⚠️ Скоро відключення" else "✅ Скоро увімкнення"
-            val message = if (isPowerOn) "Через $minutesUntilChange хв очікується відключення світла" else "Через $minutesUntilChange хв очікується увімкнення світла"
+            val title = if (isPowerOn) "⚠️ Попередження: Скоро відключення" else "✅ Готуйтесь: Скоро буде світло"
+            val message = if (isPowerOn) "За графіком світло зникне через $minutesUntilChange хв. Зарядіть пристрої! 🔋" 
+                          else "До увімкнення залишилось $minutesUntilChange хв. Кава сама себе не зварить! ☕"
             notificationManager.sendPowerChangeNotification(title, message, !isPowerOn)
         }
 
         if (minutesUntilChange in 0..2) {
-            val title = if (isPowerOn) "🔴 Відключення світла" else "🟢 Світло увімкнено"
-            val message = if (isPowerOn) "Зараз відбувається відключення електропостачання" else "Електропостачання відновлено"
+            val title = if (isPowerOn) "🔴 Відключення розпочато" else "🟢 Світло увімкнено!"
+            val message = if (isPowerOn) "Згідно з графіком, ваша черга зараз знеструмлена. Тримаємось! 💪" 
+                          else "Електропостачання відновлено. Користуйтесь із задоволенням! 💡"
             notificationManager.sendPowerChangeNotification(title, message, !isPowerOn)
         }
     }

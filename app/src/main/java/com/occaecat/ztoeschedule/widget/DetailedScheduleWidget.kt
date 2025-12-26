@@ -21,11 +21,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
 /**
  * Detailed Schedule Widget (4x2)
  * Shows current power status + today's schedule
  */
+@AndroidEntryPoint
 class DetailedScheduleWidget : AppWidgetProvider() {
+
+    @Inject lateinit var repository: EnergyRepository
+    @Inject lateinit var preferencesManager: EnergyPreferencesManager
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -46,10 +53,6 @@ class DetailedScheduleWidget : AppWidgetProvider() {
     ) {
         scope.launch {
             try {
-                val preferencesManager = EnergyPreferencesManager(context)
-                val addressStorage = com.occaecat.ztoeschedule.data.local.AddressStorage(context)
-                val repository = EnergyRepository(RetrofitClient.apiService, preferencesManager, addressStorage)
-
                 // Get saved address
                 val savedSelection = preferencesManager.savedSelectionFlow.first()
 

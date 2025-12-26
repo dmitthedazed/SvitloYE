@@ -28,6 +28,10 @@ import kotlinx.coroutines.launch
 import java.util.TimeZone
 import javax.inject.Inject
 
+import android.content.Context
+import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
+import dagger.hilt.android.qualifiers.ApplicationContext
+
 /**
  * ViewModel for managing energy outage schedule state.
  * Optimized to prevent infinite network loops during priority changes.
@@ -35,7 +39,8 @@ import javax.inject.Inject
 @HiltViewModel
 class EnergyScheduleViewModel @Inject constructor(
     private val repository: EnergyRepository,
-    private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver
+    private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UiState())
@@ -223,6 +228,7 @@ class EnergyScheduleViewModel @Inject constructor(
             repository.saveNewAddress(address)
             loadSavedAddresses()
             _uiState.update { it.copy(isAddingNewAddress = false) }
+            NotificationScheduler.runImmediateCheck(context)
         }
     }
 
@@ -230,6 +236,7 @@ class EnergyScheduleViewModel @Inject constructor(
         viewModelScope.launch {
             repository.reorderAddresses(list)
             loadSavedAddresses()
+            NotificationScheduler.runImmediateCheck(context)
         }
     }
 
@@ -237,6 +244,7 @@ class EnergyScheduleViewModel @Inject constructor(
         viewModelScope.launch {
             repository.deleteAddress(id)
             loadSavedAddresses()
+            NotificationScheduler.runImmediateCheck(context)
         }
     }
 
@@ -281,8 +289,27 @@ class EnergyScheduleViewModel @Inject constructor(
                     _uiState.update { it.copy(smartNotificationSettings = settings) }
                 }
             }
+            launch {
+                repository.getNotifyScheduleUpdatesFlow().collect { enabled ->
+                    _uiState.update { it.copy(notifyScheduleUpdates = enabled) }
+                }
+            }
+            launch {
+                repository.getNotifyStatusChangesFlow().collect { enabled ->
+                    _uiState.update { it.copy(notifyStatusChanges = enabled) }
+                }
+            }
+            launch {
+                repository.getNotifyRemindersFlow().collect { enabled ->
+                    _uiState.update { it.copy(notifyReminders = enabled) }
+                }
+            }
         }
     }
+
+    fun setNotifyScheduleUpdates(enabled: Boolean) { viewModelScope.launch { repository.setNotifyScheduleUpdates(enabled) } }
+    fun setNotifyStatusChanges(enabled: Boolean) { viewModelScope.launch { repository.setNotifyStatusChanges(enabled) } }
+    fun setNotifyReminders(enabled: Boolean) { viewModelScope.launch { repository.setNotifyReminders(enabled) } }
 
     // ========== Theme Settings ========== 
 
@@ -435,13 +462,21 @@ class EnergyScheduleViewModel @Inject constructor(
                         lastUpdateTime = now,
                         isLoading = false,
                         lastLoadFailed = false,
+                        isOffline = false, // Success means online
                         retryCountdown = 0,
                         isInitialLoadComplete = true
                     )
                 }
                 repository.saveQueueIdentifiers(cherga, pidcherga)
             }.onFailure { error ->
-                _uiState.update { it.copy(error = error.toAppError().getUserMessage(), isLoading = false) }
+                val hasCache = _uiState.value.scheduleList.isNotEmpty()
+                _uiState.update { 
+                    it.copy(
+                        error = if (hasCache) null else error.toAppError().getUserMessage(), 
+                        isLoading = false,
+                        isOffline = hasCache // If we have data but error happened, it's offline mode
+                    ) 
+                }
                 if (!_uiState.value.isConnected) startRetryTimer()
             }
         }
@@ -464,6 +499,7 @@ class EnergyScheduleViewModel @Inject constructor(
                 loadSavedAddresses()
             }
             _uiState.update { it.copy(hasSavedSelection = true, savedRemName = remName ?: "", savedCityName = cityName ?: "", savedStreetName = streetName ?: "", savedAddressName = addressName, savedCherga = cherga, savedPidcherga = pidcherga) }
+            NotificationScheduler.runImmediateCheck(context)
         }
     }
 
@@ -522,6 +558,10 @@ data class UiState(
     val isConnected: Boolean = true,
     val retryCountdown: Int = 0,
     val lastLoadFailed: Boolean = false,
+    val isOffline: Boolean = false,
+    val notifyScheduleUpdates: Boolean = true,
+    val notifyStatusChanges: Boolean = true,
+    val notifyReminders: Boolean = true,
     val displayMode: DisplayMode = DisplayMode.COMFORTABLE,
     val colorTheme: ColorTheme = ColorTheme.SYSTEM,
     val fontScale: FontScale = FontScale.NORMAL,

@@ -17,6 +17,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.occaecat.ztoeschedule.data.local.dao.ScheduleDao
+import com.occaecat.ztoeschedule.data.local.entity.ScheduleCacheEntity
+import com.occaecat.ztoeschedule.data.model.Address
+
 /**
  * Repository for managing energy outage data
  *
@@ -26,7 +32,9 @@ import kotlinx.coroutines.flow.Flow
 class EnergyRepository(
     private val apiService: GpvApiService,
     private val preferencesManager: EnergyPreferencesManager,
-    private val addressStorage: com.occaecat.ztoeschedule.data.local.AddressStorage
+    private val addressStorage: com.occaecat.ztoeschedule.data.local.AddressStorage,
+    private val scheduleDao: ScheduleDao,
+    private val gson: Gson
 ) {
 
     // ========== Address Management Methods ==========
@@ -240,22 +248,46 @@ class EnergyRepository(
         pidcherga: Int
     ): Result<ScheduleWithMessages> = try {
         coroutineScope {
-            // Launch both API calls simultaneously using supervisor or individual try-catches
+            // Launch both API calls simultaneously
             val scheduleDeferred = async { apiService.getSchedule(cherga, pidcherga) }
             val messagesDeferred = async { apiService.getMessages() }
 
             // Await both results
-            val schedules = try { scheduleDeferred.await() } catch (e: Exception) { emptyList() }
-            val messages = try { messagesDeferred.await() } catch (e: Exception) { emptyList() }
+            val schedules = try { scheduleDeferred.await() } catch (e: Exception) { null }
+            val messages = try { messagesDeferred.await() } catch (e: Exception) { null }
 
-            if (schedules.isEmpty() && messages.isEmpty()) {
-                Result.failure(Exception("Не вдалося завантажити дані"))
+            if (schedules == null && messages == null) {
+                // If network failed completely, try cache
+                loadFromCache(cherga, pidcherga)
             } else {
-                Result.success(ScheduleWithMessages(schedules, messages))
+                val result = ScheduleWithMessages(schedules ?: emptyList(), messages ?: emptyList())
+                
+                // Save successful fetch to Cache
+                val entity = ScheduleCacheEntity(
+                    cherga = cherga,
+                    pidcherga = pidcherga,
+                    scheduleJson = gson.toJson(result.schedules),
+                    messagesJson = gson.toJson(result.messages),
+                    lastUpdated = System.currentTimeMillis()
+                )
+                scheduleDao.insertSchedule(entity)
+                
+                Result.success(result)
             }
         }
     } catch (e: Exception) {
-        Result.failure(e)
+        loadFromCache(cherga, pidcherga)
+    }
+
+    private suspend fun loadFromCache(cherga: Int, pidcherga: Int): Result<ScheduleWithMessages> {
+        val cached = scheduleDao.getScheduleOnce(cherga, pidcherga)
+        return if (cached != null) {
+            val schedules: List<Schedule> = gson.fromJson(cached.scheduleJson, object : TypeToken<List<Schedule>>() {}.type)
+            val messages: List<ScheduleMessagePart> = gson.fromJson(cached.messagesJson, object : TypeToken<List<ScheduleMessagePart>>() {}.type)
+            Result.success(ScheduleWithMessages(schedules, messages))
+        } else {
+            Result.failure(Exception("Не вдалося завантажити дані (офлайн)"))
+        }
     }
 
     /**
@@ -462,61 +494,26 @@ class EnergyRepository(
 
     // ========== Notification Settings ==========
 
-    /**
-     * Get notifications enabled flow
-     */
-    fun getNotificationsEnabledFlow(): Flow<Boolean> {
-        return preferencesManager.notificationsEnabledFlow
-    }
+    fun getNotificationsEnabledFlow(): Flow<Boolean> = preferencesManager.notificationsEnabledFlow
+    fun getNotificationAdvanceMinutesFlow(): Flow<Int> = preferencesManager.notificationAdvanceMinutesFlow
+    fun getStatusNotificationEnabledFlow(): Flow<Boolean> = preferencesManager.statusNotificationEnabledFlow
+    fun getLiveActivityEnabledFlow(): Flow<Boolean> = preferencesManager.liveActivityEnabledFlow
+    
+    fun getNotifyScheduleUpdatesFlow(): Flow<Boolean> = preferencesManager.notifyScheduleUpdatesFlow
+    fun getNotifyStatusChangesFlow(): Flow<Boolean> = preferencesManager.notifyStatusChangesFlow
+    fun getNotifyRemindersFlow(): Flow<Boolean> = preferencesManager.notifyRemindersFlow
 
-    /**
-     * Get notification advance minutes flow
-     */
-    fun getNotificationAdvanceMinutesFlow(): Flow<Int> {
-        return preferencesManager.notificationAdvanceMinutesFlow
-    }
+    suspend fun setNotificationsEnabled(enabled: Boolean) = preferencesManager.setNotificationsEnabled(enabled)
+    suspend fun setNotificationAdvanceMinutes(minutes: Int) = preferencesManager.setNotificationAdvanceMinutes(minutes)
+    suspend fun setStatusNotificationEnabled(enabled: Boolean) = preferencesManager.setStatusNotificationEnabled(enabled)
+    suspend fun setLiveActivityEnabled(enabled: Boolean) = preferencesManager.setLiveActivityEnabled(enabled)
+    
+    suspend fun setNotifyScheduleUpdates(enabled: Boolean) = preferencesManager.setNotifyScheduleUpdates(enabled)
+    suspend fun setNotifyStatusChanges(enabled: Boolean) = preferencesManager.setNotifyStatusChanges(enabled)
+    suspend fun setNotifyReminders(enabled: Boolean) = preferencesManager.setNotifyReminders(enabled)
 
-    /**
-     * Set notifications enabled status
-     */
-    suspend fun setNotificationsEnabled(enabled: Boolean) {
-        preferencesManager.setNotificationsEnabled(enabled)
-    }
+    // ========== Existing methods ... 
 
-    /**
-     * Set notification advance time in minutes
-     */
-    suspend fun setNotificationAdvanceMinutes(minutes: Int) {
-        preferencesManager.setNotificationAdvanceMinutes(minutes)
-    }
-
-    /**
-     * Set status notification enabled
-     */
-    suspend fun setStatusNotificationEnabled(enabled: Boolean) {
-        preferencesManager.setStatusNotificationEnabled(enabled)
-    }
-
-    /**
-     * Get status notification enabled flow
-     */
-    fun getStatusNotificationEnabledFlow(): Flow<Boolean> {
-        return preferencesManager.statusNotificationEnabledFlow
-    }
-
-    /**
-     * Get live activity enabled flow
-     */
-    fun getLiveActivityEnabledFlow(): Flow<Boolean> {
-        return preferencesManager.liveActivityEnabledFlow
-    }
-
-    /**
-     * Set live activity enabled
-     */
-    suspend fun setLiveActivityEnabled(enabled: Boolean) {
-        preferencesManager.setLiveActivityEnabled(enabled)
-    }
 }
 
 /**
