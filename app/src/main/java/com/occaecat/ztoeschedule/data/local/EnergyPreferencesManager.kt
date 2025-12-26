@@ -51,6 +51,11 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KEY_NOTIFICATION_ADVANCE_MINUTES = intPreferencesKey("notification_advance_minutes")
         private val KEY_STATUS_NOTIFICATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("status_notification_enabled")
         private val KEY_LIVE_ACTIVITY_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("live_activity_enabled")
+        
+        // Granular settings
+        private val KEY_NOTIFY_SCHEDULE_UPDATES = androidx.datastore.preferences.core.booleanPreferencesKey("notify_schedule_updates")
+        private val KEY_NOTIFY_STATUS_CHANGES = androidx.datastore.preferences.core.booleanPreferencesKey("notify_status_changes")
+        private val KEY_NOTIFY_REMINDERS = androidx.datastore.preferences.core.booleanPreferencesKey("notify_reminders")
 
         // Smart Notification Settings
         private val KEY_NOTIF_QUIET_START = intPreferencesKey("notif_quiet_start")
@@ -256,6 +261,10 @@ class EnergyPreferencesManager(private val context: Context) {
         preferences[KEY_LIVE_ACTIVITY_ENABLED] ?: false
     }.distinctUntilChanged()
 
+    val notifyScheduleUpdatesFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_NOTIFY_SCHEDULE_UPDATES] ?: true }.distinctUntilChanged()
+    val notifyStatusChangesFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_NOTIFY_STATUS_CHANGES] ?: true }.distinctUntilChanged()
+    val notifyRemindersFlow: Flow<Boolean> = context.dataStore.data.map { it[KEY_NOTIFY_REMINDERS] ?: true }.distinctUntilChanged()
+
     /**
      * Save notification enabled status
      */
@@ -263,6 +272,18 @@ class EnergyPreferencesManager(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[KEY_NOTIFICATIONS_ENABLED] = enabled
         }
+    }
+
+    suspend fun setNotifyScheduleUpdates(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_SCHEDULE_UPDATES] = enabled }
+    }
+
+    suspend fun setNotifyStatusChanges(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_STATUS_CHANGES] = enabled }
+    }
+
+    suspend fun setNotifyReminders(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_REMINDERS] = enabled }
     }
 
     /**

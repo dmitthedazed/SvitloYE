@@ -35,17 +35,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Power Status Widget (Compact 4x1) -->
+        <!-- Power Status Widget (Glance) -->
         <receiver
-            android:name=".widget.PowerStatusWidget"
+            android:name=".widget.glance.WidgetReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.occaecat.ztoeschedule.widget.UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/widget_power_status_info" />
+                android:resource="@xml/glance_light_widget_info" />
         </receiver>
 
         <!-- Detailed Schedule Widget (4x2) -->

@@ -6,7 +6,14 @@
     <string name="nav_home">Головна</string>
     <string name="nav_notifications">Повідомлення</string>
     <string name="nav_addresses">Мої адреси</string>
-    <string name="nav_settings">Налаштування</string>
+    <string name="nav_more">Додатково</string>
+    <string name="more_settings">Налаштування</string>
+    <string name="more_donate">Підтримати проект</string>
+    <string name="more_about">О приложении</string>
+    <string name="more_faq">FAQ</string>
+    <string name="more_contact">Написать нам</string>
+    <string name="dev_signature">Розроблено dmitthedazed</string>
+    <string name="github_url">https://github.com/dmitthedazed</string>
 
     <!-- Home Screen -->
     <string name="home_last_updated">Оновлено: %1$s</string>
@@ -64,6 +71,7 @@
     <string name="error_retry_countdown">Повторна спроба через %1$d сек...</string>
     <string name="error_retry_now">Спробувати зараз</string>
     <string name="error_wait_btn">Зачекайте...</string>
+    <string name="error_offline_banner">Офлайн режим. Дані можуть бути застарілими</string>
 
     <!-- Widget strings -->
     <string name="widget_power_status_description">Компактний віджет статусу світла</string>

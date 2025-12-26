@@ -45,6 +45,9 @@ class MainActivity : ComponentActivity() {
 
         // Schedule notification monitoring
         NotificationScheduler.schedulePowerMonitoring(this)
+        
+        // Trigger immediate check to update widgets
+        NotificationScheduler.runImmediateCheck(this)
 
         setContent {
             val colorTheme by preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.SYSTEM)

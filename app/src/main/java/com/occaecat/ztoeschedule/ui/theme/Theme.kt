@@ -14,19 +14,19 @@ import androidx.compose.material3.Typography
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.data.model.FontScale
 
-private val DarkColorScheme = darkColorScheme(
+val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
     tertiary = Pink80
 )
 
-private val LightColorScheme = lightColorScheme(
+val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
     tertiary = Pink40
 )
 
-private val AmoledColorScheme = darkColorScheme(
+val AmoledColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
     tertiary = Pink80,
@@ -36,7 +36,7 @@ private val AmoledColorScheme = darkColorScheme(
     onSurface = Color.White
 )
 
-private val ContrastColorScheme = lightColorScheme(
+val ContrastColorScheme = lightColorScheme(
     primary = Color.Black,
     onPrimary = Color.White,
     secondary = Color.DarkGray,
@@ -58,18 +58,32 @@ fun SvitloYeZhytomyrTheme(
 ) {
     val context = LocalContext.current
     val systemDark = isSystemInDarkTheme()
+    val isDynamicSupported = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val colorScheme = when (themePreference) {
         ColorTheme.SYSTEM -> {
-            if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (isDynamicSupported) {
                 if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             } else {
                 if (systemDark) DarkColorScheme else LightColorScheme
             }
         }
-        ColorTheme.LIGHT -> LightColorScheme
-        ColorTheme.DARK -> DarkColorScheme
-        ColorTheme.AMOLED -> AmoledColorScheme
+        ColorTheme.LIGHT -> {
+            if (isDynamicSupported) dynamicLightColorScheme(context) else LightColorScheme
+        }
+        ColorTheme.DARK -> {
+            if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
+        }
+        ColorTheme.AMOLED -> {
+            val base = if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
+            base.copy(
+                background = Color.Black,
+                surface = Color.Black,
+                surfaceVariant = Color(0xFF111111), // Slightly lighter for cards
+                onBackground = Color.White,
+                onSurface = Color.White
+            )
+        }
         ColorTheme.CONTRAST -> ContrastColorScheme
     }
 

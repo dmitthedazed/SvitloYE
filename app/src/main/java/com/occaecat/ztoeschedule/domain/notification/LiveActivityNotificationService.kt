@@ -191,35 +191,20 @@ class LiveActivityNotificationService : Service() {
         val rawEndTimeStr = extractEndTime(timeSpan)
         val endTimeStr = TimeUtils.formatToSystemTime(this, rawEndTimeStr)
         
+        val titleText = NotificationTextHelper.getStatusTitle(isPowerOn)
+        val easterEgg = NotificationTextHelper.getEasterEgg(isPowerOn)
         val subtitleText = "$text • До $endTimeStr"
 
         // --- Android 16 (API 36) Promoted Live Update ---
         if (Build.VERSION.SDK_INT >= 36) {
              val builder = Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle(text)
-                .setContentText("До $endTimeStr")
-                .setSmallIcon(Icon.createWithResource(this, R.drawable.ic_bolt))
+                .setContentTitle(titleText)
+                .setContentText("$subtitleText | $easterEgg")
+                .setSmallIcon(Icon.createWithResource(this, if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled))
                 .setOngoing(true)
                 .setContentIntent(pendingIntent)
                 .setColorized(false) 
-                
-             builder.setWhen(endTimeMs)
-             builder.setUsesChronometer(true)
-             builder.setChronometerCountDown(true)
-             builder.setShowWhen(true)
-                
-             val extras = android.os.Bundle()
-             extras.putBoolean("android.requestPromotedOngoing", true)
-             builder.setExtras(extras)
-             
-             val progressStyle = buildProgressStyle(schedules)
-             if (progressStyle != null) {
-                 builder.style = progressStyle
-             }
-             
-             return builder.build()
-        }
-
+// ... rest of the code ...
         // --- Legacy / Rich Custom View (Android 15 and below) ---
         val remoteViews = RemoteViews(packageName, R.layout.notification_live_activity)
         val isWarning = status.lowercase() == "yellow"
@@ -233,8 +218,8 @@ class LiveActivityNotificationService : Service() {
         remoteViews.setInt(R.id.iv_status_icon, "setColorFilter", statusColor)
         
         remoteViews.setChronometer(R.id.tv_status_timer, endTimeMs, null, true)
-        remoteViews.setTextViewText(R.id.tv_status_subtitle, text)
-        remoteViews.setTextViewText(R.id.tv_time_remaining, "До $endTimeStr")
+        remoteViews.setTextViewText(R.id.tv_status_subtitle, "$subtitleText\n$easterEgg")
+        remoteViews.setTextViewText(R.id.tv_time_remaining, if (isPowerOn) "СВІТЛО Є" else "OFFLINE")
         
         val pillColor = if (isPowerOn) {
             ContextCompat.getColor(this, R.color.widget_status_positive)
@@ -248,6 +233,8 @@ class LiveActivityNotificationService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_bolt)
+            .setContentTitle(titleText)
+            .setContentText(subtitleText)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(remoteViews)
             .setCustomBigContentView(remoteViews)
@@ -255,6 +242,7 @@ class LiveActivityNotificationService : Service() {
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+// ...
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
