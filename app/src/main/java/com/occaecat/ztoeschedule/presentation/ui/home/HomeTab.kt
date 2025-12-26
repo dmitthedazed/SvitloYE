@@ -33,6 +33,11 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.TimeZone
 
+import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
+import com.occaecat.ztoeschedule.presentation.util.ScheduleImageGenerator
+import androidx.compose.ui.graphics.Color
+import android.os.Parcelable
+
 /**
  * Home tab - shows current status, address, and schedule.
  * Optimized for Kyiv timezone and grouped progress bars.
@@ -53,9 +58,46 @@ fun HomeTab(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     lastUpdateTime: String = "",
-    isOffline: Boolean = false
+    isOffline: Boolean = false,
+    isLoading: Boolean = false
 ) {
-// ... inside PullToRefreshBox ...
+    var isRefreshing by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Ticker to force recomposition for time-sensitive UI (updates every second)
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+
+    // Identify the active grouped block based on CURRENT TIME
+    val activeGroup = remember(groupedSchedule, nowMs) {
+        ScheduleMapper.getCurrentGroupedStatus(groupedSchedule)
+            ?: currentStatus?.let { status ->
+                groupedSchedule.find { it.date == status.date && it.span.contains(status.span.split("-")[0]) }
+            }
+    }
+
+    val groupedByDate = remember(groupedSchedule) {
+        groupedSchedule.groupBy { it.date }
+    }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            onRefresh()
+            coroutineScope.launch {
+                delay(1000)
+                isRefreshing = false
+            }
+        },
+        modifier = modifier
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -64,93 +106,133 @@ fun HomeTab(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (isOffline) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            if (isLoading && !isRefreshing) {
+                HomeTabSkeleton()
+            } else {
+                if (isOffline) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        shape = MaterialTheme.shapes.medium
                     ) {
-                        Icon(Icons.Default.CloudOff, null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                        Spacer(Modifier.width(12.dp))
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CloudOff, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                stringResource(R.string.error_offline_banner),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+
+                // 1. Current Status Card (Highest Priority)
+                CurrentStatusCard(
+                    activeGroup = activeGroup,
+                    currentStatus = currentStatus,
+                    groupedSchedule = groupedSchedule,
+                    nowMs = nowMs
+                )
+
+                // 2. Address Card and Update Time
+                val fullAddressString = buildString {
+                    if (cityName.isNotEmpty()) append("$cityName, ")
+                    if (streetName.isNotEmpty()) append("$streetName, ")
+                    append(addressName)
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AddressInfoCard(
+                        cityName = cityName,
+                        streetName = streetName,
+                        addressName = addressName,
+                        cherga = cherga,
+                        pidcherga = pidcherga,
+                        groupedSchedule = groupedSchedule
+                    )
+                    
+                    if (lastUpdateTime.isNotEmpty()) {
                         Text(
-                            stringResource(R.string.error_offline_banner),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            text = stringResource(R.string.home_last_updated, lastUpdateTime),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
                 }
-            }
 
-            // 1. Current Status Card (Highest Priority)
-            CurrentStatusCard(
-                activeGroup = activeGroup,
-                currentStatus = currentStatus,
-                groupedSchedule = groupedSchedule,
-                nowMs = nowMs
-            )
-
-            // 2. Address Card and Update Time
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AddressInfoCard(
-                    cityName = cityName,
-                    streetName = streetName,
-                    addressName = addressName,
-                    cherga = cherga,
-                    pidcherga = pidcherga,
-                    groupedSchedule = groupedSchedule
-                )
-                
-                if (lastUpdateTime.isNotEmpty()) {
+                // 4. Detailed Schedule List
+                groupedByDate.forEach { (date, items) ->
                     Text(
-                        text = stringResource(R.string.home_last_updated, lastUpdateTime),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(start = 8.dp)
+                        text = "🗓 $date",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 8.dp, top = 8.dp)
                     )
-                }
-            }
 
-            // 3. Detailed Schedule List
-            val fullAddressString = buildString {
-                if (cityName.isNotEmpty()) append("$cityName, ")
-                if (streetName.isNotEmpty()) append("$streetName, ")
-                append(addressName)
-            }
-
-            groupedByDate.forEach { (date, items) ->
-                Text(
-                    text = "🗓 $date",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 8.dp, top = 8.dp)
-                )
-
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large
-                ) {
-                    Column {
-                        items.forEachIndexed { index, group ->
-                            val isActive = group == activeGroup
-                            
-                            ScheduleListItemSimple(
-                                group = group,
-                                isActive = isActive,
-                                address = fullAddressString
-                            )
-
-                            if (index < items.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Column {
+                            items.forEachIndexed { index, group ->
+                                val isActive = group == activeGroup
+                                
+                                ScheduleListItemSimple(
+                                    group = group,
+                                    isActive = isActive,
+                                    address = fullAddressString
                                 )
+
+                                if (index < items.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                                    )
+                                }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeTabSkeleton() {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Status Card Skeleton
+        ShimmerItem(height = 200.dp, shape = MaterialTheme.shapes.extraLarge)
+        
+        // Address Info Skeleton
+        ShimmerItem(height = 64.dp, shape = MaterialTheme.shapes.large)
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Schedule List Header Skeleton
+        ShimmerItem(height = 20.dp, modifier = Modifier.width(120.dp).padding(start = 8.dp))
+        
+        // Schedule Items Skeleton
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                repeat(4) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShimmerItem(height = 32.dp, modifier = Modifier.width(4.dp), shape = CircleShape)
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ShimmerItem(height = 18.dp, modifier = Modifier.fillMaxWidth(0.7f))
+                            ShimmerItem(height = 14.dp, modifier = Modifier.fillMaxWidth(0.4f))
+                        }
+                    }
+                    if (it < 3) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
                 }
             }
         }
@@ -166,7 +248,6 @@ private fun CurrentStatusCard(
 ) {
     val context = LocalContext.current
     
-    // Determine visuals based on active group or fallback to raw status
     val hasElectricity = activeGroup?.isLightOn ?: (currentStatus?.displayText?.contains("Світло є", ignoreCase = true) == true)
     val isWarning = activeGroup?.color?.lowercase() == "yellow" || currentStatus?.color?.lowercase() == "yellow"
 
@@ -205,7 +286,6 @@ private fun CurrentStatusCard(
                 fontWeight = FontWeight.Bold
             )
 
-            // Progress and Timer Section (Always visible if we have data)
             if (activeGroup != null) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -313,6 +393,8 @@ private fun AddressInfoCard(
     groupedSchedule: List<GroupedSchedule>
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -344,6 +426,37 @@ private fun AddressInfoCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        val uri = ScheduleImageGenerator.generateAndShare(
+                            context,
+                            fullAddress,
+                            "$cherga.$pidcherga",
+                            groupedSchedule
+                        )
+                        if (uri != null) {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "image/png"
+                                putExtra(Intent.EXTRA_STREAM, uri as Parcelable)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Поділитися графіком"))
+                        }
+                    }
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "Поділитися зображенням",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
 
             IconButton(
                 onClick = {

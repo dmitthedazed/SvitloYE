@@ -6,6 +6,9 @@ import androidx.work.*
 import com.occaecat.ztoeschedule.BuildConfig
 import java.util.concurrent.TimeUnit
 
+import android.content.ComponentName
+import android.service.quicksettings.TileService
+
 /**
  * Manages scheduling of power monitoring notifications using WorkManager
  */
@@ -86,9 +89,22 @@ object NotificationScheduler {
 
         WorkManager.getInstance(context)
             .enqueue(workRequest)
+            
+        updateTile(context)
 
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "Immediate power check triggered")
+        }
+    }
+    
+    private fun updateTile(context: Context) {
+        try {
+            TileService.requestListeningState(
+                context,
+                ComponentName(context, PowerStatusTileService::class.java)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update QS Tile", e)
         }
     }
 }

@@ -29,6 +29,8 @@ import com.occaecat.ztoeschedule.presentation.ui.SelectionListItem
 import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
 
+import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
+
 @Composable
 fun RemSelectionPage(
     rems: List<Rem>,
@@ -49,9 +51,7 @@ fun RemSelectionPage(
         )
 
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            ListSkeleton()
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -88,9 +88,7 @@ fun CitySelectionPage(
         )
 
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            ListSkeleton()
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -127,9 +125,7 @@ fun StreetSelectionPage(
         )
 
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            ListSkeleton()
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -156,6 +152,12 @@ fun HouseNumberSelectionPage(
     onClearSearch: () -> Unit,
     onHouseSelected: (ParsedHouseNumber) -> Unit
 ) {
+    val filteredList = remember(searchQuery, houseNumbers) {
+        if (searchQuery.isBlank()) houseNumbers else houseNumbers.filter {
+            it.houseNumber.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Spacer(modifier = Modifier.height(16.dp))
         SearchField(
@@ -165,10 +167,8 @@ fun HouseNumberSelectionPage(
         )
 
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (houseNumbers.isEmpty()) {
+            GridSkeleton()
+        } else if (filteredList.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = if (searchQuery.isEmpty()) stringResource(R.string.house_empty) else stringResource(R.string.house_not_found),
@@ -183,7 +183,7 @@ fun HouseNumberSelectionPage(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(houseNumbers) { house ->
+                items(filteredList) { house ->
                     OutlinedCard(
                         onClick = { onHouseSelected(house) },
                         modifier = Modifier.fillMaxWidth(),
@@ -202,6 +202,31 @@ fun HouseNumberSelectionPage(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListSkeleton() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        repeat(8) {
+            ShimmerItem(height = 56.dp, modifier = Modifier.padding(horizontal = 16.dp), shape = MaterialTheme.shapes.medium)
+        }
+    }
+}
+
+@Composable
+private fun GridSkeleton() {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        repeat(4) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                repeat(3) {
+                    ShimmerItem(height = 60.dp, modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.large)
                 }
             }
         }

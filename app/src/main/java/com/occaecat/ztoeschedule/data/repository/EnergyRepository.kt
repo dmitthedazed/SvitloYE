@@ -16,18 +16,13 @@ import com.occaecat.ztoeschedule.domain.ScheduleDomainLogic
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.occaecat.ztoeschedule.data.local.dao.ScheduleDao
 import com.occaecat.ztoeschedule.data.local.entity.ScheduleCacheEntity
-import com.occaecat.ztoeschedule.data.model.Address
 
 /**
  * Repository for managing energy outage data
- *
- * This repository acts as a single source of truth for the app, coordinating
- * between network API calls and local data persistence.
  */
 class EnergyRepository(
     private val apiService: GpvApiService,
@@ -45,7 +40,6 @@ class EnergyRepository(
 
     suspend fun saveNewAddress(address: com.occaecat.ztoeschedule.data.model.SavedAddress) {
         addressStorage.addAddress(address)
-        // If this is the first address (priority 1), sync it to DataStore
         if (address.priority == 1) {
             syncAddressToPreferences(address)
         }
@@ -53,7 +47,6 @@ class EnergyRepository(
 
     suspend fun deleteAddress(id: String) {
         addressStorage.deleteAddress(id)
-        // Check if we deleted the primary address. If so, sync the new primary.
         val addresses = addressStorage.getAddresses()
         if (addresses.isNotEmpty()) {
             val primary = addresses.find { it.priority == 1 } ?: addresses.first()
@@ -63,10 +56,6 @@ class EnergyRepository(
         }
     }
 
-    /**
-     * Sets the given address as the active/primary one.
-     * Updates the list order and the DataStore for widgets/main screen.
-     */
     suspend fun setPrimaryAddress(id: String) {
         val updatedList = addressStorage.setAsPrimary(id)
         val newPrimary = updatedList.find { it.priority == 1 }
@@ -75,30 +64,12 @@ class EnergyRepository(
         }
     }
 
-    /**
-     * Updates the entire list of addresses with new order and priorities.
-     */
     suspend fun reorderAddresses(list: List<com.occaecat.ztoeschedule.data.model.SavedAddress>) {
         val updatedList = list.mapIndexed { index, savedAddress ->
             savedAddress.copy(priority = index + 1)
         }
         addressStorage.updateAll(updatedList)
-        
-        // Sync the new primary if it changed
         updatedList.firstOrNull()?.let { syncAddressToPreferences(it) }
-    }
-
-    /**
-     * Swaps priority between two addresses.
-     */
-    suspend fun swapAddressPriority(id1: String, id2: String) {
-        addressStorage.swapPriorities(id1, id2)
-        // Check if the primary address changed
-        val addresses = addressStorage.getAddresses()
-        val primary = addresses.find { it.priority == 1 }
-        if (primary != null) {
-            syncAddressToPreferences(primary)
-        }
     }
 
     private suspend fun syncAddressToPreferences(address: com.occaecat.ztoeschedule.data.model.SavedAddress) {
@@ -118,106 +89,30 @@ class EnergyRepository(
 
     // ========== Selection Chain Methods ==========
 
-    /**
-     * Fetch list of regional energy managements (REMs)
-     * First step in the selection chain
-     */
-    suspend fun getRemList(): Result<List<Rem>> {
-        return try {
-            val rems = apiService.getRemList()
-            Result.success(rems)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun getRemList(): Result<List<Rem>> = try {
+        Result.success(apiService.getRemList())
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    /**
-     * Fetch list of cities for a specific REM
-     * Second step in the selection chain
-     *
-     * @param remId The REM identifier
-     */
-    suspend fun getCityList(remId: String): Result<List<City>> {
-        return try {
-            val cities = apiService.getCityList(remId)
-            Result.success(cities)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun getCityList(remId: String): Result<List<City>> = try {
+        Result.success(apiService.getCityList(remId))
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    /**
-     * Fetch list of streets for a specific city
-     * Third step in the selection chain
-     *
-     * @param cityId The city identifier
-     */
-    suspend fun getStreetList(cityId: String): Result<List<Street>> {
-        return try {
-            val streets = apiService.getStreetList(cityId)
-            Result.success(streets)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun getStreetList(cityId: String): Result<List<Street>> = try {
+        Result.success(apiService.getStreetList(cityId))
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    /**
-     * Fetch list of addresses for a specific street
-     * Fourth and final step in the selection chain
-     *
-     * @param streetId The street identifier
-     */
-    suspend fun getAddressList(streetId: String): Result<List<Address>> {
-        return try {
-            val addresses = apiService.getAddressList(streetId)
-            Result.success(addresses)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun getAddressList(streetId: String): Result<List<Address>> = try {
+        Result.success(apiService.getAddressList(streetId))
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    /**
-     * Parse raw address string containing multiple house numbers
-     * Example: "25 - побутові споживачі, 27А - побутові споживачі, 31 - побутові споживачі"
-     * Result: ["25", "27А", "31"]
-     *
-     * @param raw The raw address string from the API
-     * @return List of clean house numbers
-     */
-    private fun parseRawAddressString(raw: String): List<String> {
-        return raw
-            .split(",")
-            .map { it.trim() }
-            .mapNotNull { entry ->
-                // Remove suffix patterns like " - побутові споживачі"
-                val cleaned = entry
-                    .replace(Regex("""\s*-\s*побутові споживачі\s*"""), "")
-                    .replace(Regex("""\s*-\s*\w+\s+споживачі\s*"""), "")
-                    .trim()
-
-                if (cleaned.isNotEmpty()) cleaned else null
-            }
-            .distinct()
-    }
-
-    /**
-     * Get parsed house numbers for a given address
-     * Transforms the raw API data into a clean list suitable for UI display
-     *
-     * @param address The address object from the API
-     * @return List of individual house numbers
-     */
-    fun getParsedHouseNumbers(address: Address): List<String> {
-        return parseRawAddressString(address.name)
-    }
-
-    /**
-     * Get all parsed house numbers from a list of addresses
-     * Useful for displaying all available houses in a grid layout
-     *
-     * @param addresses List of address objects
-     * @return Flat list of all house numbers with their associated queue identifiers
-     */
     fun getAllParsedHouseNumbers(addresses: List<Address>): List<ParsedHouseNumber> {
         return addresses.flatMap { address ->
             parseRawAddressString(address.name).map { houseNumber ->
@@ -231,38 +126,36 @@ class EnergyRepository(
         }
     }
 
+    private fun parseRawAddressString(raw: String): List<String> {
+        return raw.split(",")
+            .map { it.trim() }
+            .mapNotNull { entry ->
+                val cleaned = entry
+                    .replace(Regex("""\s*-\s*побутові споживачі\s*"""), "")
+                    .replace(Regex("""\s*-\s*\w+\s+споживачі\s*"""), "")
+                    .trim()
+                if (cleaned.isNotEmpty()) cleaned else null
+            }
+            .distinct()
+    }
+
     // ========== Schedule and Messages Methods ==========
 
-    /**
-     * Fetch schedule and messages simultaneously using coroutines
-     *
-     * Uses async/await pattern to fetch both data sources in parallel,
-     * improving performance by reducing total wait time.
-     *
-     * @param cherga Queue identifier
-     * @param pidcherga Sub-queue identifier
-     * @return Result containing ScheduleWithMessages or error
-     */
     suspend fun getScheduleWithMessages(
         cherga: Int,
         pidcherga: Int
     ): Result<ScheduleWithMessages> = try {
         coroutineScope {
-            // Launch both API calls simultaneously
             val scheduleDeferred = async { apiService.getSchedule(cherga, pidcherga) }
             val messagesDeferred = async { apiService.getMessages() }
 
-            // Await both results
             val schedules = try { scheduleDeferred.await() } catch (e: Exception) { null }
             val messages = try { messagesDeferred.await() } catch (e: Exception) { null }
 
             if (schedules == null && messages == null) {
-                // If network failed completely, try cache
                 loadFromCache(cherga, pidcherga)
             } else {
                 val result = ScheduleWithMessages(schedules ?: emptyList(), messages ?: emptyList())
-                
-                // Save successful fetch to Cache
                 val entity = ScheduleCacheEntity(
                     cherga = cherga,
                     pidcherga = pidcherga,
@@ -271,7 +164,6 @@ class EnergyRepository(
                     lastUpdated = System.currentTimeMillis()
                 )
                 scheduleDao.insertSchedule(entity)
-                
                 Result.success(result)
             }
         }
@@ -282,96 +174,52 @@ class EnergyRepository(
     private suspend fun loadFromCache(cherga: Int, pidcherga: Int): Result<ScheduleWithMessages> {
         val cached = scheduleDao.getScheduleOnce(cherga, pidcherga)
         return if (cached != null) {
-            val schedules: List<Schedule> = gson.fromJson(cached.scheduleJson, object : TypeToken<List<Schedule>>() {}.type)
-            val messages: List<ScheduleMessagePart> = gson.fromJson(cached.messagesJson, object : TypeToken<List<ScheduleMessagePart>>() {}.type)
+            val typeS = object : TypeToken<List<Schedule>>() {}.type
+            val typeM = object : TypeToken<List<ScheduleMessagePart>>() {}.type
+            val schedules: List<Schedule> = gson.fromJson(cached.scheduleJson, typeS)
+            val messages: List<ScheduleMessagePart> = gson.fromJson(cached.messagesJson, typeM)
             Result.success(ScheduleWithMessages(schedules, messages))
         } else {
             Result.failure(Exception("Не вдалося завантажити дані (офлайн)"))
         }
     }
 
-    /**
-     * Fetch only schedule data
-     *
-     * @param cherga Queue identifier
-     * @param pidcherga Sub-queue identifier
-     */
-    suspend fun getSchedule(cherga: Int, pidcherga: Int): Result<List<Schedule>> {
-        return try {
-            val schedules = apiService.getSchedule(cherga, pidcherga)
-            Result.success(schedules)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun getMessages(): Result<List<ScheduleMessagePart>> = try {
+        Result.success(apiService.getMessages())
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    /**
-     * Fetch only messages data
-     */
-    suspend fun getMessages(): Result<List<ScheduleMessagePart>> {
-        return try {
-            val messages = apiService.getMessages()
-            Result.success(messages)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun getSchedule(cherga: Int, pidcherga: Int): Result<List<Schedule>> = try {
+        Result.success(apiService.getSchedule(cherga, pidcherga))
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    /**
-     * Fetch server time from HTTP 'Date' header
-     * @return Result with Time in milliseconds or failure
-     */
-    suspend fun getServerTime(): Result<Long> {
-        return try {
-            val response = apiService.getHeaders()
-            if (response.isSuccessful) {
-                val dateHeader = response.headers().get("Date")
-                if (dateHeader != null) {
-                    val format = java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US)
-                    val serverDate = format.parse(dateHeader)
-                    Result.success(serverDate?.time ?: System.currentTimeMillis())
-                } else {
-                    Result.failure(Exception("No Date header"))
-                }
-            } else {
-                Result.failure(Exception("HTTP error: ${response.code()}"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
+    suspend fun getServerTime(): Result<Long> = try {
+        val response = apiService.getHeaders()
+        if (response.isSuccessful) {
+            val dateHeader = response.headers().get("Date")
+            val format = java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US)
+            val serverDate = dateHeader?.let { format.parse(it) }
+            Result.success(serverDate?.time ?: System.currentTimeMillis())
+        } else {
+            Result.failure(Exception("HTTP error: ${response.code()}"))
         }
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    // ========== Domain Logic ==========
-
-    /**
-     * Get the currently active schedule based on current time
-     *
-     * Uses domain logic to parse time spans and determine which schedule
-     * entry is active at the current moment.
-     *
-     * @param schedules List of Schedule objects
-     * @return The active Schedule or null if none is active
-     */
     fun getCurrentStatus(schedules: List<Schedule>): Schedule? {
         return ScheduleDomainLogic.getCurrentStatus(schedules)
     }
 
-    // ========== Persistence Methods ==========
+    // ========== Persistence & Flows ==========
 
-    /**
-     * Save queue identifiers to DataStore
-     *
-     * @param cherga Queue identifier
-     * @param pidcherga Sub-queue identifier
-     */
     suspend fun saveQueueIdentifiers(cherga: Int, pidcherga: Int) {
         preferencesManager.saveQueueIdentifiers(cherga, pidcherga)
     }
 
-    /**
-     * Save complete selection chain to DataStore
-     * This allows the app to restore the user's selection on next launch
-     */
     suspend fun saveCompleteSelection(
         remId: String?,
         remName: String?,
@@ -398,139 +246,37 @@ class EnergyRepository(
         )
     }
 
-    /**
-     * Get saved queue identifiers as a Flow
-     *
-     * @return Flow emitting Pair<cherga, pidcherga>
-     */
-    fun getQueueIdentifiersFlow(): Flow<Pair<Int, Int>> {
-        return preferencesManager.queueIdentifiersFlow
-    }
-
-    /**
-     * Get saved selection chain as a Flow
-     *
-     * @return Flow emitting SavedSelection or null if no selection saved
-     */
-    fun getSavedSelectionFlow(): Flow<com.occaecat.ztoeschedule.data.local.SavedSelection?> {
-        return preferencesManager.savedSelectionFlow
-    }
-
-    /**
-     * Get saved cherga as a Flow
-     */
-    fun getChergaFlow(): Flow<Int> {
-        return preferencesManager.chergaFlow
-    }
-
-    /**
-     * Get saved pidcherga as a Flow
-     */
-    fun getPidchergaFlow(): Flow<Int> {
-        return preferencesManager.pidchergaFlow
-    }
-
-    /**
-     * Get onboarding completion status as Flow
-     */
-    fun getOnboardingCompletedFlow(): Flow<Boolean> {
-        return preferencesManager.onboardingCompletedFlow
-    }
-
-    /**
-     * Mark onboarding as completed
-     */
-    suspend fun setOnboardingCompleted() {
-        preferencesManager.setOnboardingCompleted()
-    }
-
-    /**
-     * Reset onboarding status (for settings)
-     */
-    suspend fun resetOnboarding() {
-        preferencesManager.resetOnboarding()
-    }
-
-    /**
-     * Clear all saved preferences
-     */
-    suspend fun clearPreferences(): Unit {
-        preferencesManager.clearPreferences()
-    }
+    fun getSavedSelectionFlow(): Flow<com.occaecat.ztoeschedule.data.local.SavedSelection?> = preferencesManager.savedSelectionFlow
+    fun getOnboardingCompletedFlow(): Flow<Boolean> = preferencesManager.onboardingCompletedFlow
+    suspend fun setOnboardingCompleted() = preferencesManager.setOnboardingCompleted()
+    suspend fun resetOnboarding() = preferencesManager.resetOnboarding()
+    suspend fun clearPreferences() = preferencesManager.clearPreferences()
 
     // ========== Theme Settings ==========
-
-    fun getDisplayModeFlow(): Flow<DisplayMode> {
-        return preferencesManager.displayModeFlow
-    }
-
-    fun getColorThemeFlow(): Flow<ColorTheme> {
-        return preferencesManager.colorThemeFlow
-    }
-
-    fun getFontScaleFlow(): Flow<FontScale> {
-        return preferencesManager.fontScaleFlow
-    }
-
-    fun getSmartNotificationSettingsFlow(): Flow<SmartNotificationSettings> {
-        return preferencesManager.smartNotificationSettingsFlow
-    }
-
-    suspend fun setDisplayMode(mode: DisplayMode) {
-        preferencesManager.setDisplayMode(mode)
-    }
-
-    suspend fun setColorTheme(theme: ColorTheme) {
-        preferencesManager.setColorTheme(theme)
-    }
-
-    suspend fun setFontScale(scale: FontScale) {
-        preferencesManager.setFontScale(scale)
-    }
-
-    suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) {
-        preferencesManager.saveSmartNotificationSettings(settings)
-    }
+    fun getDisplayModeFlow(): Flow<DisplayMode> = preferencesManager.displayModeFlow
+    fun getColorThemeFlow(): Flow<ColorTheme> = preferencesManager.colorThemeFlow
+    fun getFontScaleFlow(): Flow<FontScale> = preferencesManager.fontScaleFlow
+    fun getSmartNotificationSettingsFlow(): Flow<SmartNotificationSettings> = preferencesManager.smartNotificationSettingsFlow
+    suspend fun setDisplayMode(mode: DisplayMode) = preferencesManager.setDisplayMode(mode)
+    suspend fun setColorTheme(theme: ColorTheme) = preferencesManager.setColorTheme(theme)
+    suspend fun setFontScale(scale: FontScale) = preferencesManager.setFontScale(scale)
+    suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) = preferencesManager.saveSmartNotificationSettings(settings)
 
     // ========== Notification Settings ==========
-
     fun getNotificationsEnabledFlow(): Flow<Boolean> = preferencesManager.notificationsEnabledFlow
     fun getNotificationAdvanceMinutesFlow(): Flow<Int> = preferencesManager.notificationAdvanceMinutesFlow
     fun getStatusNotificationEnabledFlow(): Flow<Boolean> = preferencesManager.statusNotificationEnabledFlow
     fun getLiveActivityEnabledFlow(): Flow<Boolean> = preferencesManager.liveActivityEnabledFlow
-    
-    fun getNotifyScheduleUpdatesFlow(): Flow<Boolean> = preferencesManager.notifyScheduleUpdatesFlow
-    fun getNotifyStatusChangesFlow(): Flow<Boolean> = preferencesManager.notifyStatusChangesFlow
-    fun getNotifyRemindersFlow(): Flow<Boolean> = preferencesManager.notifyRemindersFlow
+    fun getNotificationModeFlow(): Flow<Int> = preferencesManager.notificationModeFlow
 
     suspend fun setNotificationsEnabled(enabled: Boolean) = preferencesManager.setNotificationsEnabled(enabled)
     suspend fun setNotificationAdvanceMinutes(minutes: Int) = preferencesManager.setNotificationAdvanceMinutes(minutes)
     suspend fun setStatusNotificationEnabled(enabled: Boolean) = preferencesManager.setStatusNotificationEnabled(enabled)
     suspend fun setLiveActivityEnabled(enabled: Boolean) = preferencesManager.setLiveActivityEnabled(enabled)
-    
-    suspend fun setNotifyScheduleUpdates(enabled: Boolean) = preferencesManager.setNotifyScheduleUpdates(enabled)
-    suspend fun setNotifyStatusChanges(enabled: Boolean) = preferencesManager.setNotifyStatusChanges(enabled)
-    suspend fun setNotifyReminders(enabled: Boolean) = preferencesManager.setNotifyReminders(enabled)
+    suspend fun setNotificationMode(mode: Int) = preferencesManager.setNotificationMode(mode)
 
     // ========== Existing methods ... 
-
 }
 
-/**
- * Data class combining schedule and messages
- */
-data class ScheduleWithMessages(
-    val schedules: List<Schedule>,
-    val messages: List<ScheduleMessagePart>
-)
-
-/**
- * Data class representing a parsed house number with queue identifiers
- * Used for displaying individual house numbers in the UI
- */
-data class ParsedHouseNumber(
-    val houseNumber: String,
-    val cherga: Int,
-    val pidcherga: Int,
-    val originalAddressId: String
-)
+data class ScheduleWithMessages(val schedules: List<Schedule>, val messages: List<ScheduleMessagePart>)
+data class ParsedHouseNumber(val houseNumber: String, val cherga: Int, val pidcherga: Int, val originalAddressId: String)

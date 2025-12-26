@@ -1,38 +1,40 @@
 package com.occaecat.ztoeschedule.domain.notification
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
-import android.content.Intent
 import android.os.Build
-import androidx.core.content.ContextCompat
 
 object NotificationHelper {
-    fun startNotificationService(context: Context) {
-        val intent = Intent(context, StatusNotificationService::class.java)
+    const val CHANNEL_STATUS_ID = "power_status_channel"
+    const val CHANNEL_PLANNED_ID = "planned_outages_channel"
+    const val CHANNEL_EMERGENCY_ID = "emergency_updates_channel"
+    const val CHANNEL_LIVE_ID = "live_activity_channel"
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ContextCompat.startForegroundService(context, intent)
-            } else {
-                context.startService(intent)
+    fun createAllChannels(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val channels = listOf(
+            NotificationChannel(CHANNEL_STATUS_ID, "СвітлоЄ? Статус", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Постійне сповіщення про наявність світла"
+                setShowBadge(false)
+            },
+            NotificationChannel(CHANNEL_PLANNED_ID, "Планові відключення", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Попередження про зміну графіку за розкладом"
+                enableVibration(true)
+            },
+            NotificationChannel(CHANNEL_EMERGENCY_ID, "Екстрені оновлення", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Термінові зміни та оновлення графіків"
+                enableVibration(true)
+            },
+            NotificationChannel(CHANNEL_LIVE_ID, "СвітлоЄ? Таймер", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Live Activity з таймером"
+                setShowBadge(false)
             }
-        } catch (e: Exception) {
-            // If we can't start foreground service, use WorkManager instead
-            scheduleNotificationWork(context)
-        }
-    }
+        )
 
-    private fun scheduleNotificationWork(context: Context) {
-        // Implement WorkManager periodic task as fallback
-        val workRequest = androidx.work.PeriodicWorkRequestBuilder<NotificationWorker>(
-            15, java.util.concurrent.TimeUnit.MINUTES
-        ).build()
-
-        androidx.work.WorkManager.getInstance(context)
-            .enqueueUniquePeriodicWork(
-                "status_notification",
-                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
-                workRequest
-            )
+        channels.forEach { nm.createNotificationChannel(it) }
     }
 }
-
