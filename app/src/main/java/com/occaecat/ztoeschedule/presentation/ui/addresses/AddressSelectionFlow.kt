@@ -20,6 +20,8 @@ import com.occaecat.ztoeschedule.presentation.ui.onboarding.HouseNumberSelection
 import com.occaecat.ztoeschedule.presentation.ui.onboarding.RemSelectionPage
 import com.occaecat.ztoeschedule.presentation.ui.onboarding.StreetSelectionPage
 
+import androidx.compose.animation.*
+
 /**
  * A more integrated address selection flow for adding new locations within the app.
  * It doesn't have the "Welcome" screens and fits better into a sub-navigation.
@@ -91,49 +93,61 @@ fun AddressSelectionFlow(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) { 
-            when (step) {
-                1 -> RemSelectionPage(
-                    rems = remList,
-                    isLoading = isLoading,
-                    onRemSelected = {
-                        selectedRem = it
-                        onLoadCity(it.id)
-                        step = 2
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
+                    } else {
+                        (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
                     }
-                )
-                2 -> CitySelectionPage(
-                    cities = cityList,
-                    isLoading = isLoading,
-                    onCitySelected = {
-                        selectedCity = it
-                        onLoadStreet(it.id)
-                        step = 3
-                    }
-                )
-                3 -> StreetSelectionPage(
-                    streets = streetList,
-                    isLoading = isLoading,
-                    onStreetSelected = {
-                        selectedStreet = it
-                        onLoadAddress(it.id)
-                        step = 4
-                    }
-                )
-                4 -> HouseNumberSelectionPage(
-                    houseNumbers = houseNumbers,
-                    searchQuery = searchQuery,
-                    isLoading = isLoading,
-                    onSearchQueryChange = onSearchQueryChange,
-                    onClearSearch = onClearSearch,
-                    onHouseSelected = {
-                        onComplete(
-                            selectedRem?.id, selectedRem?.name,
-                            selectedCity?.id, selectedCity?.name,
-                            selectedStreet?.id, selectedStreet?.name,
-                            it.originalAddressId, it.houseNumber, it.cherga, it.pidcherga
-                        )
-                    }
-                )
+                },
+                label = "address_step_transition"
+            ) { targetStep ->
+                when (targetStep) {
+                    1 -> RemSelectionPage(
+                        rems = remList,
+                        isLoading = isLoading,
+                        onRemSelected = {
+                            selectedRem = it
+                            onLoadCity(it.id)
+                            step = 2
+                        }
+                    )
+                    2 -> CitySelectionPage(
+                        cities = cityList,
+                        isLoading = isLoading,
+                        onCitySelected = {
+                            selectedCity = it
+                            onLoadStreet(it.id)
+                            step = 3
+                        }
+                    )
+                    3 -> StreetSelectionPage(
+                        streets = streetList,
+                        isLoading = isLoading,
+                        onStreetSelected = {
+                            selectedStreet = it
+                            onLoadAddress(it.id)
+                            step = 4
+                        }
+                    )
+                    4 -> HouseNumberSelectionPage(
+                        houseNumbers = houseNumbers,
+                        searchQuery = searchQuery,
+                        isLoading = isLoading,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onClearSearch = onClearSearch,
+                        onHouseSelected = {
+                            onComplete(
+                                selectedRem?.id, selectedRem?.name,
+                                selectedCity?.id, selectedCity?.name,
+                                selectedStreet?.id, selectedStreet?.name,
+                                it.originalAddressId, it.houseNumber, it.cherga, it.pidcherga
+                            )
+                        }
+                    )
+                }
             }
         }
     }

@@ -1,12 +1,14 @@
 package com.occaecat.ztoeschedule.domain.notification
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
+import com.occaecat.ztoeschedule.domain.TimeUtils
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.TimeZone
@@ -20,10 +22,9 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import com.occaecat.ztoeschedule.widget.glance.LightWidget
 
-/**
- * Background worker that checks power schedule and sends notifications.
- * Uses Europe/Kyiv timezone for all internal logic to match the utility provider.
- */
+import android.service.quicksettings.TileService
+import android.content.ComponentName
+
 @HiltWorker
 class PowerMonitorWorker @AssistedInject constructor(
     @Assisted context: Context,
@@ -34,14 +35,17 @@ class PowerMonitorWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        Log.d("PowerMonitorWorker", "Background check triggered")
         try {
-            val notificationsEnabled = preferencesManager.notificationsEnabledFlow.first()
-            
             val savedSelection = preferencesManager.savedSelectionFlow.first()
-            if (savedSelection == null || savedSelection.cherga == 0 || savedSelection.pidcherga == 0) {
+            if (savedSelection == null || savedSelection.cherga == 0) {
+                Log.d("PowerMonitorWorker", "No selection found, skipping")
                 return Result.success()
             }
 
+            updateGlanceAddressOnly(savedSelection.addressName)
+
+            val notificationsEnabled = preferencesManager.notificationsEnabledFlow.first()
             val advanceMinutes = preferencesManager.notificationAdvanceMinutesFlow.first()
 
             val result = repository.getScheduleWithMessages(savedSelection.cherga, savedSelection.pidcherga)
@@ -52,15 +56,13 @@ class PowerMonitorWorker @AssistedInject constructor(
                 // Check for schedule updates
                 val currentHash = data.schedules.hashCode().toString()
                 val lastHash = preferencesManager.lastScheduleHashFlow.first()
-                
                 if (lastHash != null && lastHash != currentHash) {
-                    notificationManager.sendPowerChangeNotification(
+                    Log.d("PowerMonitorWorker", "Schedule changed, sending update notification")
+                    notificationManager.sendUpdateNotification(
                         "📢 Графік оновлено",
-                        "Житомиробленерго оновило розклад відключень",
-                        false
+                        "Житомиробленерго оновило розклад відключень"
                     )
                 }
-                
                 if (lastHash != currentHash) {
                     preferencesManager.saveLastScheduleHash(currentHash)
                 }
@@ -70,31 +72,61 @@ class PowerMonitorWorker @AssistedInject constructor(
                     if (notificationsEnabled) {
                         checkAndNotify(currentStatus, advanceMinutes)
                     }
-                    
-                    // Update Widget
                     updateGlanceWidgets(currentStatus, savedSelection.addressName)
+                    updateQuickSettingsTile()
                 }
             }
 
             return Result.success()
         } catch (e: Exception) {
+            Log.e("PowerMonitorWorker", "Worker failed", e)
             return if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
     }
 
-    private suspend fun updateGlanceWidgets(status: GroupedSchedule, address: String) {
-        val manager = GlanceAppWidgetManager(applicationContext)
-        val widget = LightWidget()
-        val glanceIds = manager.getGlanceIds(widget.javaClass)
-        
-        glanceIds.forEach { glanceId ->
-            updateAppWidgetState(applicationContext, glanceId) { prefs ->
-                prefs[LightWidget.KEY_STATUS] = status.color.lowercase()
-                prefs[LightWidget.KEY_NEXT_EVENT] = status.endTime
-                prefs[LightWidget.KEY_ADDRESS] = address
-                prefs[LightWidget.KEY_UPDATED] = System.currentTimeMillis()
+    private fun updateQuickSettingsTile() {
+        try {
+            TileService.requestListeningState(
+                applicationContext,
+                ComponentName(applicationContext, PowerStatusTileService::class.java)
+            )
+        } catch (e: Exception) {
+            Log.e("PowerMonitorWorker", "Failed to update QS Tile", e)
+        }
+    }
+
+    private suspend fun updateGlanceAddressOnly(address: String) {
+        try {
+            val manager = GlanceAppWidgetManager(applicationContext)
+            val widget = LightWidget()
+            val glanceIds = manager.getGlanceIds(widget.javaClass)
+            glanceIds.forEach { glanceId ->
+                updateAppWidgetState(applicationContext, glanceId) { prefs ->
+                    prefs[LightWidget.KEY_ADDRESS] = address
+                }
+                widget.update(applicationContext, glanceId)
             }
-            widget.update(applicationContext, glanceId)
+        } catch (e: Exception) {
+            Log.e("PowerMonitorWorker", "Widget update failed", e)
+        }
+    }
+
+    private suspend fun updateGlanceWidgets(status: GroupedSchedule, address: String) {
+        try {
+            val manager = GlanceAppWidgetManager(applicationContext)
+            val widget = LightWidget()
+            val glanceIds = manager.getGlanceIds(widget.javaClass)
+            glanceIds.forEach { glanceId ->
+                updateAppWidgetState(applicationContext, glanceId) { prefs ->
+                    prefs[LightWidget.KEY_STATUS] = status.color.lowercase()
+                    prefs[LightWidget.KEY_NEXT_EVENT] = status.endTime
+                    prefs[LightWidget.KEY_ADDRESS] = address
+                    prefs[LightWidget.KEY_UPDATED] = System.currentTimeMillis()
+                }
+                widget.update(applicationContext, glanceId)
+            }
+        } catch (e: Exception) {
+            Log.e("PowerMonitorWorker", "Full widget update failed", e)
         }
     }
 
@@ -102,9 +134,7 @@ class PowerMonitorWorker @AssistedInject constructor(
         if (schedules.isEmpty()) return null
         val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
         val now = Calendar.getInstance(kyivZone)
-        val currentHour = now.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = now.get(Calendar.MINUTE)
-        val currentTimeInMinutes = currentHour * 60 + currentMinute
+        val currentTimeInMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
 
         return schedules.firstOrNull { schedule ->
             val parts = schedule.span.split("-")
@@ -122,49 +152,25 @@ class PowerMonitorWorker @AssistedInject constructor(
     private fun parseTime(timeStr: String): Int? {
         val parts = timeStr.split(":")
         if (parts.size != 2) return null
-        return try {
-            parts[0].toInt() * 60 + parts[1].toInt()
-        } catch (e: Exception) { null }
+        return try { parts[0].toInt() * 60 + parts[1].toInt() } catch (e: Exception) { null }
     }
 
     private suspend fun checkAndNotify(currentStatus: GroupedSchedule, advanceMinutes: Int) {
-        val settings = preferencesManager.smartNotificationSettingsFlow.first()
-        
-        // 1. Quiet Hours Check
-        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val currentHour = Calendar.getInstance(kyivZone).get(Calendar.HOUR_OF_DAY)
-        if (settings.isQuietHour(currentHour)) return
-
-        // 2. Priority Check (SILENT)
-        if (settings.priorityMode == PriorityMode.SILENT) return
-
         val isPowerOn = currentStatus.isLightOn
         val endTimeStr = Regex("""(\d{2}:\d{2})""").findAll(currentStatus.span).lastOrNull()?.value ?: return
-        val endTimeParts = endTimeStr.split(":")
-        val minutesUntilChange = getMinutesUntilTime(Pair(endTimeParts[0].toInt(), endTimeParts[1].toInt()))
-
-        // Alert types
-        val isOutageAlert = isPowerOn // Warning: Light is ON, so next is OFF
-        val isRestoreAlert = !isPowerOn // Warning: Light is OFF, so next is ON
+        val minutesUntilChange = getMinutesUntilTime(Pair(endTimeStr.split(":")[0].toInt(), endTimeStr.split(":")[1].toInt()))
         
-        // Apply Priority Filters
-        if (settings.priorityMode == PriorityMode.CRITICAL_ONLY || settings.priorityMode == PriorityMode.SMART) {
-            // Skip "Restore" alerts in Critical/Smart modes (focus on outages)
-            if (isRestoreAlert) return
-        }
+        val mode = preferencesManager.notificationModeFlow.first()
+        if (mode == 2) return
+        if (mode == 1 && !isPowerOn) return // IMPORTANT only: focus on outages
 
         if (minutesUntilChange in (advanceMinutes - 5)..advanceMinutes) {
-            val title = if (isPowerOn) "⚠️ Попередження: Скоро відключення" else "✅ Готуйтесь: Скоро буде світло"
-            val message = if (isPowerOn) "За графіком світло зникне через $minutesUntilChange хв. Зарядіть пристрої! 🔋" 
-                          else "До увімкнення залишилось $minutesUntilChange хв. Кава сама себе не зварить! ☕"
-            notificationManager.sendPowerChangeNotification(title, message, !isPowerOn)
+            val title = if (isPowerOn) "⚠️ Скоро відключення" else "✅ Світло повертається"
+            notificationManager.sendPowerChangeNotification(title, "До зміни залишилось $minutesUntilChange хв", isPowerOn)
         }
-
         if (minutesUntilChange in 0..2) {
-            val title = if (isPowerOn) "🔴 Відключення розпочато" else "🟢 Світло увімкнено!"
-            val message = if (isPowerOn) "Згідно з графіком, ваша черга зараз знеструмлена. Тримаємось! 💪" 
-                          else "Електропостачання відновлено. Користуйтесь із задоволенням! 💡"
-            notificationManager.sendPowerChangeNotification(title, message, !isPowerOn)
+            val title = if (isPowerOn) "🔴 Відключення" else "🟢 Світло увімкнено!"
+            notificationManager.sendPowerChangeNotification(title, "Статус змінився за графіком", isPowerOn)
         }
     }
 

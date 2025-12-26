@@ -10,22 +10,12 @@ import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.glance.Button
-import androidx.glance.GlanceId
-import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
-import androidx.glance.Image
-import androidx.glance.ImageProvider
-import androidx.glance.LocalContext
-import androidx.glance.LocalSize
-import androidx.glance.action.ActionParameters
+import androidx.glance.*
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
-import androidx.glance.background
-import androidx.glance.currentState
 import androidx.glance.layout.*
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -39,6 +29,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.first
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -58,24 +49,30 @@ class LightWidget : GlanceAppWidget() {
 
     override val sizeMode = SizeMode.Responsive(
         setOf(
-            DpSize(100.dp, 100.dp), // Small
-            DpSize(200.dp, 100.dp), // Medium
-            DpSize(200.dp, 200.dp)  // Large
+            DpSize(100.dp, 100.dp),
+            DpSize(200.dp, 100.dp),
+            DpSize(200.dp, 200.dp)
         )
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appContext = context.applicationContext ?: context
         val entryPoint = EntryPointAccessors.fromApplication(appContext, LightWidgetEntryPoint::class.java)
-        val repository = entryPoint.energyRepository()
         val prefManager = entryPoint.energyPreferencesManager()
 
+        // 1. Get the address name from the app's DataStore (fast)
+        val selection = prefManager.savedSelectionFlow.first()
+        
+        // We do NOT fetch network here to avoid blocking the widget rendering
+        
         provideContent {
             val prefs = currentState<Preferences>()
+            
+            // Use address from app config if available, otherwise from widget cache
+            val address = selection?.addressName ?: prefs[KEY_ADDRESS]
             val status = prefs[KEY_STATUS] ?: "unknown"
-            val address = prefs[KEY_ADDRESS]
             val nextEvent = prefs[KEY_NEXT_EVENT] ?: "--:--"
-            val context = LocalContext.current
+            val currentContext = LocalContext.current
             
             SvitloYeGlanceTheme {
                 val size = LocalSize.current
@@ -84,7 +81,7 @@ class LightWidget : GlanceAppWidget() {
                     modifier = GlanceModifier
                         .fillMaxSize()
                         .background(GlanceTheme.colors.surface)
-                        .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
+                        .clickable(actionStartActivity(Intent(currentContext, MainActivity::class.java)))
                         .padding(12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -92,18 +89,19 @@ class LightWidget : GlanceAppWidget() {
                         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
                             Text("Налаштуйте адресу", style = TextStyle(color = GlanceTheme.colors.onSurface))
                             Spacer(GlanceModifier.height(8.dp))
-                            Button(
+                            androidx.glance.Button(
                                 text = "Налаштувати",
-                                onClick = actionStartActivity(Intent(context, MainActivity::class.java))
+                                onClick = actionStartActivity(
+                                    Intent(currentContext, MainActivity::class.java).apply {
+                                        putExtra("configure_widget", true)
+                                    }
+                                )
                             )
                         }
                     } else {
                         when {
-                            // Large (Full)
                             size.height >= 180.dp -> FullLayout(status, nextEvent, address)
-                            // Medium (Timeline - simplified to row)
                             size.width >= 180.dp -> RowLayout(status, nextEvent)
-                            // Small (Status)
                             else -> SmallLayout(status, nextEvent)
                         }
                     }
@@ -113,78 +111,57 @@ class LightWidget : GlanceAppWidget() {
     }
 
     @Composable
-    fun SmallLayout(status: String, nextEvent: String) {
+    private fun SmallLayout(status: String, nextEvent: String) {
         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
             StatusIcon(status, 32.dp)
             Spacer(GlanceModifier.height(8.dp))
             Text(
-                text = if(status == "red") "Немає" else "Є світло",
+                text = if(status == "red") "Немає" else if(status == "unknown") "Оновлення" else "Є світло",
                 style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Bold)
             )
-            Text(
-                text = nextEvent,
-                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp)
-            )
-        }
-    }
-
-    @Composable
-    fun RowLayout(status: String, nextEvent: String) {
-        Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
-            StatusIcon(status, 40.dp)
-            Spacer(GlanceModifier.width(12.dp))
-            Column {
-                Text(
-                    text = if(status == "red") "Відключення" else "Світло є",
-                    style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                )
-                Text(
-                    text = "До $nextEvent",
-                    style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant)
-                )
+            if (status != "unknown") {
+                Text(text = nextEvent, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
             }
         }
     }
 
     @Composable
-    fun FullLayout(status: String, nextEvent: String, address: String) {
-        Column(
-            modifier = GlanceModifier.fillMaxSize(),
-            horizontalAlignment = Alignment.Horizontal.CenterHorizontally
-        ) {
-            RowLayout(status, nextEvent)
-            Spacer(GlanceModifier.height(12.dp))
-            Box(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(GlanceTheme.colors.outline)
-            ) {}
-            Spacer(GlanceModifier.height(8.dp))
-            Text(
-                text = address,
-                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp),
-                maxLines = 2
-            )
-            // Ideally draw timeline here using Canvas/Box, but simplified for now
+    private fun RowLayout(status: String, nextEvent: String) {
+        Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
+            StatusIcon(status, 40.dp)
+            Spacer(GlanceModifier.width(12.dp))
+            Column {
+                Text(
+                    text = if(status == "red") "Відключення" else if(status == "unknown") "Синхронізація..." else "Світло є",
+                    style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                )
+                if (status != "unknown") {
+                    Text(text = "До $nextEvent", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant))
+                }
+            }
         }
     }
 
     @Composable
-    fun StatusIcon(status: String, size: androidx.compose.ui.unit.Dp) {
+    private fun FullLayout(status: String, nextEvent: String, address: String) {
+        Column(modifier = GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
+            RowLayout(status, nextEvent)
+            Spacer(GlanceModifier.height(12.dp))
+            Box(modifier = GlanceModifier.fillMaxWidth().height(1.dp).background(GlanceTheme.colors.outline)) {}
+            Spacer(GlanceModifier.height(8.dp))
+            Text(text = address, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 2)
+        }
+    }
+
+    @Composable
+    private fun StatusIcon(status: String, size: androidx.compose.ui.unit.Dp) {
         val iconRes = if (status == "red") R.drawable.ic_home_filled else R.drawable.ic_bolt
         val tint = when (status) {
             "red" -> ColorProvider(Color.Red)
             "green", "white" -> ColorProvider(Color.Green)
             "yellow" -> ColorProvider(Color.Yellow)
-            else -> GlanceTheme.colors.onSurface
+            else -> GlanceTheme.colors.onSurfaceVariant
         }
-        
-        Image(
-            provider = ImageProvider(iconRes),
-            contentDescription = null,
-            modifier = GlanceModifier.size(size),
-            colorFilter = androidx.glance.ColorFilter.tint(tint)
-        )
+        Image(provider = ImageProvider(iconRes), contentDescription = null, modifier = GlanceModifier.size(size), colorFilter = ColorFilter.tint(tint))
     }
 }

@@ -109,7 +109,7 @@ fun SvitloYeZhytomyrTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = scaledTypography,
-        shapes = AppShapes,
+        shapes = Shapes,
         content = content
     )
 }

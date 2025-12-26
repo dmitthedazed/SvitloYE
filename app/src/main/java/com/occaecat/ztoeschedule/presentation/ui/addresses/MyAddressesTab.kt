@@ -3,6 +3,8 @@ package com.occaecat.ztoeschedule.presentation.ui.addresses
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -23,26 +25,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.occaecat.ztoeschedule.data.model.City
-import com.occaecat.ztoeschedule.data.model.Rem
-import com.occaecat.ztoeschedule.data.model.SavedAddress
-import com.occaecat.ztoeschedule.data.model.Street
+import com.occaecat.ztoeschedule.data.model.*
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.TimeUtils
-import java.util.Calendar
+import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
+import com.occaecat.ztoeschedule.ui.theme.OctagonShape
 import java.util.Collections
-import java.util.TimeZone
 
-/**
- * My Addresses tab with draggable cards for priority management.
- * Locked to Europe/Kyiv timezone for status and progress.
- */
+import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyAddressesTab(
@@ -55,6 +55,10 @@ fun MyAddressesTab(
     houseNumbers: List<ParsedHouseNumber>,
     searchQuery: String,
     isLoading: Boolean,
+    isWideScreen: Boolean = false,
+    inspectedScheduleList: List<Schedule> = emptyList(),
+    inspectedGroupedSchedule: List<GroupedSchedule> = emptyList(),
+    isInspectingLoading: Boolean = false,
     onStartAdding: () -> Unit,
     onCancelAdding: () -> Unit,
     onLoadRem: () -> Unit,
@@ -66,71 +70,71 @@ fun MyAddressesTab(
     onSaveAddress: (name: String, icon: String, remId: String, remName: String, cityId: String, cityName: String, streetId: String, streetName: String, addressId: String, addressName: String, cherga: Int, pidcherga: Int) -> Unit,
     onDeleteAddress: (String) -> Unit,
     onUpdateOrder: (List<SavedAddress>) -> Unit,
+    onRefreshAddress: (Int, Int) -> Unit = { _, _ -> },
+    onInspectAddress: (SavedAddress) -> Unit = {},
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
-    if (isAddingNew) {
-        var tempSelection by remember { mutableStateOf<TempSelection?>(null) }
+    var selectedAddressId by remember(addresses) { mutableStateOf(addresses.firstOrNull()?.id) }
+    val selectedAddress = remember(selectedAddressId, addresses) { addresses.find { it.id == selectedAddressId } }
 
-        if (tempSelection == null) {
-            AddressSelectionFlow(
-                remList = remList,
-                cityList = cityList,
-                streetList = streetList,
-                houseNumbers = houseNumbers,
-                searchQuery = searchQuery,
-                isLoading = isLoading,
-                onLoadRem = onLoadRem,
-                onLoadCity = onLoadCity,
-                onLoadStreet = onLoadStreet,
-                onLoadAddress = onLoadAddress,
-                onSearchQueryChange = onSearchQueryChange,
-                onClearSearch = onClearSearch,
-                onCancel = onCancelAdding,
-                onComplete = { remId, remName, cityId, cityName, streetId, streetName, addrId, addrName, cherga, pid ->
-                    tempSelection = TempSelection(
-                        remId ?: "", remName ?: "", cityId ?: "", cityName ?: "",
-                        streetId ?: "", streetName ?: "", addrId, addrName, cherga, pid
-                    )
-                }
-            )
-        } else {
-            AddressCustomizationScreen(
-                onComplete = { name, icon ->
-                    val s = tempSelection!!
-                    onSaveAddress(
-                        name, icon, s.remId, s.remName, s.cityId, s.cityName,
-                        s.streetId, s.streetName, s.addressId, s.addressName, s.cherga, s.pidcherga
-                    )
-                },
-                onBack = { tempSelection = null }
-            )
-        }
-        return
+    LaunchedEffect(selectedAddressId, isWideScreen) {
+        if (isWideScreen && selectedAddress != null) onInspectAddress(selectedAddress)
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        AnimatedContent(
-            targetState = addresses.isEmpty(),
-            transitionSpec = {
-                fadeIn() togetherWith fadeOut()
-            },
-            label = "addresses_state_transition"
-        ) { isEmpty ->
-            if (isEmpty) {
-                EmptyAddressesView(onStartAdding, modifier = Modifier.fillMaxSize().padding(contentPadding))
+    Row(modifier = modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) {
+            if (isLoading && addresses.isEmpty()) {
+                AddressesSkeleton(contentPadding)
+            } else if (addresses.isEmpty()) {
+                EmptyAddressesView(onStartAdding, Modifier.fillMaxSize().padding(contentPadding))
             } else {
                 DraggableAddressList(
-                    addresses = addresses,
-                    statuses = addressStatuses,
-                    onDelete = onDeleteAddress,
-                    onStartAdding = onStartAdding,
-                    onUpdateOrder = onUpdateOrder,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = contentPadding
+                    addresses = addresses, statuses = addressStatuses,
+                    selectedId = if (isWideScreen) selectedAddressId else null,
+                    onDelete = onDeleteAddress, onStartAdding = onStartAdding, onUpdateOrder = onUpdateOrder,
+                    onSelect = { if (isWideScreen) selectedAddressId = it.id else onInspectAddress(it) },
+                    modifier = Modifier.fillMaxSize(), contentPadding = contentPadding
                 )
             }
         }
+
+        if (isWideScreen) {
+            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+            Box(modifier = Modifier.weight(1.5f)) {
+                if (selectedAddress != null) {
+                    if (isInspectingLoading && inspectedGroupedSchedule.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    } else {
+                        HomeTab(selectedAddress.remName, selectedAddress.cityName, selectedAddress.streetName, selectedAddress.addressName, selectedAddress.cherga, selectedAddress.pidcherga, null, inspectedScheduleList, inspectedGroupedSchedule, { onInspectAddress(selectedAddress) }, Modifier.fillMaxSize(), contentPadding, "", false, isInspectingLoading)
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Оберіть адресу зліва", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddressesSkeleton(contentPadding: PaddingValues) {
+    val ld = LocalLayoutDirection.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(
+                start = contentPadding.calculateStartPadding(ld) + 16.dp,
+                top = contentPadding.calculateTopPadding() + 16.dp,
+                end = contentPadding.calculateEndPadding(ld) + 16.dp,
+                bottom = contentPadding.calculateBottomPadding() + 16.dp
+            ),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        repeat(3) {
+            ShimmerItem(height = 120.dp, shape = MaterialTheme.shapes.extraLarge)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        ShimmerItem(height = 64.dp, shape = OctagonShape)
     }
 }
 
@@ -138,9 +142,11 @@ fun MyAddressesTab(
 private fun DraggableAddressList(
     addresses: List<SavedAddress>,
     statuses: Map<String, GroupedSchedule?>,
+    selectedId: String?,
     onDelete: (String) -> Unit,
     onStartAdding: () -> Unit,
     onUpdateOrder: (List<SavedAddress>) -> Unit,
+    onSelect: (SavedAddress) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
@@ -148,82 +154,57 @@ private fun DraggableAddressList(
     var addressToDelete by remember { mutableStateOf<SavedAddress?>(null) }
     var showPrimaryChangeDialog by remember { mutableStateOf<SavedAddress?>(null) }
     val initialPrimaryId = remember(addresses) { addresses.firstOrNull()?.id }
-
     val lazyListState = rememberLazyListState()
     var draggedIndex by remember { mutableIntStateOf(-1) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    val ld = LocalLayoutDirection.current
+    val haptic = LocalHapticFeedback.current
 
     LazyColumn(
-        state = lazyListState,
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = contentPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr) + 16.dp,
-            top = contentPadding.calculateTopPadding() + 16.dp,
-            end = contentPadding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr) + 16.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        state = lazyListState, modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = contentPadding.calculateStartPadding(ld) + 16.dp, top = contentPadding.calculateTopPadding() + 16.dp, end = contentPadding.calculateEndPadding(ld) + 16.dp, bottom = contentPadding.calculateBottomPadding() + 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         itemsIndexed(list, key = { _, item -> item.id }) { index, address ->
             val isDragging = index == draggedIndex
-            val scale by animateFloatAsState(if (isDragging) 1.05f else 1f, label = "scale")
-            val elevation by animateDpAsState(if (isDragging) 16.dp else 2.dp, label = "elevation")
-
-            Box(modifier = Modifier
-                .zIndex(if (isDragging) 1f else 0f)
-                .animateItem()
-            ) {
+            val isSelected = address.id == selectedId
+            val scale by animateFloatAsState(
+                targetValue = if (isDragging) 1.05f else 1f, 
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                label = "s"
+            )
+            
+            Box(modifier = Modifier.zIndex(if (isDragging) 1f else 0f).animateItem()) {
                 AddressItem(
-                    address = address,
-                    status = statuses[address.id],
-                    isPrimary = index == 0,
-                    onDelete = { addressToDelete = address },
-                    modifier = Modifier
-                        .graphicsLayer {
-                            translationY = if (isDragging) dragOffsetY else 0f
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                        .shadow(elevation, shape = MaterialTheme.shapes.extraLarge)
+                    address, statuses[address.id], index == 0, isSelected, { addressToDelete = address }, { 
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(address) 
+                    },
+                    Modifier.graphicsLayer { translationY = if (isDragging) dragOffsetY else 0f; scaleX = scale; scaleY = scale }
+                        .shadow(if (isDragging) 12.dp else 0.dp, MaterialTheme.shapes.extraLarge)
                         .pointerInput(Unit) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = { 
-                                    draggedIndex = index 
-                                    dragOffsetY = 0f
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    draggedIndex = index; dragOffsetY = 0f 
                                 },
-                                onDragEnd = {
-                                    if (list.firstOrNull()?.id != initialPrimaryId) {
-                                        showPrimaryChangeDialog = list.first()
-                                    } else {
-                                        onUpdateOrder(list)
-                                    }
-                                    draggedIndex = -1
-                                    dragOffsetY = 0f
+                                onDragEnd = { 
+                                    if (list.firstOrNull()?.id != initialPrimaryId) showPrimaryChangeDialog = list.first() else onUpdateOrder(list)
+                                    draggedIndex = -1 
                                 },
-                                onDragCancel = { 
-                                    draggedIndex = -1
-                                    dragOffsetY = 0f
-                                },
+                                onDragCancel = { draggedIndex = -1 },
                                 onDrag = { change, amount ->
-                                    change.consume()
-                                    dragOffsetY += amount.y
-                                    
-                                    val currentItem = lazyListState.layoutInfo.visibleItemsInfo.find { it.index == draggedIndex }
-                                    val itemHeight = currentItem?.size ?: 500
-                                    val threshold = itemHeight / 2f
-                                    
-                                    if (dragOffsetY > threshold && draggedIndex < list.size - 1) {
-                                        val newList = list.toMutableList()
-                                        Collections.swap(newList, draggedIndex, draggedIndex + 1)
-                                        list = newList
-                                        draggedIndex++
-                                        dragOffsetY -= itemHeight + 48f
-                                    } else if (dragOffsetY < -threshold && draggedIndex > 0) {
-                                        val newList = list.toMutableList()
-                                        Collections.swap(newList, draggedIndex, draggedIndex - 1)
-                                        list = newList
-                                        draggedIndex--
-                                        dragOffsetY += itemHeight + 48f
+                                    change.consume(); dragOffsetY += amount.y
+                                    val itemHeight = lazyListState.layoutInfo.visibleItemsInfo.find { it.index == draggedIndex }?.size ?: 500
+                                    if (kotlin.math.abs(dragOffsetY) > itemHeight / 2f) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        if (dragOffsetY > 0 && draggedIndex < list.size - 1) {
+                                            val newList = list.toMutableList(); Collections.swap(newList, draggedIndex, draggedIndex + 1)
+                                            list = newList; draggedIndex++; dragOffsetY -= itemHeight
+                                        } else if (dragOffsetY < 0 && draggedIndex > 0) {
+                                            val newList = list.toMutableList(); Collections.swap(newList, draggedIndex, draggedIndex - 1)
+                                            list = newList; draggedIndex--; dragOffsetY += itemHeight
+                                        }
                                     }
                                 }
                             )
@@ -231,304 +212,104 @@ private fun DraggableAddressList(
                 )
             }
         }
-
-        item(key = "add_address_item") {
-            OutlinedCard(
-                onClick = onStartAdding,
-                modifier = Modifier.fillMaxWidth().animateItem(),
-                shape = MaterialTheme.shapes.extraLarge,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        item {
+            Button(
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onStartAdding() 
+                }, 
+                modifier = Modifier.fillMaxWidth().height(64.dp).padding(top = 8.dp), 
+                shape = OctagonShape, // Use 2025 Octagon Shape
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(12.dp))
-                    Text("Додати нову адресу", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                }
+                Icon(Icons.Default.Add, null); Spacer(Modifier.width(12.dp)); Text("Додати нову адресу", fontWeight = FontWeight.Bold)
             }
         }
     }
-
-    if (showPrimaryChangeDialog != null) {
-        AlertDialog(
-            onDismissRequest = { 
-                showPrimaryChangeDialog = null
-                // Reset local list to original state
-                list = addresses
-            },
-            title = { Text("Змінити основну адресу?") },
-            text = { Text("Ви перемістили '${showPrimaryChangeDialog!!.name}' на перше место. Тепер вона буде відображатися як головна.") },
-            confirmButton = {
-                Button(onClick = {
-                    onUpdateOrder(list)
-                    showPrimaryChangeDialog = null
-                }) {
-                    Text("Підтвердити")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { 
-                    showPrimaryChangeDialog = null
-                    // Reset local list to original state
-                    list = addresses
-                }) {
-                    Text("Скасувати")
-                }
-            }
-        )
-    }
-
-    if (addressToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { addressToDelete = null },
-            title = { Text("Видалити адресу?") },
-            text = { Text("Ви впевнені, що хочете видалити '${addressToDelete!!.name}'?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete(addressToDelete!!.id)
-                        addressToDelete = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Видалити")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { addressToDelete = null }) {
-                    Text("Скасувати")
-                }
-            }
-        )
-    }
+    if (showPrimaryChangeDialog != null) AlertDialog(onDismissRequest = { showPrimaryChangeDialog = null; list = addresses }, title = { Text("Змінити головну?") }, confirmButton = { Button(onClick = { onUpdateOrder(list); showPrimaryChangeDialog = null }) { Text("Так") } })
+    if (addressToDelete != null) AlertDialog(onDismissRequest = { addressToDelete = null }, title = { Text("Видалити?") }, confirmButton = { TextButton(onClick = { onDelete(addressToDelete!!.id); addressToDelete = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Так") } })
 }
 
 @Composable
-private fun AddressItem(
-    address: SavedAddress,
-    status: GroupedSchedule?,
-    isPrimary: Boolean,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+private fun AddressItem(address: SavedAddress, status: GroupedSchedule?, isPrimary: Boolean, isSelected: Boolean, onDelete: () -> Unit, onClick: () -> Unit, modifier: Modifier = Modifier) {
     ElevatedCard(
-        modifier = modifier.fillMaxWidth().animateContentSize(),
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = if (isPrimary) {
-            CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        } else CardDefaults.elevatedCardColors()
+        onClick = onClick, modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge,
+        colors = when {
+            isSelected -> CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            isPrimary -> CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            else -> CardDefaults.elevatedCardColors()
+        }
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = getIconForName(address.iconName),
-                        contentDescription = null,
-                        modifier = Modifier.padding(12.dp),
-                        tint = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = OctagonShape, color = if(isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(44.dp)) {
+                    Icon(getIconForName(address.iconName), null, Modifier.padding(10.dp), if(isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = address.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (isPrimary) {
-                        Text(
-                            text = "Основна локація",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(address.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${address.cityName}, ${address.streetName}", style = MaterialTheme.typography.bodySmall, color = if(isPrimary) MaterialTheme.colorScheme.onPrimaryContainer.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                
-                Icon(
-                    imageVector = Icons.Default.DragIndicator,
-                    contentDescription = "Утримуйте для переміщення",
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                )
-
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.DeleteOutline, "Видалити", tint = if(isPrimary) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.error)
-                }
+                IconButton(onClick = onDelete) { Icon(Icons.Default.DeleteOutline, null, tint = if(isPrimary) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.error) }
             }
-            
-            Spacer(Modifier.height(16.dp))
-            
             if (status != null) {
-                StatusInfoSection(status, isPrimary)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
+                StatusInfoSection(status)
             }
-
-            Text(
-                text = "${address.cityName}, ${address.streetName}, ${address.addressName}",
-                style = MaterialTheme.typography.bodyLarge
-            )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SuggestionChip(
-                    onClick = { },
-                    label = { Text("Черга ${address.cherga}.${address.pidcherga}") },
-                    enabled = false,
-                    shape = MaterialTheme.shapes.medium
-                )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SuggestionChip(onClick = {}, label = { Text("${address.cherga}.${address.pidcherga}") }, shape = CircleShape, border = null, colors = SuggestionChipDefaults.suggestionChipColors(containerColor = (if(isPrimary) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.surfaceVariant).copy(0.1f)))
+                if (isPrimary) {
+                    Spacer(Modifier.width(8.dp))
+                    Text("Головна", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StatusInfoSection(
-    status: GroupedSchedule,
-    isPrimary: Boolean
-) {
+private fun StatusInfoSection(status: GroupedSchedule) {
     val context = LocalContext.current
-    val color = when(status.color.lowercase()) {
-        "red" -> MaterialTheme.colorScheme.error
-        "yellow" -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
-    }
-
+    val color = when(status.color.lowercase()) { "red" -> MaterialTheme.colorScheme.error; "yellow" -> MaterialTheme.colorScheme.tertiary; else -> MaterialTheme.colorScheme.primary }
     val progress = calculateSimpleProgress(status.span)
-
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                color = color.copy(alpha = 0.15f),
-                shape = CircleShape
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier.size(10.dp).clip(CircleShape).background(color)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = status.displayText,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = color
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            
+            Box(Modifier.size(8.dp).clip(OctagonShape).background(color))
+            Spacer(Modifier.width(8.dp))
+            Text(status.displayText, style = MaterialTheme.typography.labelLarge, color = color, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
             val endTimeStr = Regex("""(\d{2}:\d{2})""").findAll(status.span).lastOrNull()?.value ?: ""
-            val systemEndTime = if (endTimeStr.isNotEmpty()) TimeUtils.formatToSystemTime(context, endTimeStr) else ""
-            
-            Text(
-                text = "До $systemEndTime",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if(isPrimary) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("До ${if (endTimeStr.isNotEmpty()) TimeUtils.formatToSystemTime(context, endTimeStr) else ""}", style = MaterialTheme.typography.bodySmall)
         }
-        
-        Spacer(Modifier.height(12.dp))
-        
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(8.dp),
-            color = color,
-            trackColor = color.copy(alpha = 0.1f),
-            strokeCap = StrokeCap.Round
-        )
+        Spacer(Modifier.height(8.dp))
+        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(6.dp), color = color, trackColor = color.copy(0.1f), strokeCap = StrokeCap.Round)
     }
 }
 
 private fun calculateSimpleProgress(span: String): Float {
     return try {
-        val timeRegex = Regex("""(\d{2}:\d{2})""")
-        val matches = timeRegex.findAll(span).toList()
+        val matches = Regex("""(\d{2}:\d{2})""").findAll(span).toList()
         if (matches.size < 2) return 0.5f
-        
-        val startStr = matches[0].value
-        val endStr = matches[1].value
-        
-        fun parse(s: String): Int {
-            val p = s.split(":")
-            return p[0].toInt() * 60 + p[1].toInt()
-        }
-        
-        val start = parse(startStr)
-        var end = parse(endStr)
-        val isMultiDay = span.contains("(")
-        
-        if (isMultiDay || end <= start) {
-            if (end <= start) end += 1440
-        }
-        
-        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val now = Calendar.getInstance(kyivZone)
-        var current = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        
-        if (isMultiDay && current < start) {
-            current += 1440
-        } else if (!isMultiDay && current < start && end > 1440) {
-            current += 1440
-        }
-        
-        ((current - start).toFloat() / (end - start).toFloat()).coerceIn(0f, 1f)
-    } catch (e: Exception) {
-        0.5f
-    }
+        fun parse(s: String) = s.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+        val start = parse(matches[0].value); var end = parse(matches[1].value)
+        if (span.contains("(") || end <= start) end += 1440
+        val kyiv = java.util.TimeZone.getTimeZone("Europe/Kyiv")
+        val now = java.util.Calendar.getInstance(kyiv); var cur = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+        if (span.contains("(") && cur < start) cur += 1440
+        ((cur - start).toFloat() / (end - start).toFloat()).coerceIn(0f, 1f)
+    } catch (e: Exception) { 0.5f }
 }
 
 @Composable
-private fun EmptyAddressesView(
-    onStartAdding: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(imageVector = Icons.Default.LocationOff, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f))
-            Text(text = "Список адрес порожній", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(text = "Додайте свою першу локацію,\nщоб стежити за світлом", textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onStartAdding, shape = MaterialTheme.shapes.medium) {
-                Icon(Icons.Default.Add, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Додати адресу")
-            }
+private fun EmptyAddressesView(onStartAdding: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Icon(Icons.Default.LocationOff, null, Modifier.size(64.dp), MaterialTheme.colorScheme.secondary.copy(0.5f))
+            Text("Список адрес порожній", style = MaterialTheme.typography.titleMedium)
+            Button(onClick = onStartAdding, shape = OctagonShape) { Text("Додати адресу") }
         }
     }
 }
 
-private fun getIconForName(name: String): ImageVector {
-    return when (name) {
-        "home" -> Icons.Default.Home
-        "apartment" -> Icons.Default.Apartment
-        "work" -> Icons.Default.Work
-        "school" -> Icons.Default.School
-        "star" -> Icons.Default.Star
-        else -> Icons.Default.LocationOn
-    }
-}
-
-private data class TempSelection(val remId: String, val remName: String, val cityId: String, val cityName: String, val streetId: String, val streetName: String, val addressId: String, val addressName: String, val cherga: Int, val pidcherga: Int)
+private fun getIconForName(name: String) = when (name) { "home" -> Icons.Default.Home; "apartment" -> Icons.Default.Apartment; "work" -> Icons.Default.Work; "school" -> Icons.Default.School; "star" -> Icons.Default.Star; else -> Icons.Default.LocationOn }

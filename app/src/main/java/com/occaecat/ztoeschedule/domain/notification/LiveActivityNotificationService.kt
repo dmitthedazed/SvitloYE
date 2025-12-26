@@ -1,5 +1,6 @@
 package com.occaecat.ztoeschedule.domain.notification
 
+import android.content.pm.ServiceInfo
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -19,30 +20,17 @@ import androidx.core.content.ContextCompat
 import com.occaecat.ztoeschedule.MainActivity
 import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
-import com.occaecat.ztoeschedule.data.network.RetrofitClient
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import com.occaecat.ztoeschedule.domain.TimeUtils
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.TimeZone
-
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-/**
- * Service providing a "Live Activity" style notification for Android.
- * Locked to Europe/Kyiv timezone for accurate schedule representation.
- */
 @AndroidEntryPoint
 class LiveActivityNotificationService : Service() {
 
@@ -50,7 +38,7 @@ class LiveActivityNotificationService : Service() {
         private const val CHANNEL_ID = "live_activity_channel"
         private const val CHANNEL_NAME = "СвітлоЄ? Таймер"
         private const val NOTIFICATION_ID = 2002
-        private const val UPDATE_INTERVAL_MS = 60_000L // 1 minute
+        private const val UPDATE_INTERVAL_MS = 60_000L
 
         fun start(context: Context) {
             val intent = Intent(context, LiveActivityNotificationService::class.java)
@@ -76,25 +64,27 @@ class LiveActivityNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        
         createNotificationChannel()
-        
         try {
-            startForeground(NOTIFICATION_ID, createLoadingNotification())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID, 
+                    createLoadingNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createLoadingNotification())
+            }
         } catch (e: Exception) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                 notificationManager.notify(NOTIFICATION_ID, createLoadingNotification())
+                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                 nm.notify(NOTIFICATION_ID, createLoadingNotification())
             }
         }
-        
         startPeriodicUpdates()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
-    }
-
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
@@ -104,19 +94,13 @@ class LiveActivityNotificationService : Service() {
     }
 
     private fun createNotificationChannel() {
-        val importance = NotificationManager.IMPORTANCE_LOW
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            CHANNEL_NAME,
-            importance
-        ).apply {
+        val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "Відображення часу до зміни статусу"
             setShowBadge(false)
             setSound(null, null)
         }
-
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.createNotificationChannel(channel)
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(channel)
     }
 
     private fun createLoadingNotification(): Notification {
@@ -131,41 +115,29 @@ class LiveActivityNotificationService : Service() {
     private fun startPeriodicUpdates() {
         updateJob = serviceScope.launch {
             while (isActive) {
-                try {
-                    updateNotification()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                try { updateNotification() } catch (e: Exception) { e.printStackTrace() }
                 delay(UPDATE_INTERVAL_MS)
             }
         }
     }
 
     private suspend fun updateNotification() {
-        val savedSelection = preferencesManager.savedSelectionFlow.first()
-        if (savedSelection == null || savedSelection.cherga == 0 || savedSelection.pidcherga == 0) {
-            return
-        }
-
-        val result = repository.getScheduleWithMessages(
-            savedSelection.cherga,
-            savedSelection.pidcherga
-        )
+        val savedSelection = preferencesManager.savedSelectionFlow.first() ?: return
+        val result = repository.getScheduleWithMessages(savedSelection.cherga, savedSelection.pidcherga)
 
         result.onSuccess { data ->
-            val groupedSchedules = ScheduleMapper.getGroupedSchedule(data.schedules)
-            val currentStatus = ScheduleMapper.getCurrentGroupedStatus(groupedSchedules)
+            val grouped = ScheduleMapper.getGroupedSchedule(data.schedules)
+            val current = ScheduleMapper.getCurrentGroupedStatus(grouped)
 
-            if (currentStatus != null) {
+            if (current != null) {
                 val notification = createLiveActivityNotification(
-                    status = currentStatus.color,
-                    timeSpan = currentStatus.span,
-                    text = currentStatus.displayText,
-                    schedules = groupedSchedules
+                    status = current.color,
+                    timeSpan = current.span,
+                    text = current.displayText,
+                    schedules = grouped
                 )
-
-                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(NOTIFICATION_ID, notification)
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(NOTIFICATION_ID, notification)
             }
         }
     }
@@ -176,39 +148,39 @@ class LiveActivityNotificationService : Service() {
         text: String,
         schedules: List<GroupedSchedule>
     ): Notification {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val pendingIntent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         val isPowerOn = status.lowercase() != "red"
         val endTimeMs = calculateEndTimeMs(timeSpan)
         val rawEndTimeStr = extractEndTime(timeSpan)
         val endTimeStr = TimeUtils.formatToSystemTime(this, rawEndTimeStr)
         
-        val titleText = NotificationTextHelper.getStatusTitle(isPowerOn)
+        val minutesRemaining = (endTimeMs - System.currentTimeMillis()) / 60000
+        val titleText = NotificationTextHelper.getStatusTitle(isPowerOn, endTimeStr)
+        val detailedMsg = NotificationTextHelper.getDetailedStatus(isPowerOn, endTimeStr, minutesRemaining)
         val easterEgg = NotificationTextHelper.getEasterEgg(isPowerOn)
-        val subtitleText = "$text • До $endTimeStr"
 
-        // --- Android 16 (API 36) Promoted Live Update ---
         if (Build.VERSION.SDK_INT >= 36) {
              val builder = Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle(titleText)
-                .setContentText("$subtitleText | $easterEgg")
+                .setContentText(detailedMsg + " | " + easterEgg)
                 .setSmallIcon(Icon.createWithResource(this, if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled))
                 .setOngoing(true)
                 .setContentIntent(pendingIntent)
                 .setColorized(false) 
-// ... rest of the code ...
-        // --- Legacy / Rich Custom View (Android 15 and below) ---
+             builder.setWhen(endTimeMs)
+             builder.setUsesChronometer(true)
+             builder.setChronometerCountDown(true)
+             builder.setShowWhen(true)
+             val extras = android.os.Bundle()
+             extras.putBoolean("android.requestPromotedOngoing", true)
+             builder.setExtras(extras)
+             buildProgressStyle(schedules)?.let { builder.style = it }
+             return builder.build()
+        }
+
         val remoteViews = RemoteViews(packageName, R.layout.notification_live_activity)
         val isWarning = status.lowercase() == "yellow"
-        
         remoteViews.setImageViewResource(R.id.iv_status_icon, if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
         val statusColor = when {
             isWarning -> Color.parseColor("#FFC107")
@@ -216,25 +188,20 @@ class LiveActivityNotificationService : Service() {
             else -> Color.parseColor("#F44336")
         }
         remoteViews.setInt(R.id.iv_status_icon, "setColorFilter", statusColor)
-        
         remoteViews.setChronometer(R.id.tv_status_timer, endTimeMs, null, true)
-        remoteViews.setTextViewText(R.id.tv_status_subtitle, "$subtitleText\n$easterEgg")
+        remoteViews.setTextViewText(R.id.tv_status_subtitle, detailedMsg + "\n" + easterEgg)
         remoteViews.setTextViewText(R.id.tv_time_remaining, if (isPowerOn) "СВІТЛО Є" else "OFFLINE")
         
-        val pillColor = if (isPowerOn) {
-            ContextCompat.getColor(this, R.color.widget_status_positive)
-        } else if (isWarning) {
-            ContextCompat.getColor(this, R.color.widget_status_warning)
-        } else {
-             ContextCompat.getColor(this, R.color.widget_status_negative)
-        }
+        val pillColor = if (isPowerOn) ContextCompat.getColor(this, R.color.widget_status_positive)
+                        else if (isWarning) ContextCompat.getColor(this, R.color.widget_status_warning)
+                        else ContextCompat.getColor(this, R.color.widget_status_negative)
         remoteViews.setTextColor(R.id.tv_time_remaining, Color.BLACK)
         remoteViews.setInt(R.id.tv_time_remaining, "setBackgroundTintList", android.content.res.ColorStateList.valueOf(pillColor).defaultColor)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_bolt)
+            .setSmallIcon(if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
             .setContentTitle(titleText)
-            .setContentText(subtitleText)
+            .setContentText(detailedMsg)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(remoteViews)
             .setCustomBigContentView(remoteViews)
@@ -242,67 +209,48 @@ class LiveActivityNotificationService : Service() {
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-// ...
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             builder.setColorized(true)
-            val bgColor = if (isPowerOn) {
-                if (isDarkMode) Color.parseColor("#1B5E20") else Color.parseColor("#F1F8E9")
-            } else {
-                if (isDarkMode) Color.parseColor("#B71C1C") else Color.parseColor("#FFEBEE")
-            }
+            val bgColor = if (isPowerOn) (if (isDarkMode) Color.parseColor("#1B5E20") else Color.parseColor("#F1F8E9"))
+                             else (if (isDarkMode) Color.parseColor("#B71C1C") else Color.parseColor("#FFEBEE"))
             builder.setColor(bgColor)
         }
-
         return builder.build()
     }
 
-    private fun extractEndTime(span: String): String {
-        return Regex("""(\d{2}:\d{2})""").findAll(span).lastOrNull()?.value ?: ""
-    }
+    private fun extractEndTime(span: String): String = Regex("""(\d{2}:\d{2})""").findAll(span).lastOrNull()?.value ?: ""
 
     private fun calculateEndTimeMs(span: String): Long {
         return try {
             val endTimeStr = extractEndTime(span)
             val parts = endTimeStr.split(":")
-            val hour = parts[0].toInt()
-            val minute = parts[1].toInt()
-
             val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
             val calendar = Calendar.getInstance(kyivZone)
             val now = calendar.timeInMillis
-            
-            calendar.set(Calendar.HOUR_OF_DAY, hour)
-            calendar.set(Calendar.MINUTE, minute)
+            calendar.set(Calendar.HOUR_OF_DAY, parts[0].toInt())
+            calendar.set(Calendar.MINUTE, parts[1].toInt())
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
-
-            if (calendar.timeInMillis <= now) {
-                calendar.add(Calendar.DAY_OF_YEAR, 1)
-            }
+            if (calendar.timeInMillis <= now) calendar.add(Calendar.DAY_OF_YEAR, 1)
             calendar.timeInMillis
-        } catch (e: Exception) {
-            System.currentTimeMillis()
-        }
+        } catch (e: Exception) { System.currentTimeMillis() }
     }
             
-    @RequiresApi(36) // Android 16
+    @RequiresApi(36)
     private fun buildProgressStyle(schedules: List<GroupedSchedule>): Notification.Style? {
         try {
             val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
             val now = Calendar.getInstance(kyivZone)
             val currentProgress = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-
             val segments = ArrayList<Notification.ProgressStyle.Segment>()
             val points = ArrayList<Notification.ProgressStyle.Point>()
-
             val sortedSchedules = schedules.sortedBy { 
                 val timeStr = Regex("""(\d{2}:\d{2})""").find(it.span)?.value ?: "00:00"
                 val p = timeStr.split(":")
                 p[0].toInt() * 60 + p[1].toInt()
             }
-
             for (schedule in sortedSchedules) {
                 val duration = schedule.durationHours * 60 + schedule.durationMinutes
                 val color = when (schedule.color.lowercase()) {
@@ -313,23 +261,16 @@ class LiveActivityNotificationService : Service() {
                 }
                 segments.add(Notification.ProgressStyle.Segment(duration).setColor(color))
             }
-            
             points.add(Notification.ProgressStyle.Point(currentProgress).setColor(Color.WHITE))
-
             if (segments.isEmpty()) return null
-
             val style = Notification.ProgressStyle()
             style.isStyledByProgress = false
             style.progress = currentProgress
             style.progressSegments = segments
             style.progressPoints = points
-            
             style.progressStartIcon = Icon.createWithResource(this, R.drawable.ic_home_filled)
             style.progressEndIcon = Icon.createWithResource(this, R.drawable.ic_bolt)
-
             return style
-        } catch (e: Exception) {
-            return null
-        }
+        } catch (e: Exception) { return null }
     }
 }

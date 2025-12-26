@@ -3,12 +3,13 @@ package com.occaecat.ztoeschedule.domain.notification
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.occaecat.ztoeschedule.MainActivity
+import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
-import com.occaecat.ztoeschedule.data.network.RetrofitClient
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
@@ -17,7 +18,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.TimeZone
-
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -61,7 +61,11 @@ class StatusNotificationService : Service() {
         
         createNotificationChannel()
         try {
-            startForeground(NOTIFICATION_ID, createNotification())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification())
+            }
         } catch (e: Exception) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -96,13 +100,14 @@ class StatusNotificationService : Service() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+        return NotificationCompat.Builder(this, NotificationHelper.CHANNEL_STATUS_ID)
+            .setSmallIcon(R.drawable.ic_bolt)
             .setContentTitle("Завантаження статусу...")
             .setContentText("Оновлення інформації")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
@@ -175,23 +180,74 @@ class StatusNotificationService : Service() {
         }
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         
-        val title = NotificationTextHelper.getStatusTitle(isPowerOn)
-        val easterEgg = NotificationTextHelper.getEasterEgg(isPowerOn)
+        val rawEndTime = Regex("(\\d{2}:\\d{2})").findAll(timeSpan).lastOrNull()?.value ?: ""
+        val endTime = TimeUtils.formatToSystemTime(this, rawEndTime)
+        val title = NotificationTextHelper.getStatusTitle(isPowerOn, endTime)
+        
+        // Calculate remaining time
+        val remainingText = getRemainingTimeText(rawEndTime)
+        val progress = calculateProgress(timeSpan)
         
         val icon = if (isPowerOn) android.R.drawable.presence_online else android.R.drawable.presence_busy
-        
-        val rawEndTime = Regex("""(\d{2}:\d{2})""").findAll(timeSpan).lastOrNull()?.value ?: ""
-        val endTime = TimeUtils.formatToSystemTime(this, rawEndTime)
-        val message = "До $endTime • $address\n$easterEgg"
+        val message = "$statusText • $remainingText\n$address"
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, NotificationHelper.CHANNEL_STATUS_ID)
             .setSmallIcon(icon)
             .setContentTitle(title)
-            .setContentText("До $endTime • $address")
+            .setContentText(remainingText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setProgress(100, progress, false)
             .setContentIntent(pendingIntent)
             .build()
+    }
+
+    private fun getRemainingTimeText(endTimeStr: String): String {
+        try {
+            val parts = endTimeStr.split(":")
+            val targetHour = parts[0].toInt()
+            val targetMinute = parts[1].toInt()
+            
+            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+            val now = Calendar.getInstance(kyivZone)
+            val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+            var targetMinutes = targetHour * 60 + targetMinute
+            
+            if (targetMinutes < currentMinutes) targetMinutes += 24 * 60
+            
+            val diff = targetMinutes - currentMinutes
+            val h = diff / 60
+            val m = diff % 60
+            
+            return "Осталось: ${if (h > 0) "${h}год " else ""}${m}хв"
+        } catch (e: Exception) {
+            return ""
+        }
+    }
+
+    private fun calculateProgress(span: String): Int {
+        try {
+            val parts = span.split("-")
+            val startStr = parts[0].trim()
+            val endStr = parts[1].trim()
+            
+            val startMin = parseTime(startStr) ?: return 0
+            var endMin = parseTime(endStr) ?: return 0
+            if (endMin < startMin) endMin += 24 * 60
+            
+            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+            val now = Calendar.getInstance(kyivZone)
+            var currentMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+            if (currentMin < startMin) currentMin += 24 * 60 // Handle midnight crossover if needed
+            
+            val total = endMin - startMin
+            val elapsed = currentMin - startMin
+            
+            return if (total > 0) ((elapsed.toFloat() / total.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
+        } catch (e: Exception) {
+            return 0
+        }
     }
 }

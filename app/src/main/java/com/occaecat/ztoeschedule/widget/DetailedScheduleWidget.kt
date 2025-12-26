@@ -12,7 +12,6 @@ import androidx.core.content.ContextCompat
 import com.occaecat.ztoeschedule.MainActivity
 import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
-import com.occaecat.ztoeschedule.data.network.RetrofitClient
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.domain.ScheduleDomainLogic
 import kotlinx.coroutines.CoroutineScope

@@ -5,59 +5,51 @@ import kotlin.random.Random
 
 object NotificationTextHelper {
 
-    fun getStatusTitle(isPowerOn: Boolean): String {
+    fun getStatusTitle(isPowerOn: Boolean, nextChangeTime: String): String {
         return if (isPowerOn) {
-            listOf(
-                "⚡ Світло є",
-                "🟢 Електроенергія подається",
-                "🔋 Живлення відновлено",
-                "💡 Житомир світиться"
-            ).random()
+            "Світло є ✅ До $nextChangeTime"
         } else {
-            listOf(
-                "🌑 Відключення за графіком",
-                "🔴 Енергосистема відпочиває",
-                "🕯️ Час запалити свічки",
-                "⏳ Режим енергозбереження"
-            ).random()
+            "Світла немає 🔴 До $nextChangeTime"
+        }
+    }
+
+    fun getDetailedStatus(isPowerOn: Boolean, nextChangeTime: String, minutesRemaining: Long): String {
+        val timeLabel = formatRemainingTime(minutesRemaining)
+        return if (isPowerOn) {
+            "Насолоджуйтесь! Наступне відключення о $nextChangeTime ($timeLabel)"
+        } else {
+            "Тримаємось! Світло мають ввімкнути о $nextChangeTime ($timeLabel)"
         }
     }
 
     fun getEasterEgg(isPowerOn: Boolean): String {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         
-        return if (isPowerOn) {
-            when {
-                hour in 0..6 -> "Заряджайте все, поки тихо 🌙"
-                hour in 7..10 -> "Час готувати каву! ☕"
-                hour in 18..22 -> "Затишного вечора зі світлом ✨"
-                else -> listOf(
-                    "Час зарядити павербанк! 🔋",
-                    "Енергетики — супергерої 🦸‍♂️",
-                    "Інтернет літає! 🚀",
-                    "Пральна машина чекає на тебе 🧺"
-                ).random()
-            }
-        } else {
-            when {
-                hour in 0..6 -> "Спи спокійно, сни зі світлом 💤"
-                hour in 18..23 -> "Чудова нагода почитати книгу 📖"
-                else -> listOf(
-                    "Миколаїч обіцяв скоро ввімкнути 😉",
-                    "Тримаємось, ми ж з Житомира! 💪",
-                    "Кращий час для медитації 🧘",
-                    "Офлайн — це теж життя 🌳"
-                ).random()
-            }
-        }
+        val eggsOn = listOf(
+            "Час зварити каву! ☕",
+            "Пральна машина чекає 🧺",
+            "Зарядіть павербанки про запас 🔋",
+            "Інтернет працює — життя чудове! 🚀",
+            "Енергетики працюють для вас 🦸‍♂️"
+        )
+        
+        val eggsOff = listOf(
+            "Миколаїч обіцяв скоро ввімкнути 😉",
+            "Час для настільних ігор 🎲",
+            "Найкращий момент для читання 📖",
+            "Відпочиньте від гаджетів 🌳",
+            "Житомир не зламати! 💪"
+        )
+
+        return if (isPowerOn) eggsOn.random() else eggsOff.random()
     }
 
     fun formatRemainingTime(minutes: Long): String {
         val hours = minutes / 60
         val mins = minutes % 60
         return when {
-            hours > 0 -> "Ще $hours год $mins хв"
-            else -> "Залишилось $mins хв"
+            hours > 0 -> "через $hours год $mins хв"
+            else -> "через $mins хв"
         }
     }
 }
