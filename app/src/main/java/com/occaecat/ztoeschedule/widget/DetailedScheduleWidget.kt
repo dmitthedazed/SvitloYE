@@ -65,7 +65,7 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                         statusText = "Налаштуйте адресу",
                         scheduleText = "Відкрийте додаток для налаштування",
                         addressText = "",
-                        status = "gray"
+                        status = com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN
                     )
                     return@launch
                 }
@@ -78,10 +78,10 @@ class DetailedScheduleWidget : AppWidgetProvider() {
 
                 result.onSuccess { data ->
                     val currentStatus = ScheduleDomainLogic.getCurrentStatus(data.schedules)
-                    val isPowerOn = currentStatus?.color?.lowercase() != "red"
-                    val statusColor = currentStatus?.color?.lowercase() ?: "gray"
+                    val scheduleStatus = currentStatus?.status ?: com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN
+                    val isPowerOn = scheduleStatus == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
 
-                    val statusText = if (isPowerOn) "Світло є" else "Відключення"
+                    val statusText = currentStatus?.displayText ?: "Немає даних"
 
                     // Format schedule for today
                     val scheduleText = formatScheduleList(context, data.schedules)
@@ -98,7 +98,7 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                         statusText = statusText,
                         scheduleText = scheduleText,
                         addressText = addressText,
-                        status = statusColor
+                        status = scheduleStatus
                     )
                 }.onFailure {
                     updateWidgetView(
@@ -110,7 +110,7 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                         statusText = "Помилка",
                         scheduleText = "Не вдалося завантажити графік",
                         addressText = "",
-                        status = "gray"
+                        status = com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN
                     )
                 }
             } catch (e: Exception) {
@@ -123,7 +123,7 @@ class DetailedScheduleWidget : AppWidgetProvider() {
                     statusText = "Помилка",
                     scheduleText = e.message ?: "Невідома помилка",
                     addressText = "",
-                    status = "gray"
+                    status = com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN
                 )
             }
         }
@@ -138,7 +138,7 @@ class DetailedScheduleWidget : AppWidgetProvider() {
         statusText: String,
         scheduleText: String,
         addressText: String,
-        status: String
+        status: com.occaecat.ztoeschedule.data.model.ScheduleStatus
     ) {
         val views = RemoteViews(context.packageName, R.layout.widget_detailed_schedule)
 
@@ -172,11 +172,11 @@ class DetailedScheduleWidget : AppWidgetProvider() {
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
     
-    private fun setWidgetColor(context: Context, views: RemoteViews, status: String) {
-        val colorRes = when (status.lowercase()) {
-            "red" -> R.color.widget_status_negative
-            "green", "white" -> R.color.widget_status_positive
-            "yellow" -> R.color.widget_status_warning
+    private fun setWidgetColor(context: Context, views: RemoteViews, status: com.occaecat.ztoeschedule.data.model.ScheduleStatus) {
+        val colorRes = when (status) {
+            com.occaecat.ztoeschedule.data.model.ScheduleStatus.OUTAGE -> R.color.widget_status_negative
+            com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> R.color.widget_status_positive
+            com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> R.color.widget_status_warning
             else -> R.color.widget_text_secondary
         }
         
@@ -192,10 +192,10 @@ class DetailedScheduleWidget : AppWidgetProvider() {
         // Grouping logic for display could be good, but simple list is fine too
         // Let's use simple formatting for the widget list to keep it dense
         return schedules.joinToString("\n") { schedule ->
-            val emoji = when (schedule.color.lowercase()) {
-                "red" -> "🔴" // Red Circle
-                "green", "white" -> "🟢" // Green Circle
-                "yellow" -> "🟡" // Yellow Circle
+            val emoji = when (schedule.status) {
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.OUTAGE -> "🔴" // Red Circle
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> "🟢" // Green Circle
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> "🟡" // Yellow Circle
                 else -> "⚪"
             }
             val systemSpan = com.occaecat.ztoeschedule.domain.TimeUtils.formatSpanToSystem(context, schedule.span)

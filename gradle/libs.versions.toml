@@ -23,9 +23,16 @@ firebaseCrashlyticsPlugin = "2.9.9"
 firebaseBom = "34.7.0"
 room = "2.6.1"
 glance = "1.1.0"
+kronos = "0.0.1-alpha11"
+splashscreen = "1.0.1"
+material = "1.12.0"
+navigation = "2.8.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -72,6 +79,9 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 # Glance
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
+
+# Time (NTP)
+kronos-android = { group = "com.lyft.kronos", name = "kronos-android", version.ref = "kronos" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

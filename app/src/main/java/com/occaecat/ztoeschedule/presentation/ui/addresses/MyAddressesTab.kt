@@ -40,8 +40,9 @@ import com.occaecat.ztoeschedule.domain.TimeUtils
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
 import com.occaecat.ztoeschedule.ui.theme.OctagonShape
 import java.util.Collections
-
 import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.style.TextOverflow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +56,7 @@ fun MyAddressesTab(
     houseNumbers: List<ParsedHouseNumber>,
     searchQuery: String,
     isLoading: Boolean,
-    isWideScreen: Boolean = false,
+    useWideLayout: Boolean = false,
     inspectedScheduleList: List<Schedule> = emptyList(),
     inspectedGroupedSchedule: List<GroupedSchedule> = emptyList(),
     isInspectingLoading: Boolean = false,
@@ -75,11 +76,20 @@ fun MyAddressesTab(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
-    var selectedAddressId by remember(addresses) { mutableStateOf(addresses.firstOrNull()?.id) }
+    // Persist selection across rotation
+    var selectedAddressId by rememberSaveable { mutableStateOf(addresses.firstOrNull()?.id) }
+    
+    // Update selection if list changes and nothing is selected, but don't override user choice
+    LaunchedEffect(addresses) {
+        if (selectedAddressId == null && addresses.isNotEmpty()) {
+            selectedAddressId = addresses.first().id
+        }
+    }
+
     val selectedAddress = remember(selectedAddressId, addresses) { addresses.find { it.id == selectedAddressId } }
 
-    LaunchedEffect(selectedAddressId, isWideScreen) {
-        if (isWideScreen && selectedAddress != null) onInspectAddress(selectedAddress)
+    LaunchedEffect(selectedAddressId, useWideLayout) {
+        if (useWideLayout && selectedAddress != null) onInspectAddress(selectedAddress)
     }
 
     Row(modifier = modifier.fillMaxSize()) {
@@ -91,15 +101,15 @@ fun MyAddressesTab(
             } else {
                 DraggableAddressList(
                     addresses = addresses, statuses = addressStatuses,
-                    selectedId = if (isWideScreen) selectedAddressId else null,
+                    selectedId = if (useWideLayout) selectedAddressId else null,
                     onDelete = onDeleteAddress, onStartAdding = onStartAdding, onUpdateOrder = onUpdateOrder,
-                    onSelect = { if (isWideScreen) selectedAddressId = it.id else onInspectAddress(it) },
+                    onSelect = { if (useWideLayout) selectedAddressId = it.id else onInspectAddress(it) },
                     modifier = Modifier.fillMaxSize(), contentPadding = contentPadding
                 )
             }
         }
 
-        if (isWideScreen) {
+        if (useWideLayout) {
             VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
             Box(modifier = Modifier.weight(1.5f)) {
                 if (selectedAddress != null) {
@@ -151,12 +161,19 @@ private fun DraggableAddressList(
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     var list by remember(addresses) { mutableStateOf(addresses) }
-    var addressToDelete by remember { mutableStateOf<SavedAddress?>(null) }
-    var showPrimaryChangeDialog by remember { mutableStateOf<SavedAddress?>(null) }
+    
+    // We only need to save the ID of the address to delete to survive rotation
+    var addressToDeleteId by rememberSaveable { mutableStateOf<String?>(null) }
+    val addressToDelete = remember(addressToDeleteId, addresses) { addresses.find { it.id == addressToDeleteId } }
+    
+    // Similarly for primary change dialog
+    var showPrimaryChangeId by rememberSaveable { mutableStateOf<String?>(null) }
+    val showPrimaryChangeDialog = remember(showPrimaryChangeId, addresses) { addresses.find { it.id == showPrimaryChangeId } }
+
     val initialPrimaryId = remember(addresses) { addresses.firstOrNull()?.id }
     val lazyListState = rememberLazyListState()
-    var draggedIndex by remember { mutableIntStateOf(-1) }
-    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var draggedIndex by rememberSaveable { mutableIntStateOf(-1) }
+    var dragOffsetY by rememberSaveable { mutableFloatStateOf(0f) }
     val ld = LocalLayoutDirection.current
     val haptic = LocalHapticFeedback.current
 
@@ -176,20 +193,20 @@ private fun DraggableAddressList(
             
             Box(modifier = Modifier.zIndex(if (isDragging) 1f else 0f).animateItem()) {
                 AddressItem(
-                    address, statuses[address.id], index == 0, isSelected, { addressToDelete = address }, { 
+                    address, statuses[address.id], index == 0, isSelected, { addressToDeleteId = address.id }, { 
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(address) 
                     },
                     Modifier.graphicsLayer { translationY = if (isDragging) dragOffsetY else 0f; scaleX = scale; scaleY = scale }
                         .shadow(if (isDragging) 12.dp else 0.dp, MaterialTheme.shapes.extraLarge)
-                        .pointerInput(Unit) {
+                        .pointerInput(address.id) { // Use address.id as key
                             detectDragGesturesAfterLongPress(
                                 onDragStart = { 
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     draggedIndex = index; dragOffsetY = 0f 
                                 },
                                 onDragEnd = { 
-                                    if (list.firstOrNull()?.id != initialPrimaryId) showPrimaryChangeDialog = list.first() else onUpdateOrder(list)
+                                    if (list.firstOrNull()?.id != initialPrimaryId) showPrimaryChangeId = list.first().id else onUpdateOrder(list)
                                     draggedIndex = -1 
                                 },
                                 onDragCancel = { draggedIndex = -1 },
@@ -226,8 +243,8 @@ private fun DraggableAddressList(
             }
         }
     }
-    if (showPrimaryChangeDialog != null) AlertDialog(onDismissRequest = { showPrimaryChangeDialog = null; list = addresses }, title = { Text("Змінити головну?") }, confirmButton = { Button(onClick = { onUpdateOrder(list); showPrimaryChangeDialog = null }) { Text("Так") } })
-    if (addressToDelete != null) AlertDialog(onDismissRequest = { addressToDelete = null }, title = { Text("Видалити?") }, confirmButton = { TextButton(onClick = { onDelete(addressToDelete!!.id); addressToDelete = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Так") } })
+    if (showPrimaryChangeDialog != null) AlertDialog(onDismissRequest = { showPrimaryChangeId = null; list = addresses }, title = { Text("Змінити головну?") }, confirmButton = { Button(onClick = { onUpdateOrder(list); showPrimaryChangeId = null }) { Text("Так") } })
+    if (addressToDelete != null) AlertDialog(onDismissRequest = { addressToDeleteId = null }, title = { Text("Видалити?") }, confirmButton = { TextButton(onClick = { onDelete(addressToDelete!!.id); addressToDeleteId = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Так") } })
 }
 
 @Composable
@@ -256,12 +273,35 @@ private fun AddressItem(address: SavedAddress, status: GroupedSchedule?, isPrima
                 Spacer(Modifier.height(12.dp))
                 StatusInfoSection(status)
             }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SuggestionChip(onClick = {}, label = { Text("${address.cherga}.${address.pidcherga}") }, shape = CircleShape, border = null, colors = SuggestionChipDefaults.suggestionChipColors(containerColor = (if(isPrimary) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.surfaceVariant).copy(0.1f)))
+            Spacer(Modifier.height(12.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SuggestionChip(
+                    onClick = {}, 
+                    label = { Text("${address.cherga}.${address.pidcherga}") }, 
+                    shape = CircleShape, 
+                    border = null, 
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = (if(isPrimary) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.surfaceVariant).copy(0.1f)
+                    )
+                )
+                
                 if (isPrimary) {
-                    Spacer(Modifier.width(8.dp))
-                    Text("Головна", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = "Головна", 
+                            style = MaterialTheme.typography.labelSmall, 
+                            color = MaterialTheme.colorScheme.primary, 
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
         }
@@ -271,34 +311,50 @@ private fun AddressItem(address: SavedAddress, status: GroupedSchedule?, isPrima
 @Composable
 private fun StatusInfoSection(status: GroupedSchedule) {
     val context = LocalContext.current
-    val color = when(status.color.lowercase()) { "red" -> MaterialTheme.colorScheme.error; "yellow" -> MaterialTheme.colorScheme.tertiary; else -> MaterialTheme.colorScheme.primary }
-    val progress = calculateSimpleProgress(status.span)
+    val color = when(status.status) { 
+        com.occaecat.ztoeschedule.data.model.ScheduleStatus.OUTAGE -> MaterialTheme.colorScheme.error 
+        com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> MaterialTheme.colorScheme.tertiary 
+        else -> MaterialTheme.colorScheme.primary 
+    }
+    
+    // Ticker to force recomposition for progress bar
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { // Use Unit to keep the loop running independently of data changes
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            kotlinx.coroutines.delay(10000) // Update every 10s is enough for address list
+        }
+    }
+    
+    val progress = remember(status, nowMs) {
+        val durationMs = status.endMs - status.startMs
+        if (durationMs <= 0) 0f
+        else ((nowMs - status.startMs).toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    }
+
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(OctagonShape).background(color))
             Spacer(Modifier.width(8.dp))
-            Text(status.displayText, style = MaterialTheme.typography.labelLarge, color = color, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.weight(1f))
-            val endTimeStr = Regex("""(\d{2}:\d{2})""").findAll(status.span).lastOrNull()?.value ?: ""
-            Text("До ${if (endTimeStr.isNotEmpty()) TimeUtils.formatToSystemTime(context, endTimeStr) else ""}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = status.displayText, 
+                style = MaterialTheme.typography.labelLarge, 
+                color = color, 
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "До ${TimeUtils.formatToSystemTime(context, status.endTime)}", 
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
         }
         Spacer(Modifier.height(8.dp))
         LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(6.dp), color = color, trackColor = color.copy(0.1f), strokeCap = StrokeCap.Round)
     }
-}
-
-private fun calculateSimpleProgress(span: String): Float {
-    return try {
-        val matches = Regex("""(\d{2}:\d{2})""").findAll(span).toList()
-        if (matches.size < 2) return 0.5f
-        fun parse(s: String) = s.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
-        val start = parse(matches[0].value); var end = parse(matches[1].value)
-        if (span.contains("(") || end <= start) end += 1440
-        val kyiv = java.util.TimeZone.getTimeZone("Europe/Kyiv")
-        val now = java.util.Calendar.getInstance(kyiv); var cur = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
-        if (span.contains("(") && cur < start) cur += 1440
-        ((cur - start).toFloat() / (end - start).toFloat()).coerceIn(0f, 1f)
-    } catch (e: Exception) { 0.5f }
 }
 
 @Composable

@@ -44,7 +44,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient {
+        val cacheSize = 10 * 1024 * 1024L // 10 MB
+        val cache = okhttp3.Cache(context.cacheDir, cacheSize)
+
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BODY
@@ -53,6 +56,7 @@ object AppModule {
             }
         }
         return OkHttpClient.Builder()
+            .cache(cache)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

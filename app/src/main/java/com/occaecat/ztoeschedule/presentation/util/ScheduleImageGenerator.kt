@@ -104,9 +104,9 @@ object ScheduleImageGenerator {
 
             items.forEach { item ->
                 // Status Indicator
-                val color = when {
-                    item.isLightOn -> greenPaint
-                    item.color.equals("yellow", ignoreCase = true) -> yellowPaint
+                val color = when (item.status) {
+                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> greenPaint
+                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> yellowPaint
                     else -> redPaint
                 }
                 
@@ -117,7 +117,7 @@ object ScheduleImageGenerator {
                 canvas.drawText(item.span, 110f, currentY, textPaint)
                 
                 // Status Text
-                val statusText = if (item.isLightOn) "Світло є" else "Відключення"
+                val statusText = item.displayText
                 val textWidth = textPaint.measureText(statusText)
                 canvas.drawText(statusText, width - textWidth - 60f, currentY, secondaryTextPaint)
 

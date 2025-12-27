@@ -2,6 +2,8 @@ package com.occaecat.ztoeschedule
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
@@ -23,8 +26,10 @@ import javax.inject.Inject
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 
 import com.occaecat.ztoeschedule.data.model.FontScale
+import com.occaecat.ztoeschedule.data.model.SavedAddress
 
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -50,11 +55,9 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Setup dynamic app shortcuts
-        setupAppShortcuts()
 
         // Schedule notification monitoring
         NotificationScheduler.schedulePowerMonitoring(this)
@@ -77,12 +80,35 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val viewModel: EnergyScheduleViewModel = hiltViewModel()
-            
-            // Handle Intent for widget configuration
-            LaunchedEffect(intent) {
-                if (intent.getBooleanExtra("configure_widget", false)) {
-                    viewModel.setShowWidgetConfig(true)
+            val uiState by viewModel.uiState.collectAsState()
+
+            // Update Dynamic Shortcuts whenever addresses change
+            LaunchedEffect(uiState.savedAddresses) {
+                updateDynamicShortcuts(uiState.savedAddresses)
+            }
+
+            // Keep splash screen on until initial load is complete
+            LaunchedEffect(uiState.isInitialLoadComplete) {
+                if (uiState.isInitialLoadComplete) {
+                    val content: View = findViewById(android.R.id.content)
+                    content.viewTreeObserver.addOnPreDrawListener(
+                        object : ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                return if (uiState.isInitialLoadComplete) {
+                                    content.viewTreeObserver.removeOnPreDrawListener(this)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                        }
+                    )
                 }
+            }
+            
+            // Handle Intent for shortcuts and widget configuration
+            LaunchedEffect(intent) {
+                handleIntent(intent, viewModel)
             }
 
             val colorTheme by preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.SYSTEM)
@@ -93,14 +119,13 @@ class MainActivity : ComponentActivity() {
                 fontScalePreference = fontScale
             ) {
                 val windowSizeClass = calculateWindowSizeClass(this)
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     MainScreen(
                         viewModel = viewModel,
-                        widthSizeClass = windowSizeClass.widthSizeClass
+                        windowSizeClass = windowSizeClass
                     )
                 }
             }
@@ -112,19 +137,58 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
     }
 
-    private fun setupAppShortcuts() {
-        val shortcut = ShortcutInfoCompat.Builder(this, "check_status")
-            .setShortLabel("Перевірити статус")
-            .setLongLabel("Перевірити статус електропостачання")
-            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_bolt))
-            .setIntent(
-                Intent(this, MainActivity::class.java).apply {
+    private fun handleIntent(intent: Intent, viewModel: EnergyScheduleViewModel) {
+        if (intent.getBooleanExtra("configure_widget", false)) {
+            viewModel.setShowWidgetConfig(true)
+        }
+        
+        val shortcutId = intent.getStringExtra("shortcut_id")
+        if (shortcutId == "add_address") {
+            viewModel.startAddingAddress()
+        } else if (intent.hasExtra("address_id")) {
+            val addressId = intent.getStringExtra("address_id")
+            viewModel.setRequestedAddressId(addressId)
+        }
+    }
+
+    private fun updateDynamicShortcuts(addresses: List<SavedAddress>) {
+        val shortcuts = mutableListOf<ShortcutInfoCompat>()
+
+        // 1. Static-like dynamic shortcut for Check Status (always first)
+        shortcuts.add(
+            ShortcutInfoCompat.Builder(this, "check_status")
+                .setShortLabel(getString(R.string.shortcut_check_status))
+                .setIcon(IconCompat.createWithResource(this, R.drawable.ic_bolt))
+                .setIntent(Intent(this, MainActivity::class.java).apply {
                     action = Intent.ACTION_VIEW
                     putExtra("shortcut_id", "check_status")
-                }
-            )
-            .build()
+                })
+                .setRank(0)
+                .build()
+        )
 
-        ShortcutManagerCompat.addDynamicShortcuts(this, listOf(shortcut))
+        // 2. Add shortcuts for top 3 saved addresses
+        addresses.take(3).forEachIndexed { index, address ->
+            val iconRes = when (address.iconName) {
+                "home" -> R.drawable.ic_home_filled
+                else -> R.drawable.ic_bolt
+            }
+            
+            shortcuts.add(
+                ShortcutInfoCompat.Builder(this, "address_${address.id}")
+                    .setShortLabel(address.name)
+                    .setLongLabel("${address.cityName}, ${address.streetName}")
+                    .setIcon(IconCompat.createWithResource(this, iconRes))
+                    .setIntent(Intent(this, MainActivity::class.java).apply {
+                        action = Intent.ACTION_VIEW
+                        putExtra("shortcut_id", "address_${address.id}")
+                        putExtra("address_id", address.id)
+                    })
+                    .setRank(index + 1)
+                    .build()
+            )
+        }
+
+        ShortcutManagerCompat.setDynamicShortcuts(this, shortcuts)
     }
 }

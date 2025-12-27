@@ -11,6 +11,7 @@ import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import com.occaecat.ztoeschedule.domain.model.getUserMessage
 import com.occaecat.ztoeschedule.domain.model.toAppError
 import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
+import com.occaecat.ztoeschedule.domain.time.TimeProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -19,6 +20,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import javax.inject.Inject
+import androidx.lifecycle.SavedStateHandle
+import androidx.compose.runtime.Stable
 
 data class AddressDataState(
     val address: SavedAddress,
@@ -34,6 +37,8 @@ data class AddressDataState(
 class EnergyScheduleViewModel @Inject constructor(
     private val repository: EnergyRepository,
     private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver,
+    private val timeProvider: TimeProvider,
+    private val savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -42,6 +47,9 @@ class EnergyScheduleViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // Restore inspected address if process was killed
+            val restoredInspectId = savedStateHandle.get<String>("inspected_id")
+
             try {
                 launch {
                     networkObserver.isConnected.collect { connected ->
@@ -52,13 +60,22 @@ class EnergyScheduleViewModel @Inject constructor(
                 }
                 launch { loadNotificationSettings() }
                 launch { loadThemeSettings() }
-                launch { checkTimeSync() }
+                
                 launch {
                     combine(repository.getOnboardingCompletedFlow(), repository.getSavedSelectionFlow()) { completed, selection ->
                         Pair(completed, selection)
                     }.collect { (completed, selection) ->
                         _uiState.update { it.copy(onboardingCompleted = completed, hasSavedSelection = selection != null, isInitialLoadComplete = true) }
                         loadSavedAddresses()
+                        
+                        // Try to restore inspected address after addresses are loaded
+                        if (restoredInspectId != null) {
+                            val addresses = repository.getSavedAddresses()
+                            val found = addresses.find { it.id == restoredInspectId }
+                            if (found != null) {
+                                startInspectingAddress(found)
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -115,13 +132,14 @@ class EnergyScheduleViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val statusMap = mutableMapOf<String, GroupedSchedule?>()
+            val nowMs = timeProvider.now()
             addresses.forEach { address ->
                 val cachedData = _uiState.value.addressDataList.find { it.address.id == address.id }
                 if (cachedData != null && cachedData.groupedSchedule.isNotEmpty()) {
-                    statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(cachedData.groupedSchedule)
+                    statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(cachedData.groupedSchedule, nowMs)
                 } else {
                     repository.getSchedule(address.cherga, address.pidcherga).onSuccess { schedules ->
-                        statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(ScheduleMapper.getGroupedSchedule(schedules))
+                        statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(ScheduleMapper.getGroupedSchedule(schedules), nowMs)
                     }
                 }
             }
@@ -185,6 +203,10 @@ class EnergyScheduleViewModel @Inject constructor(
     fun clearData() = viewModelScope.launch { repository.clearPreferences(); _uiState.value = UiState() }
     fun setShowWidgetConfig(show: Boolean) { _uiState.update { it.copy(showWidgetConfig = show) } }
     
+    fun setRequestedAddressId(id: String?) {
+        _uiState.update { it.copy(requestedAddressId = id) }
+    }
+    
     fun selectWidgetAddress(address: SavedAddress) {
         viewModelScope.launch {
             repository.setPrimaryAddress(address.id)
@@ -205,13 +227,17 @@ class EnergyScheduleViewModel @Inject constructor(
     }
 
     fun startInspectingAddress(address: SavedAddress) {
+        savedStateHandle["inspected_id"] = address.id // Save state
         _uiState.update { it.copy(inspectedAddress = address, isInspectingLoading = true) }
         viewModelScope.launch {
             val data = loadSingleAddressData(address)
             _uiState.update { it.copy(inspectedScheduleList = data.scheduleList, inspectedGroupedSchedule = data.groupedSchedule, isInspectingLoading = false) }
         }
     }
-    fun stopInspectingAddress() { _uiState.update { it.copy(inspectedAddress = null) } }
+    fun stopInspectingAddress() { 
+        savedStateHandle["inspected_id"] = null // Clear state
+        _uiState.update { it.copy(inspectedAddress = null) } 
+    }
 
     fun retryLoading() { refreshAllSchedules() }
     fun loadScheduleWithMessages(cherga: Int, pid: Int) { refreshAllSchedules() }
@@ -236,6 +262,7 @@ class EnergyScheduleViewModel @Inject constructor(
     fun clearHouseNumberSearch() { _uiState.update { it.copy(houseNumberSearchQuery = "") } }
 }
 
+@Stable
 data class UiState(
     val remList: List<Rem> = emptyList(),
     val cityList: List<City> = emptyList(),
@@ -276,5 +303,6 @@ data class UiState(
     val inspectedAddress: SavedAddress? = null,
     val inspectedScheduleList: List<Schedule> = emptyList(),
     val inspectedGroupedSchedule: List<GroupedSchedule> = emptyList(),
-    val isInspectingLoading: Boolean = false
+    val isInspectingLoading: Boolean = false,
+    val requestedAddressId: String? = null
 )

@@ -13,7 +13,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,10 +49,16 @@ import com.occaecat.ztoeschedule.presentation.ui.addresses.AddAddressScreen
 @Composable
 fun MainScreen(
     viewModel: EnergyScheduleViewModel = hiltViewModel(),
-    widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact
+    windowSizeClass: WindowSizeClass
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val isWideScreen = widthSizeClass != WindowWidthSizeClass.Compact
+    
+    // Logic based on M3 Adaptive breakpoints
+    val showNavRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+    val showTwoPanes = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded && 
+                      windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact
+    val useWideLayout = showNavRail
+    
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -58,6 +66,32 @@ fun MainScreen(
 
     val pagerState = rememberPagerState(pageCount = { uiState.addressDataList.size })
     
+    // Handle Navigation Side Effects from Shortcuts
+    LaunchedEffect(uiState.isAddingNewAddress) {
+        if (uiState.isAddingNewAddress && currentRoute != "add_address") {
+            navController.navigate("add_address") {
+                launchSingleTop = true
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.requestedAddressId, uiState.addressDataList) {
+        val requestedId = uiState.requestedAddressId
+        if (requestedId != null && uiState.addressDataList.isNotEmpty()) {
+            val index = uiState.addressDataList.indexOfFirst { it.address.id == requestedId }
+            if (index != -1) {
+                pagerState.animateScrollToPage(index)
+                if (currentRoute != "home") {
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.startDestinationId)
+                        launchSingleTop = true
+                    }
+                }
+            }
+            viewModel.setRequestedAddressId(null) // Clear request
+        }
+    }
+
     // Spring specs for 2025 Motion
     val springSpec = spring<IntOffset>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
     val floatSpring = spring<Float>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
@@ -90,8 +124,8 @@ fun MainScreen(
         return
     }
 
-    val isInspecting = currentRoute == "inspect" && !isWideScreen
-    val isSettings = currentRoute == "settings" && !isWideScreen
+    val isInspecting = currentRoute == "inspect" && !useWideLayout
+    val isSettings = currentRoute == "settings" && !useWideLayout
     val isAdding = currentRoute == "add_address"
     val shouldShowBars = !isInspecting && !isSettings && !isAdding
 
@@ -112,7 +146,7 @@ fun MainScreen(
 
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
-            if (isWideScreen) {
+            if (useWideLayout) {
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surface,
                     header = { Icon(Icons.Default.Bolt, null, Modifier.padding(vertical = 12.dp), tint = MaterialTheme.colorScheme.primary) }
@@ -158,7 +192,7 @@ fun MainScreen(
                 },
                 bottomBar = {
                     AnimatedVisibility(
-                        visible = !isWideScreen && shouldShowBars,
+                        visible = !useWideLayout && shouldShowBars,
                         enter = slideInVertically(initialOffsetY = { it }, animationSpec = springSpec) + fadeIn(),
                         exit = slideOutVertically(targetOffsetY = { it }, animationSpec = springSpec) + fadeOut()
                     ) {
@@ -225,6 +259,15 @@ fun MainScreen(
                     }
                 ) {
                     composable("home") {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        
+                        LaunchedEffect(pagerState.currentPage, uiState.addressDataList) {
+                            if (uiState.addressDataList.isNotEmpty()) {
+                                val addressId = uiState.addressDataList[pagerState.currentPage].address.id
+                                androidx.core.content.pm.ShortcutManagerCompat.reportShortcutUsed(context, "address_$addressId")
+                            }
+                        }
+
                         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                             val data = uiState.addressDataList[page]
                             HomeTab(data.address.remName, data.address.cityName, data.address.streetName, data.address.addressName, data.address.cherga, data.address.pidcherga, data.currentStatus, data.scheduleList, data.groupedSchedule, { viewModel.refreshAllSchedules() }, Modifier.fillMaxSize(), padding, data.lastUpdateTime, data.isOffline, uiState.isLoading)
@@ -233,8 +276,8 @@ fun MainScreen(
                     composable("notifications") { NotificationsTab(uiState.infoMessages, uiState.formattedMessage, Modifier.fillMaxSize(), padding, uiState.isLoading) }
                     composable("addresses") {
                         MyAddressesTab(
-                            uiState.savedAddresses, uiState.addressStatuses, uiState.isAddingNewAddress, uiState.remList, uiState.cityList, uiState.streetList, uiState.filteredHouseNumbers, uiState.houseNumberSearchQuery, uiState.isLoading, isWideScreen, uiState.inspectedScheduleList, uiState.inspectedGroupedSchedule, uiState.isInspectingLoading,
-                            { viewModel.startAddingAddress(); navController.navigate("add_address") }, { viewModel.cancelAddingAddress() }, { viewModel.loadRemList() }, { viewModel.loadCityList(it) }, { viewModel.loadStreetList(it) }, { viewModel.loadAddressList(it) }, { viewModel.filterHouseNumbers(it) }, { viewModel.clearHouseNumberSearch() }, { n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p -> viewModel.addSavedAddress(n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p) }, { viewModel.deleteSavedAddress(it) }, { viewModel.updateAddressesOrder(it) }, { c, p -> viewModel.loadScheduleWithMessages(c, p) }, { viewModel.startInspectingAddress(it); if (!isWideScreen) navController.navigate("inspect") }, Modifier.fillMaxSize(), padding
+                            uiState.savedAddresses, uiState.addressStatuses, uiState.isAddingNewAddress, uiState.remList, uiState.cityList, uiState.streetList, uiState.filteredHouseNumbers, uiState.houseNumberSearchQuery, uiState.isLoading, useWideLayout, uiState.inspectedScheduleList, uiState.inspectedGroupedSchedule, uiState.isInspectingLoading,
+                            { viewModel.startAddingAddress(); navController.navigate("add_address") }, { viewModel.cancelAddingAddress() }, { viewModel.loadRemList() }, { viewModel.loadCityList(it) }, { viewModel.loadStreetList(it) }, { viewModel.loadAddressList(it) }, { viewModel.filterHouseNumbers(it) }, { viewModel.clearHouseNumberSearch() }, { n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p -> viewModel.addSavedAddress(n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p) }, { viewModel.deleteSavedAddress(it) }, { viewModel.updateAddressesOrder(it) }, { c, p -> viewModel.loadScheduleWithMessages(c, p) }, { viewModel.startInspectingAddress(it); if (!useWideLayout) navController.navigate("inspect") }, Modifier.fillMaxSize(), padding
                         )
                     }
                     composable("add_address") {
@@ -280,9 +323,26 @@ fun MainScreen(
             }
         }
 
-        // Global Dialogs
         if (uiState.showWidgetConfig) {
-            AlertDialog(onDismissRequest = { viewModel.setShowWidgetConfig(false) }, title = { Text("Віджет") }, text = { Column { uiState.savedAddresses.forEach { a -> ListItem(headlineContent = { Text(a.name) }, modifier = Modifier.clickable { viewModel.selectWidgetAddress(a) }) } } }, confirmButton = { TextButton(onClick = { viewModel.setShowWidgetConfig(false) }) { Text("Закрити") } })
+            AlertDialog(
+                onDismissRequest = { viewModel.setShowWidgetConfig(false) }, 
+                title = { Text("Віджет") }, 
+                text = { 
+                    Column { 
+                        uiState.savedAddresses.forEach { a -> 
+                            ListItem(
+                                headlineContent = { Text(a.name) }, 
+                                modifier = Modifier.clickable(
+                                    onClickLabel = "Вибрати ${a.name} для віджета"
+                                ) { 
+                                    viewModel.selectWidgetAddress(a) 
+                                }
+                            ) 
+                        } 
+                    } 
+                }, 
+                confirmButton = { TextButton(onClick = { viewModel.setShowWidgetConfig(false) }) { Text("Закрити") } }
+            )
         }
     }
 }

@@ -18,17 +18,35 @@ data class Schedule(
     @SerializedName("text")
     val text: String? = null
 ) {
+    val status: ScheduleStatus
+        get() = ScheduleStatus.fromColor(color)
+
     /**
      * Get display text based on color if text is null
      */
     val displayText: String
-        get() = text ?: when (color.lowercase()) {
-            "red" -> "Відключення"
-            "white" -> "Світло є"
-            "yellow" -> "Можливе відключення"
-            "green" -> "Світло є"
+        get() = text ?: when (status) {
+            ScheduleStatus.OUTAGE -> "Відключення"
+            ScheduleStatus.AVAILABLE -> "Світло є"
+            ScheduleStatus.PROBABLE -> "Можливе відключення"
             else -> "Невідомо"
         }
+}
+
+enum class ScheduleStatus {
+    AVAILABLE,   // Green/White
+    OUTAGE,      // Red
+    PROBABLE,    // Yellow
+    UNKNOWN;
+
+    companion object {
+        fun fromColor(color: String): ScheduleStatus = when (color.lowercase()) {
+            "white", "green" -> AVAILABLE
+            "red" -> OUTAGE
+            "yellow" -> PROBABLE
+            else -> UNKNOWN
+        }
+    }
 }
 
 

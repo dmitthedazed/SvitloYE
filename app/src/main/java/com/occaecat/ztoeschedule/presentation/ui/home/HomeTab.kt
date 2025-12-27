@@ -37,6 +37,7 @@ import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
 import com.occaecat.ztoeschedule.presentation.util.ScheduleImageGenerator
 import androidx.compose.ui.graphics.Color
 import android.os.Parcelable
+import androidx.compose.runtime.saveable.rememberSaveable
 
 /**
  * Home tab - shows current status, address, and schedule.
@@ -61,22 +62,15 @@ fun HomeTab(
     isOffline: Boolean = false,
     isLoading: Boolean = false
 ) {
-    var isRefreshing by remember { mutableStateOf(false) }
+    var isRefreshing by rememberSaveable { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Ticker to force recomposition for time-sensitive UI (updates every second)
-    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            nowMs = System.currentTimeMillis()
-        }
-    }
-
-    // Identify the active grouped block based on CURRENT TIME
-    val activeGroup = remember(groupedSchedule, nowMs) {
-        ScheduleMapper.getCurrentGroupedStatus(groupedSchedule)
+    // Identify the active grouped block. 
+    // We use current time only for initial identification, avoiding constant recomposition.
+    val activeGroup = remember(groupedSchedule, currentStatus) {
+        val nowMs = System.currentTimeMillis()
+        ScheduleMapper.getCurrentGroupedStatus(groupedSchedule, nowMs)
             ?: currentStatus?.let { status ->
                 groupedSchedule.find { it.date == status.date && it.span.contains(status.span.split("-")[0]) }
             }
@@ -96,10 +90,12 @@ fun HomeTab(
                 isRefreshing = false
             }
         },
-        modifier = modifier
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter // Center the content column
     ) {
         Column(
             modifier = Modifier
+                .widthIn(max = 840.dp) // Standard M3 max width for readability
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(contentPadding)
@@ -134,8 +130,7 @@ fun HomeTab(
                 CurrentStatusCard(
                     activeGroup = activeGroup,
                     currentStatus = currentStatus,
-                    groupedSchedule = groupedSchedule,
-                    nowMs = nowMs
+                    groupedSchedule = groupedSchedule
                 )
 
                 // 2. Address Card and Update Time
@@ -167,32 +162,36 @@ fun HomeTab(
 
                 // 4. Detailed Schedule List
                 groupedByDate.forEach { (date, items) ->
-                    Text(
-                        text = "🗓 $date",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 8.dp, top = 8.dp)
-                    )
+                    key(date) {
+                        Text(
+                            text = "🗓 $date",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 8.dp, top = 8.dp)
+                        )
 
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large
-                    ) {
-                        Column {
-                            items.forEachIndexed { index, group ->
-                                val isActive = group == activeGroup
-                                
-                                ScheduleListItemSimple(
-                                    group = group,
-                                    isActive = isActive,
-                                    address = fullAddressString
-                                )
+                        ElevatedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large
+                        ) {
+                            Column {
+                                items.forEachIndexed { index, group ->
+                                    key(group.span) {
+                                        val isActive = group == activeGroup
+                                        
+                                        ScheduleListItemSimple(
+                                            group = group,
+                                            isActive = isActive,
+                                            address = fullAddressString
+                                        )
 
-                                if (index < items.lastIndex) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                                    )
+                                        if (index < items.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -243,13 +242,13 @@ private fun HomeTabSkeleton() {
 private fun CurrentStatusCard(
     activeGroup: GroupedSchedule?,
     currentStatus: Schedule?,
-    groupedSchedule: List<GroupedSchedule>,
-    nowMs: Long
+    groupedSchedule: List<GroupedSchedule>
 ) {
     val context = LocalContext.current
+    val status = activeGroup?.status ?: currentStatus?.status
     
-    val hasElectricity = activeGroup?.isLightOn ?: (currentStatus?.displayText?.contains("Світло є", ignoreCase = true) == true)
-    val isWarning = activeGroup?.color?.lowercase() == "yellow" || currentStatus?.color?.lowercase() == "yellow"
+    val hasElectricity = status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
+    val isWarning = status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE
 
     val containerColor = when {
         isWarning -> MaterialTheme.colorScheme.tertiaryContainer 
@@ -272,9 +271,21 @@ private fun CurrentStatusCard(
             modifier = Modifier.fillMaxWidth().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            val statusIcon = when (status) {
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> Icons.Default.CheckCircle
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> Icons.Default.Warning
+                else -> Icons.Default.PowerOff
+            }
+            
+            val statusDescription = when (status) {
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> stringResource(R.string.status_available)
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> stringResource(R.string.status_probable)
+                else -> stringResource(R.string.status_outage)
+            }
+
             Icon(
-                imageVector = if (hasElectricity) Icons.Default.CheckCircle else Icons.Default.PowerOff,
-                contentDescription = null,
+                imageVector = statusIcon,
+                contentDescription = statusDescription,
                 modifier = Modifier.size(64.dp)
             )
 
@@ -307,80 +318,89 @@ private fun CurrentStatusCard(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    val progress = calculateProgressAbsolute(activeGroup, nowMs)
-                    val timeRemaining = calculateTimeRemainingAbsolute(activeGroup, nowMs)
-
-                    val animatedProgress by animateFloatAsState(
-                        targetValue = progress,
-                        animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
-                        label = "progress"
+                    LiveProgressBar(
+                        activeGroup = activeGroup,
+                        contentColor = contentColor,
+                        hasElectricity = hasElectricity
                     )
-
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        LinearProgressIndicator(
-                            progress = { animatedProgress },
-                            modifier = Modifier.fillMaxWidth().height(12.dp),
-                            color = contentColor,
-                            trackColor = contentColor.copy(alpha = 0.2f),
-                            strokeCap = StrokeCap.Round
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = if (hasElectricity) stringResource(R.string.home_time_to_outage, timeRemaining) 
-                                   else stringResource(R.string.home_time_to_restore, timeRemaining),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-                    }
                 }
             }
         }
     }
 }
 
+/**
+ * Isolated progress bar component that handles its own time updates.
+ * This prevents the entire CurrentStatusCard from recomposing every second.
+ */
+@Composable
+private fun LiveProgressBar(
+    activeGroup: GroupedSchedule,
+    contentColor: Color,
+    hasElectricity: Boolean
+) {
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    
+    // Local ticker only for this component
+    LaunchedEffect(activeGroup) {
+        while (true) {
+            delay(1000)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+
+    val progress = remember(activeGroup, nowMs) {
+        calculateProgressAbsolute(activeGroup, nowMs)
+    }
+    
+    val timeRemaining = remember(activeGroup, nowMs) {
+        calculateTimeRemainingAbsolute(activeGroup, nowMs)
+    }
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
+        label = "progress"
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier.fillMaxWidth().height(12.dp),
+            color = contentColor,
+            trackColor = contentColor.copy(alpha = 0.2f),
+            strokeCap = StrokeCap.Round
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = if (hasElectricity) stringResource(R.string.home_time_to_outage, timeRemaining) 
+                   else stringResource(R.string.home_time_to_restore, timeRemaining),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+    }
+}
+
 private fun calculateProgressAbsolute(group: GroupedSchedule, nowMs: Long): Float {
-    return try {
-        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val startCal = Calendar.getInstance(kyivZone)
-        val dateParts = group.date.split(".")
-        val timeParts = group.startTime.split(":")
-        startCal.set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), timeParts[0].toInt(), timeParts[1].toInt(), 0)
-        startCal.set(Calendar.MILLISECOND, 0)
-        
-        val startMs = startCal.timeInMillis
-        val durationMs = (group.durationHours * 60 + group.durationMinutes) * 60 * 1000L
-        if (durationMs <= 0) return 0f
-        
-        val elapsedMs = nowMs - startMs
-        (elapsedMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-    } catch (e: Exception) { 0f }
+    val durationMs = group.endMs - group.startMs
+    if (durationMs <= 0) return 0f
+    
+    val elapsedMs = nowMs - group.startMs
+    return (elapsedMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
 }
 
 private fun calculateTimeRemainingAbsolute(group: GroupedSchedule, nowMs: Long): String {
-    return try {
-        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val startCal = Calendar.getInstance(kyivZone)
-        val dateParts = group.date.split(".")
-        val timeParts = group.startTime.split(":")
-        startCal.set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), timeParts[0].toInt(), timeParts[1].toInt(), 0)
-        startCal.set(Calendar.MILLISECOND, 0)
-        
-        val startMs = startCal.timeInMillis
-        val durationMs = (group.durationHours * 60 + group.durationMinutes) * 60 * 1000L
-        val endMs = startMs + durationMs
-        
-        val remainingMs = endMs - nowMs
-        if (remainingMs <= 0) return "0хв"
-        
-        val remainingMinutes = remainingMs / 60000
-        val hours = remainingMinutes / 60
-        val mins = remainingMinutes % 60
-        
-        if (hours > 0) "${hours}г ${mins}хв" else "${mins}хв"
-    } catch (e: Exception) { "—" }
+    val remainingMs = group.endMs - nowMs
+    if (remainingMs <= 0) return "0хв"
+    
+    val remainingMinutes = remainingMs / 60000
+    val hours = remainingMinutes / 60
+    val mins = remainingMinutes % 60
+    
+    return if (hours > 0) "${hours}г ${mins}хв" else "${mins}хв"
 }
 
 @Composable
@@ -505,7 +525,11 @@ private fun formatScheduleForSharing(
     groupedByDate.forEach { (date, items) ->
         appendLine("🗓 $date:")
         items.forEach { item ->
-            val icon = if (item.isLightOn) "🟢" else "🔴"
+            val icon = when (item.status) {
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> "🟢"
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> "🟡"
+                else -> "🔴"
+            }
             appendLine("$icon ${item.span} - ${item.displayText}")
         }
         appendLine()
@@ -520,7 +544,6 @@ private fun ScheduleListItemSimple(
     address: String
 ) {
     val context = LocalContext.current
-    val hasElectricity = group.isLightOn
     val systemSpan = TimeUtils.formatSpanToSystem(context, group.span)
     
     ListItem(
@@ -531,11 +554,16 @@ private fun ScheduleListItemSimple(
             Text(text = "$systemSpan • ${group.formattedDuration}", style = MaterialTheme.typography.bodySmall)
         },
         leadingContent = {
-            Surface(modifier = Modifier.size(4.dp, 32.dp), color = if (hasElectricity) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, shape = CircleShape) {}
+            val indicatorColor = when (group.status) {
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> MaterialTheme.colorScheme.primary
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.error
+            }
+            Surface(modifier = Modifier.size(4.dp, 32.dp), color = indicatorColor, shape = CircleShape) {}
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (!hasElectricity) {
+                if (group.status != com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE) {
                     IconButton(
                         onClick = { addOutageToCalendar(context, group, address) },
                         modifier = Modifier.size(32.dp)

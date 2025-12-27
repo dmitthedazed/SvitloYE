@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="add_address"
+        android:enabled="true"
+        android:icon="@drawable/ic_bolt"
+        android:shortcutShortLabel="@string/shortcut_add_address"
+        android:shortcutLongLabel="@string/shortcut_add_address">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.occaecat.svitloye"
+            android:targetClass="com.occaecat.ztoeschedule.MainActivity">
+            <extra android:name="shortcut_id" android:value="add_address" />
+        </intent>
+    </shortcut>
+</shortcuts>

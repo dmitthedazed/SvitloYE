@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <style name="Theme.SvitloYeZhytomyr" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Main app theme customization -->
+    </style>
 
-    <style name="Theme.SvitloYeZhytomyr" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Splash Screen Theme -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/white</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_bolt</item>
+        <item name="postSplashScreenTheme">@style/Theme.SvitloYeZhytomyr</item>
+    </style>
 </resources>
