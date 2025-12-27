@@ -1,19 +1,14 @@
 package com.occaecat.ztoeschedule.domain.notification
 
-import android.content.pm.ServiceInfo
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
-import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -24,8 +19,11 @@ import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import com.occaecat.ztoeschedule.domain.TimeUtils
+import com.occaecat.ztoeschedule.domain.time.TimeProvider
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import java.util.Calendar
 import java.util.TimeZone
 import dagger.hilt.android.AndroidEntryPoint
@@ -59,6 +57,7 @@ class LiveActivityNotificationService : Service() {
     
     @Inject lateinit var preferencesManager: EnergyPreferencesManager
     @Inject lateinit var repository: EnergyRepository
+    @Inject lateinit var timeProvider: TimeProvider
     
     private var updateJob: Job? = null
 
@@ -114,27 +113,35 @@ class LiveActivityNotificationService : Service() {
 
     private fun startPeriodicUpdates() {
         updateJob = serviceScope.launch {
-            while (isActive) {
-                try { updateNotification() } catch (e: Exception) { e.printStackTrace() }
-                delay(UPDATE_INTERVAL_MS)
+            val ticker = flow {
+                while (true) {
+                    emit(Unit)
+                    delay(UPDATE_INTERVAL_MS)
+                }
             }
+
+            preferencesManager.savedSelectionFlow
+                .combine(ticker) { selection, _ -> selection }
+                .collect { selection ->
+                    if (selection != null) {
+                        try { updateNotification(selection) } catch (e: Exception) { e.printStackTrace() }
+                    }
+                }
         }
     }
 
-    private suspend fun updateNotification() {
-        val savedSelection = preferencesManager.savedSelectionFlow.first() ?: return
-        val result = repository.getScheduleWithMessages(savedSelection.cherga, savedSelection.pidcherga)
+    private suspend fun updateNotification(selection: com.occaecat.ztoeschedule.data.local.SavedSelection) {
+        val result = repository.getCachedScheduleWithMessages(selection.cherga, selection.pidcherga)
 
         result.onSuccess { data ->
             val grouped = ScheduleMapper.getGroupedSchedule(data.schedules)
-            val current = ScheduleMapper.getCurrentGroupedStatus(grouped)
+            val current = ScheduleMapper.getCurrentGroupedStatus(grouped, timeProvider.now())
 
             if (current != null) {
                 val notification = createLiveActivityNotification(
-                    status = current.color,
-                    timeSpan = current.span,
-                    text = current.displayText,
-                    schedules = grouped
+                    current = current,
+                    schedules = grouped,
+                    address = selection.addressName
                 )
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 nm.notify(NOTIFICATION_ID, notification)
@@ -143,133 +150,136 @@ class LiveActivityNotificationService : Service() {
     }
 
     private fun createLiveActivityNotification(
-        status: String,
-        timeSpan: String,
-        text: String,
-        schedules: List<GroupedSchedule>
+        current: GroupedSchedule,
+        schedules: List<GroupedSchedule>,
+        address: String
     ): Notification {
         val pendingIntent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-        val isPowerOn = status.lowercase() != "red"
-        val endTimeMs = calculateEndTimeMs(timeSpan)
-        val rawEndTimeStr = extractEndTime(timeSpan)
-        val endTimeStr = TimeUtils.formatToSystemTime(this, rawEndTimeStr)
+        val refreshIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_REFRESH
+        }
+        val refreshPendingIntent = PendingIntent.getBroadcast(this, 2, refreshIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        val status = current.status
+        val isPowerOn = status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
+        val isWarning = status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE
         
-        val minutesRemaining = (endTimeMs - System.currentTimeMillis()) / 60000
-        val titleText = NotificationTextHelper.getStatusTitle(isPowerOn, endTimeStr)
+        val endTimeMs = current.endMs
+        val endTimeStr = TimeUtils.formatToSystemTime(this, current.endTime)
+        
+        val nowMs = timeProvider.now()
+        val minutesRemaining = (endTimeMs - nowMs) / 60000
+        
+        val h = minutesRemaining / 60
+        val m = minutesRemaining % 60
+        val timeString = if (h > 0) "${h}г ${m}хв" else "${m}хв"
+        
+        val emoji = if (isPowerOn) "🟢" else if (isWarning) "🟡" else "🔴"
+        val statusText = if (isPowerOn) "Світло є" else if (isWarning) "Можливо" else "Відключення"
+        
+        val smartTitle = "⏳ Ще $timeString • $emoji $statusText"
+        val subText = "До $endTimeStr"
+
         val detailedMsg = NotificationTextHelper.getDetailedStatus(isPowerOn, endTimeStr, minutesRemaining)
         val easterEgg = NotificationTextHelper.getEasterEgg(isPowerOn)
 
+        // --- ANDROID 16+ (API 36) LIVE UPDATE (PROMOTED) ---
         if (Build.VERSION.SDK_INT >= 36) {
              val builder = Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle(titleText)
-                .setContentText(detailedMsg + " | " + easterEgg)
                 .setSmallIcon(Icon.createWithResource(this, if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled))
+                .setContentTitle(smartTitle)
+                .setContentText(detailedMsg)
+                .setSubText(subText)
                 .setOngoing(true)
+                .setColorized(false) // Must be FALSE for Promoted
                 .setContentIntent(pendingIntent)
-                .setColorized(false) 
+                .setShortCriticalText(timeString) // Shown in status chip
+                .addExtras(android.os.Bundle().apply {
+                    // EXTRA_REQUEST_PROMOTED_ONGOING
+                    putBoolean("android.requestPromotedOngoing", true)
+                })
+                .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_bolt), "Оновити", refreshPendingIntent).build())
+
+             // Trigger countdown in system chip
              builder.setWhen(endTimeMs)
+             builder.setShowWhen(true)
              builder.setUsesChronometer(true)
              builder.setChronometerCountDown(true)
-             builder.setShowWhen(true)
-             val extras = android.os.Bundle()
-             extras.putBoolean("android.requestPromotedOngoing", true)
-             builder.setExtras(extras)
+
+             // Build modern ProgressStyle
              buildProgressStyle(schedules)?.let { builder.style = it }
+             
              return builder.build()
         }
 
-        val remoteViews = RemoteViews(packageName, R.layout.notification_live_activity)
-        val isWarning = status.lowercase() == "yellow"
-        remoteViews.setImageViewResource(R.id.iv_status_icon, if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
-        val statusColor = when {
-            isWarning -> Color.parseColor("#FFC107")
-            isPowerOn -> Color.parseColor("#4CAF50")
-            else -> Color.parseColor("#F44336")
-        }
-        remoteViews.setInt(R.id.iv_status_icon, "setColorFilter", statusColor)
-        remoteViews.setChronometer(R.id.tv_status_timer, endTimeMs, null, true)
-        remoteViews.setTextViewText(R.id.tv_status_subtitle, detailedMsg + "\n" + easterEgg)
-        remoteViews.setTextViewText(R.id.tv_time_remaining, if (isPowerOn) "СВІТЛО Є" else "OFFLINE")
-        
-        val pillColor = if (isPowerOn) ContextCompat.getColor(this, R.color.widget_status_positive)
-                        else if (isWarning) ContextCompat.getColor(this, R.color.widget_status_warning)
-                        else ContextCompat.getColor(this, R.color.widget_status_negative)
-        remoteViews.setTextColor(R.id.tv_time_remaining, Color.BLACK)
-        remoteViews.setInt(R.id.tv_time_remaining, "setBackgroundTintList", android.content.res.ColorStateList.valueOf(pillColor).defaultColor)
-
+        // --- LEGACY STYLE (Android 12-15) ---
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
-            .setContentTitle(titleText)
+            .setContentTitle(smartTitle)
             .setContentText(detailedMsg)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(remoteViews)
-            .setCustomBigContentView(remoteViews)
+            .setSubText(subText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$detailedMsg\n📍 $address\n\n$easterEgg"))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-
+            .addAction(R.drawable.ic_bolt, "Оновити", refreshPendingIntent)
+            
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             builder.setColorized(true)
+            val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             val bgColor = if (isPowerOn) (if (isDarkMode) Color.parseColor("#1B5E20") else Color.parseColor("#F1F8E9"))
+                             else if (isWarning) (if (isDarkMode) Color.parseColor("#5D4037") else Color.parseColor("#FFF8E1"))
                              else (if (isDarkMode) Color.parseColor("#B71C1C") else Color.parseColor("#FFEBEE"))
             builder.setColor(bgColor)
         }
+        
+        builder.setWhen(endTimeMs)
+        builder.setUsesChronometer(true)
+        builder.setChronometerCountDown(true)
+
         return builder.build()
     }
 
-    private fun extractEndTime(span: String): String = Regex("""(\d{2}:\d{2})""").findAll(span).lastOrNull()?.value ?: ""
-
-    private fun calculateEndTimeMs(span: String): Long {
-        return try {
-            val endTimeStr = extractEndTime(span)
-            val parts = endTimeStr.split(":")
-            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-            val calendar = Calendar.getInstance(kyivZone)
-            val now = calendar.timeInMillis
-            calendar.set(Calendar.HOUR_OF_DAY, parts[0].toInt())
-            calendar.set(Calendar.MINUTE, parts[1].toInt())
-            calendar.set(Calendar.SECOND, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
-            if (calendar.timeInMillis <= now) calendar.add(Calendar.DAY_OF_YEAR, 1)
-            calendar.timeInMillis
-        } catch (e: Exception) { System.currentTimeMillis() }
-    }
-            
     @RequiresApi(36)
-    private fun buildProgressStyle(schedules: List<GroupedSchedule>): Notification.Style? {
+    private fun buildProgressStyle(schedules: List<GroupedSchedule>): Notification.ProgressStyle? {
         try {
-            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-            val now = Calendar.getInstance(kyivZone)
-            val currentProgress = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+            val style = Notification.ProgressStyle()
+            val nowCal = timeProvider.nowCalendar()
+            
+            // Current progress in minutes from midnight (0..1440)
+            val currentProgress = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
+            
             val segments = ArrayList<Notification.ProgressStyle.Segment>()
             val points = ArrayList<Notification.ProgressStyle.Point>()
-            val sortedSchedules = schedules.sortedBy { 
-                val timeStr = Regex("""(\d{2}:\d{2})""").find(it.span)?.value ?: "00:00"
-                val p = timeStr.split(":")
-                p[0].toInt() * 60 + p[1].toInt()
-            }
-            for (schedule in sortedSchedules) {
+            
+            // Only take schedules for the current date to keep the timeline sane
+            val todayDate = TimeUtils.formatToSystemTime(this, "00:00") // placeholder check
+            // Note: Since we use GroupedSchedule, we can map their durations
+            
+            for (schedule in schedules) {
                 val duration = schedule.durationHours * 60 + schedule.durationMinutes
-                val color = when (schedule.color.lowercase()) {
-                    "red" -> Color.parseColor("#F44336")
-                    "green", "white" -> Color.parseColor("#4CAF50")
-                    "yellow" -> Color.parseColor("#FFC107")
+                if (duration <= 0) continue
+                
+                val color = when (schedule.status) {
+                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.OUTAGE -> Color.parseColor("#F44336")
+                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> Color.parseColor("#4CAF50")
+                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> Color.parseColor("#FFC107")
                     else -> Color.GRAY
                 }
+                
                 segments.add(Notification.ProgressStyle.Segment(duration).setColor(color))
             }
+            
+            // Milestone point for current time
             points.add(Notification.ProgressStyle.Point(currentProgress).setColor(Color.WHITE))
-            if (segments.isEmpty()) return null
-            val style = Notification.ProgressStyle()
-            style.isStyledByProgress = false
+            
+            style.isStyledByProgress = true // Use segments
             style.progress = currentProgress
             style.progressSegments = segments
             style.progressPoints = points
-            style.progressStartIcon = Icon.createWithResource(this, R.drawable.ic_home_filled)
-            style.progressEndIcon = Icon.createWithResource(this, R.drawable.ic_bolt)
+            
             return style
         } catch (e: Exception) { return null }
     }

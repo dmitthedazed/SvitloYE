@@ -86,7 +86,7 @@ class PowerStatusWidget : AppWidgetProvider() {
                          val endTime = parseEndTime(currentStatus.span)
                          val minutesRemaining = endTime?.let { getMinutesUntilTime(it) } ?: 0
                          val timeRemainingStr = formatTimeRemaining(minutesRemaining)
-                         val statusText = if (currentStatus.color.lowercase() != "red") "Світло є" else "Відключення"
+                         val statusText = currentStatus.displayText
                          val systemUntilTime = com.occaecat.ztoeschedule.domain.TimeUtils.formatToSystemTime(context, endTime?.let { "${it.first.toString().padStart(2, '0')}:${it.second.toString().padStart(2, '0')}" } ?: "00:00")
                          
                          updateWidgetState(
@@ -94,8 +94,8 @@ class PowerStatusWidget : AppWidgetProvider() {
                              appWidgetManager, 
                              appWidgetId, 
                              WidgetState.Loaded(
-                                 isPowerOn = currentStatus.color.lowercase() != "red",
-                                 status = currentStatus.color.lowercase(),
+                                 isPowerOn = currentStatus.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE,
+                                 status = currentStatus.status,
                                  statusText = statusText,
                                  timeRemaining = timeRemainingStr,
                                  untilTime = "До $systemUntilTime"
@@ -140,12 +140,12 @@ class PowerStatusWidget : AppWidgetProvider() {
                     is WidgetState.NotConfigured -> {
                         views.setTextViewText(R.id.widget_remaining_small, "?")
                         views.setImageViewResource(R.id.widget_icon, R.drawable.ic_launcher_foreground)
-                        setWidgetColor(context, views, "gray")
+                        setWidgetColor(context, views, com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN)
                     }
                     is WidgetState.Error -> {
                         views.setTextViewText(R.id.widget_remaining_small, "!")
                         views.setImageViewResource(R.id.widget_icon, android.R.drawable.stat_notify_error)
-                        setWidgetColor(context, views, "gray")
+                        setWidgetColor(context, views, com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN)
                     }
                     is WidgetState.Loaded -> {
                         val iconRes = if (state.isPowerOn) android.R.drawable.presence_online else android.R.drawable.presence_busy
@@ -169,14 +169,14 @@ class PowerStatusWidget : AppWidgetProvider() {
                         views.setTextViewText(R.id.widget_subtitle, "адресу в додатку")
                         views.setTextViewText(R.id.widget_remaining_pill, "⚙")
                         views.setImageViewResource(R.id.widget_icon, R.drawable.ic_launcher_foreground)
-                        setWidgetColor(context, views, "gray")
+                        setWidgetColor(context, views, com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN)
                     }
                     is WidgetState.Error -> {
                         views.setTextViewText(R.id.widget_status_text, "Помилка")
                         views.setTextViewText(R.id.widget_subtitle, state.message)
                         views.setTextViewText(R.id.widget_remaining_pill, "!")
                         views.setImageViewResource(R.id.widget_icon, android.R.drawable.stat_notify_error)
-                        setWidgetColor(context, views, "gray")
+                        setWidgetColor(context, views, com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN)
                     }
                     is WidgetState.Loaded -> {
                         val iconRes = if (state.isPowerOn) android.R.drawable.presence_online else android.R.drawable.presence_busy
@@ -201,13 +201,13 @@ class PowerStatusWidget : AppWidgetProvider() {
                         views.setTextViewText(R.id.widget_status_text, "Налаштуйте")
                         views.setTextViewText(R.id.widget_remaining_text, "адресу в додатку")
                         views.setImageViewResource(R.id.widget_icon, R.drawable.ic_launcher_foreground)
-                        setWidgetColor(context, views, "gray")
+                        setWidgetColor(context, views, com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN)
                     }
                     is WidgetState.Error -> {
                         views.setTextViewText(R.id.widget_status_text, "Помилка")
                         views.setTextViewText(R.id.widget_remaining_text, state.message)
                         views.setImageViewResource(R.id.widget_icon, android.R.drawable.stat_notify_error)
-                        setWidgetColor(context, views, "gray")
+                        setWidgetColor(context, views, com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN)
                     }
                     is WidgetState.Loaded -> {
                         val iconRes = if (state.isPowerOn) android.R.drawable.presence_online else android.R.drawable.presence_busy
@@ -235,11 +235,11 @@ class PowerStatusWidget : AppWidgetProvider() {
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 
-    private fun setWidgetColor(context: Context, views: RemoteViews, status: String) {
-        val drawableRes = when (status.lowercase()) {
-            "red" -> R.drawable.widget_card_red
-            "green", "white" -> R.drawable.widget_card_green
-            "yellow" -> R.drawable.widget_card_yellow
+    private fun setWidgetColor(context: Context, views: RemoteViews, status: com.occaecat.ztoeschedule.data.model.ScheduleStatus) {
+        val drawableRes = when (status) {
+            com.occaecat.ztoeschedule.data.model.ScheduleStatus.OUTAGE -> R.drawable.widget_card_red
+            com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> R.drawable.widget_card_green
+            com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> R.drawable.widget_card_yellow
             else -> R.drawable.widget_card_gray
         }
         
@@ -249,7 +249,7 @@ class PowerStatusWidget : AppWidgetProvider() {
         // Determine contrasting text/icon color
         // Red/Green backgrounds are dark/saturated -> White text
         // Yellow/Gray backgrounds are light -> Black text
-        val textColor = if (status.lowercase() == "yellow" || status.lowercase() == "gray") {
+        val textColor = if (status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE || status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.UNKNOWN) {
              Color.BLACK
         } else {
              Color.WHITE
@@ -277,7 +277,7 @@ class PowerStatusWidget : AppWidgetProvider() {
         data class Error(val message: String) : WidgetState()
         data class Loaded(
             val isPowerOn: Boolean,
-            val status: String, // red/green/yellow
+            val status: com.occaecat.ztoeschedule.data.model.ScheduleStatus,
             val statusText: String,
             val timeRemaining: String,
             val untilTime: String

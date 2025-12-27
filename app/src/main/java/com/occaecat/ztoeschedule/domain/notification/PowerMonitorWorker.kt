@@ -25,13 +25,16 @@ import com.occaecat.ztoeschedule.widget.glance.LightWidget
 import android.service.quicksettings.TileService
 import android.content.ComponentName
 
+import com.occaecat.ztoeschedule.domain.time.TimeProvider
+
 @HiltWorker
 class PowerMonitorWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val preferencesManager: EnergyPreferencesManager,
     private val repository: EnergyRepository,
-    private val notificationManager: PowerNotificationManager
+    private val notificationManager: PowerNotificationManager,
+    private val timeProvider: TimeProvider
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -53,21 +56,27 @@ class PowerMonitorWorker @AssistedInject constructor(
             result.onSuccess { data ->
                 val groupedSchedules = ScheduleMapper.getGroupedSchedule(data.schedules)
                 
-                // Check for schedule updates
-                val currentHash = data.schedules.hashCode().toString()
-                val lastHash = preferencesManager.lastScheduleHashFlow.first()
-                if (lastHash != null && lastHash != currentHash) {
-                    Log.d("PowerMonitorWorker", "Schedule changed, sending update notification")
-                    notificationManager.sendUpdateNotification(
-                        "📢 Графік оновлено",
-                        "Житомиробленерго оновило розклад відключень"
-                    )
-                }
-                if (lastHash != currentHash) {
-                    preferencesManager.saveLastScheduleHash(currentHash)
+                // Check for schedule updates (only if data is not empty to avoid false alarms)
+                if (data.schedules.isNotEmpty()) {
+                    val currentHash = data.schedules.hashCode().toString()
+                    val lastHash = preferencesManager.lastScheduleHashFlow.first()
+                    
+                    if (lastHash != null && lastHash != currentHash) {
+                        Log.d("PowerMonitorWorker", "Schedule changed, sending update notification")
+                        
+                        val today = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"))
+                        notificationManager.sendUpdateNotification(
+                            "📢 Графік оновлено ($today)",
+                            "З'явилися зміни у розкладі відключень. Перевірте актуальний статус."
+                        )
+                    }
+                    
+                    if (lastHash != currentHash) {
+                        preferencesManager.saveLastScheduleHash(currentHash)
+                    }
                 }
 
-                val currentStatus = getCurrentGroupedStatus(groupedSchedules)
+                val currentStatus = ScheduleMapper.getCurrentGroupedStatus(groupedSchedules, timeProvider.now())
                 if (currentStatus != null) {
                     if (notificationsEnabled) {
                         checkAndNotify(currentStatus, advanceMinutes)
@@ -118,7 +127,7 @@ class PowerMonitorWorker @AssistedInject constructor(
             val glanceIds = manager.getGlanceIds(widget.javaClass)
             glanceIds.forEach { glanceId ->
                 updateAppWidgetState(applicationContext, glanceId) { prefs ->
-                    prefs[LightWidget.KEY_STATUS] = status.color.lowercase()
+                    prefs[LightWidget.KEY_STATUS] = status.status.name.lowercase()
                     prefs[LightWidget.KEY_NEXT_EVENT] = status.endTime
                     prefs[LightWidget.KEY_ADDRESS] = address
                     prefs[LightWidget.KEY_UPDATED] = System.currentTimeMillis()
@@ -130,35 +139,13 @@ class PowerMonitorWorker @AssistedInject constructor(
         }
     }
 
-    private fun getCurrentGroupedStatus(schedules: List<GroupedSchedule>): GroupedSchedule? {
-        if (schedules.isEmpty()) return null
-        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val now = Calendar.getInstance(kyivZone)
-        val currentTimeInMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-
-        return schedules.firstOrNull { schedule ->
-            val parts = schedule.span.split("-")
-            if (parts.size >= 2) {
-                val start = parseTime(parts[0].trim())
-                val end = parseTime(parts[1].trim())
-                if (start != null && end != null) {
-                    if (end >= start) currentTimeInMinutes in start until end
-                    else currentTimeInMinutes >= start || currentTimeInMinutes < end
-                } else false
-            } else false
-        }
-    }
-
-    private fun parseTime(timeStr: String): Int? {
-        val parts = timeStr.split(":")
-        if (parts.size != 2) return null
-        return try { parts[0].toInt() * 60 + parts[1].toInt() } catch (e: Exception) { null }
-    }
-
     private suspend fun checkAndNotify(currentStatus: GroupedSchedule, advanceMinutes: Int) {
         val isPowerOn = currentStatus.isLightOn
-        val endTimeStr = Regex("""(\d{2}:\d{2})""").findAll(currentStatus.span).lastOrNull()?.value ?: return
-        val minutesUntilChange = getMinutesUntilTime(Pair(endTimeStr.split(":")[0].toInt(), endTimeStr.split(":")[1].toInt()))
+        val endTimeStr = currentStatus.endTime
+        val endParts = endTimeStr.split(":")
+        if (endParts.size != 2) return
+        
+        val minutesUntilChange = getMinutesUntilTime(Pair(endParts[0].toInt(), endParts[1].toInt()))
         
         val mode = preferencesManager.notificationModeFlow.first()
         if (mode == 2) return
@@ -176,7 +163,7 @@ class PowerMonitorWorker @AssistedInject constructor(
 
     private fun getMinutesUntilTime(targetTime: Pair<Int, Int>): Int {
         val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val now = Calendar.getInstance(kyivZone)
+        val now = timeProvider.nowCalendar() // Use accurate NTP time
         val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
         val targetMinutes = targetTime.first * 60 + targetTime.second
         return if (targetMinutes > currentMinutes) targetMinutes - currentMinutes else (1440 - currentMinutes) + targetMinutes

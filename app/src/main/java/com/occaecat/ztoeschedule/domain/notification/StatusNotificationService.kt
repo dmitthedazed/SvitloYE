@@ -14,16 +14,17 @@ import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import com.occaecat.ztoeschedule.domain.TimeUtils
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.first
-import java.util.Calendar
-import java.util.TimeZone
+import com.occaecat.ztoeschedule.domain.time.TimeProvider
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 
 /**
  * Foreground service that displays persistent notification with current power status.
- * Uses Europe/Kyiv timezone for accurate tracking.
+ * Uses NTP time via TimeProvider.
+ * Reacts immediately to address changes.
  */
 @AndroidEntryPoint
 class StatusNotificationService : Service() {
@@ -53,6 +54,7 @@ class StatusNotificationService : Service() {
     
     @Inject lateinit var preferencesManager: EnergyPreferencesManager
     @Inject lateinit var repository: EnergyRepository
+    @Inject lateinit var timeProvider: TimeProvider
     
     private var updateJob: Job? = null
 
@@ -113,28 +115,38 @@ class StatusNotificationService : Service() {
 
     private fun startPeriodicUpdates() {
         updateJob = serviceScope.launch {
-            while (isActive) {
-                try { updateNotification() } catch (e: Exception) {}
-                delay(UPDATE_INTERVAL_MS)
+            // Ticker flow that emits every minute
+            val ticker = flow {
+                while (true) {
+                    emit(Unit)
+                    delay(UPDATE_INTERVAL_MS)
+                }
             }
+
+            // Combine ticker and address preferences.
+            // This ensures we update when:
+            // 1. Time passes (every minute)
+            // 2. User changes address (immediately)
+            preferencesManager.savedSelectionFlow
+                .combine(ticker) { selection, _ -> selection }
+                .collect { selection ->
+                    if (selection != null && selection.cherga != 0) {
+                        try { updateNotification(selection) } catch (e: Exception) {}
+                    }
+                }
         }
     }
 
-    private suspend fun updateNotification() {
-        val savedSelection = preferencesManager.savedSelectionFlow.first() ?: return
-        if (savedSelection.cherga == 0) return
-
-        val result = repository.getScheduleWithMessages(savedSelection.cherga, savedSelection.pidcherga)
+    private suspend fun updateNotification(selection: com.occaecat.ztoeschedule.data.local.SavedSelection) {
+        val result = repository.getCachedScheduleWithMessages(selection.cherga, selection.pidcherga)
         result.onSuccess { data ->
             val groupedSchedules = ScheduleMapper.getGroupedSchedule(data.schedules)
-            val currentStatus = getCurrentGroupedStatus(groupedSchedules)
+            val currentStatus = ScheduleMapper.getCurrentGroupedStatus(groupedSchedules, timeProvider.now())
 
             if (currentStatus != null) {
                 val notification = createStatusNotification(
-                    isPowerOn = currentStatus.isLightOn,
-                    timeSpan = currentStatus.span,
-                    address = savedSelection.addressName,
-                    statusText = currentStatus.displayText
+                    current = currentStatus,
+                    address = selection.addressName
                 )
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.notify(NOTIFICATION_ID, notification)
@@ -142,112 +154,59 @@ class StatusNotificationService : Service() {
         }
     }
 
-    private fun getCurrentGroupedStatus(schedules: List<GroupedSchedule>): GroupedSchedule? {
-        if (schedules.isEmpty()) return null
-        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val now = Calendar.getInstance(kyivZone)
-        val currentHour = now.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = now.get(Calendar.MINUTE)
-        val currentTimeInMinutes = currentHour * 60 + currentMinute
-
-        return schedules.firstOrNull { schedule ->
-            val parts = schedule.span.split("-")
-            if (parts.size >= 2) {
-                val start = parseTime(parts[0].trim())
-                val end = parseTime(parts[1].trim())
-                if (start != null && end != null) {
-                    if (end >= start) currentTimeInMinutes in start until end
-                    else currentTimeInMinutes >= start || currentTimeInMinutes < end
-                } else false
-            } else false
-        }
-    }
-
-    private fun parseTime(timeStr: String): Int? {
-        val parts = timeStr.split(":")
-        if (parts.size != 2) return null
-        return try { parts[0].toInt() * 60 + parts[1].toInt() } catch (e: Exception) { null }
-    }
-
     private fun createStatusNotification(
-        isPowerOn: Boolean,
-        timeSpan: String,
-        address: String,
-        statusText: String
+        current: GroupedSchedule,
+        address: String
     ): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         
-        val rawEndTime = Regex("(\\d{2}:\\d{2})").findAll(timeSpan).lastOrNull()?.value ?: ""
-        val endTime = TimeUtils.formatToSystemTime(this, rawEndTime)
-        val title = NotificationTextHelper.getStatusTitle(isPowerOn, endTime)
+        val refreshIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_REFRESH
+        }
+        val refreshPendingIntent = PendingIntent.getBroadcast(this, 1, refreshIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        val isPowerOn = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
+        val isWarning = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE
         
-        // Calculate remaining time
-        val remainingText = getRemainingTimeText(rawEndTime)
-        val progress = calculateProgress(timeSpan)
+        val endTime = TimeUtils.formatToSystemTime(this, current.endTime)
+        
+        // Emoji Title
+        val titleIcon = if (isPowerOn) "🟢" else if (isWarning) "🟡" else "🔴"
+        val statusTitle = if (isPowerOn) "Світло є" else if (isWarning) "Можливо" else "Відключення"
+        val title = "$titleIcon $statusTitle • До $endTime"
+        
+        // Calculate remaining time using NTP
+        val nowMs = timeProvider.now()
+        val remainingMs = current.endMs - nowMs
+        val remainingMinutes = if (remainingMs > 0) remainingMs / 60000 else 0
+        
+        val h = remainingMinutes / 60
+        val m = remainingMinutes % 60
+        val remainingText = if (h > 0) "${h}год ${m}хв" else "${m}хв"
+        
+        // Calculate progress
+        val durationMs = current.endMs - current.startMs
+        val progress = if (durationMs > 0) {
+            ((nowMs - current.startMs).toFloat() / durationMs.toFloat() * 100).toInt().coerceIn(0, 100)
+        } else 0
         
         val icon = if (isPowerOn) android.R.drawable.presence_online else android.R.drawable.presence_busy
-        val message = "$statusText • $remainingText\n$address"
+        val message = "Залишилось: $remainingText\n📍 $address"
 
         return NotificationCompat.Builder(this, NotificationHelper.CHANNEL_STATUS_ID)
-            .setSmallIcon(icon)
+            .setSmallIcon(R.drawable.ic_bolt)
             .setContentTitle(title)
-            .setContentText(remainingText)
+            .setContentText("Залишилось: $remainingText")
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, false)
             .setContentIntent(pendingIntent)
+            .addAction(R.drawable.ic_bolt, "Оновити", refreshPendingIntent) // Refresh Action
             .build()
-    }
-
-    private fun getRemainingTimeText(endTimeStr: String): String {
-        try {
-            val parts = endTimeStr.split(":")
-            val targetHour = parts[0].toInt()
-            val targetMinute = parts[1].toInt()
-            
-            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-            val now = Calendar.getInstance(kyivZone)
-            val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-            var targetMinutes = targetHour * 60 + targetMinute
-            
-            if (targetMinutes < currentMinutes) targetMinutes += 24 * 60
-            
-            val diff = targetMinutes - currentMinutes
-            val h = diff / 60
-            val m = diff % 60
-            
-            return "Осталось: ${if (h > 0) "${h}год " else ""}${m}хв"
-        } catch (e: Exception) {
-            return ""
-        }
-    }
-
-    private fun calculateProgress(span: String): Int {
-        try {
-            val parts = span.split("-")
-            val startStr = parts[0].trim()
-            val endStr = parts[1].trim()
-            
-            val startMin = parseTime(startStr) ?: return 0
-            var endMin = parseTime(endStr) ?: return 0
-            if (endMin < startMin) endMin += 24 * 60
-            
-            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-            val now = Calendar.getInstance(kyivZone)
-            var currentMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-            if (currentMin < startMin) currentMin += 24 * 60 // Handle midnight crossover if needed
-            
-            val total = endMin - startMin
-            val elapsed = currentMin - startMin
-            
-            return if (total > 0) ((elapsed.toFloat() / total.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
-        } catch (e: Exception) {
-            return 0
-        }
     }
 }

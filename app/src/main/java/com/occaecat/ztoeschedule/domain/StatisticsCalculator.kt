@@ -28,17 +28,15 @@ object StatisticsCalculator {
         dailySchedules.forEach { schedule ->
             val duration = getDurationInMinutes(schedule.span)
             
-            // Check status based on color
-            val colorLower = schedule.color.lowercase()
-            val isLightOn = colorLower == "green" || colorLower == "white"
-            
-            val textLower = schedule.displayText.lowercase()
-            val actuallyOn = textLower.contains("світло є") || isLightOn
-            
-            if (actuallyOn) {
-                onMinutes += duration
-            } else {
-                outageMinutes += duration
+            when (schedule.status) {
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> onMinutes += duration
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> {
+                    // For statistics, we might want to track probable outages separately, 
+                    // but for a simple view let's treat it as "potentially off"
+                    outageMinutes += duration 
+                }
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.OUTAGE -> outageMinutes += duration
+                else -> unknownMinutes += duration
             }
         }
 

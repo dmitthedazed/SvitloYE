@@ -57,18 +57,38 @@ object ScheduleMapper {
         val hours = totalMinutes / 60
         val minutes = totalMinutes % 60
 
+        val startMs = parseDateTimeToMs(first.date, startTime)
+        val endMs = startMs + (totalMinutes * 60 * 1000L)
+
         return GroupedSchedule(
             date = first.date,
             span = mergedSpan,
             startTime = startTime,
             endTime = endTime,
             color = first.color,
+            status = first.status,
             text = first.text,
             displayText = first.displayText,
             durationHours = hours,
             durationMinutes = minutes,
-            intervalCount = group.size
+            intervalCount = group.size,
+            startMs = startMs,
+            endMs = endMs
         )
+    }
+
+    private fun parseDateTimeToMs(date: String, time: String): Long {
+        return try {
+            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+            val cal = Calendar.getInstance(kyivZone)
+            val dateParts = date.split(".")
+            val timeParts = time.split(":")
+            cal.set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), timeParts[0].toInt(), timeParts[1].toInt(), 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            cal.timeInMillis
+        } catch (e: Exception) {
+            0L
+        }
     }
 
     private fun calculateTotalMinutes(group: List<Schedule>): Int {
@@ -103,33 +123,13 @@ object ScheduleMapper {
 
     /**
      * Находит текущий активный сгруппированный интервал (абсолютное сравнение времени)
+     * @param nowMs Текущее время в миллисекундах (желательно синхронизированное с NTP)
      */
-    fun getCurrentGroupedStatus(schedules: List<GroupedSchedule>): GroupedSchedule? {
+    fun getCurrentGroupedStatus(schedules: List<GroupedSchedule>, nowMs: Long): GroupedSchedule? {
         if (schedules.isEmpty()) return null
 
-        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-        val now = Calendar.getInstance(kyivZone)
-        val nowMs = now.timeInMillis
-
-        val sdf = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.US)
-        sdf.timeZone = kyivZone
-
         return schedules.firstOrNull { group ->
-            try {
-                val startCal = Calendar.getInstance(kyivZone)
-                val dateParts = group.date.split(".")
-                val timeParts = group.startTime.split(":")
-                startCal.set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), timeParts[0].toInt(), timeParts[1].toInt(), 0)
-                startCal.set(Calendar.MILLISECOND, 0)
-                
-                val startMs = startCal.timeInMillis
-                val durationMs = (group.durationHours * 60 + group.durationMinutes) * 60 * 1000L
-                val endMs = startMs + durationMs
-
-                nowMs >= startMs && nowMs < endMs
-            } catch (e: Exception) {
-                false
-            }
+            nowMs >= group.startMs && nowMs < group.endMs
         }
     }
 
@@ -156,15 +156,18 @@ data class GroupedSchedule(
     val startTime: String,
     val endTime: String,
     val color: String,
+    val status: com.occaecat.ztoeschedule.data.model.ScheduleStatus,
     val text: String?,
     val displayText: String,
     val durationHours: Int,
     val durationMinutes: Int,
-    val intervalCount: Int
+    val intervalCount: Int,
+    val startMs: Long,
+    val endMs: Long
 ) {
     val formattedDuration: String
         get() = ScheduleMapper.formatDuration(durationHours, durationMinutes)
 
     val isLightOn: Boolean
-        get() = color.lowercase() in listOf("white", "green")
+        get() = status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
 }

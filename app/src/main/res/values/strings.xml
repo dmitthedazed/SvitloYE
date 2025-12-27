@@ -24,6 +24,11 @@
     <string name="home_time_to_restore">До увімкнення: %1$s</string>
     <string name="home_status_now">Зараз</string>
 
+    <!-- Status descriptions for accessibility -->
+    <string name="status_available">Світло є</string>
+    <string name="status_probable">Можливе відключення</string>
+    <string name="status_outage">Відключення</string>
+
     <!-- Onboarding & Address Selection -->
     <string name="onboarding_welcome_title">Світло під контролем</string>
     <string name="onboarding_welcome_desc">Давайте налаштуємо вашу адресу, щоб ви завжди знали актуальний графік відключень</string>
@@ -79,4 +84,8 @@
     <string name="widget_not_configured">Налаштуйте адресу в додатку</string>
     <string name="widget_loading">Завантаження…</string>
     <string name="widget_error">Помилка завантаження</string>
+
+    <!-- Shortcuts -->
+    <string name="shortcut_add_address">Додати адресу</string>
+    <string name="shortcut_check_status">Перевірити статус</string>
 </resources>

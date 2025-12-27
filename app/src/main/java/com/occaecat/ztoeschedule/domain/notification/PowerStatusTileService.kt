@@ -17,11 +17,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.occaecat.ztoeschedule.domain.time.TimeProvider
+
 @AndroidEntryPoint
 class PowerStatusTileService : TileService() {
 
     @Inject
     lateinit var repository: EnergyRepository
+
+    @Inject
+    lateinit var timeProvider: TimeProvider
 
     private val serviceScope = CoroutineScope(Dispatchers.IO)
 
@@ -78,10 +83,10 @@ class PowerStatusTileService : TileService() {
 
                 val schedules = result.getOrThrow()
                 val grouped = ScheduleMapper.getGroupedSchedule(schedules)
-                val currentStatus = ScheduleMapper.getCurrentGroupedStatus(grouped)
+                val currentStatus = ScheduleMapper.getCurrentGroupedStatus(grouped, timeProvider.now())
 
                 if (currentStatus != null) {
-                    val isLightOn = currentStatus.isLightOn
+                    val isLightOn = currentStatus.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
                     val state = if (isLightOn) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
                     val label = if (isLightOn) "Світло є" else "Світла немає"
                     updateTileState(tile, state, label, primaryAddress.name)

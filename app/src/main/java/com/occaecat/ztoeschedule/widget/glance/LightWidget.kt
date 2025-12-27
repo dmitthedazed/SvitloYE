@@ -115,8 +115,14 @@ class LightWidget : GlanceAppWidget() {
         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
             StatusIcon(status, 32.dp)
             Spacer(GlanceModifier.height(8.dp))
+            val text = when(status) {
+                "outage" -> "Немає"
+                "available" -> "Є світло"
+                "probable" -> "Можливо"
+                else -> "Оновлення"
+            }
             Text(
-                text = if(status == "red") "Немає" else if(status == "unknown") "Оновлення" else "Є світло",
+                text = text,
                 style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Bold)
             )
             if (status != "unknown") {
@@ -131,8 +137,14 @@ class LightWidget : GlanceAppWidget() {
             StatusIcon(status, 40.dp)
             Spacer(GlanceModifier.width(12.dp))
             Column {
+                val text = when(status) {
+                    "outage" -> "Відключення"
+                    "available" -> "Світло є"
+                    "probable" -> "Можливе відкл."
+                    else -> "Синхронізація..."
+                }
                 Text(
-                    text = if(status == "red") "Відключення" else if(status == "unknown") "Синхронізація..." else "Світло є",
+                    text = text,
                     style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 )
                 if (status != "unknown") {
@@ -155,11 +167,11 @@ class LightWidget : GlanceAppWidget() {
 
     @Composable
     private fun StatusIcon(status: String, size: androidx.compose.ui.unit.Dp) {
-        val iconRes = if (status == "red") R.drawable.ic_home_filled else R.drawable.ic_bolt
+        val iconRes = if (status == "available") R.drawable.ic_bolt else R.drawable.ic_home_filled
         val tint = when (status) {
-            "red" -> ColorProvider(Color.Red)
-            "green", "white" -> ColorProvider(Color.Green)
-            "yellow" -> ColorProvider(Color.Yellow)
+            "outage" -> ColorProvider(Color.Red)
+            "available" -> ColorProvider(Color.Green)
+            "probable" -> ColorProvider(Color.Yellow)
             else -> GlanceTheme.colors.onSurfaceVariant
         }
         Image(provider = ImageProvider(iconRes), contentDescription = null, modifier = GlanceModifier.size(size), colorFilter = ColorFilter.tint(tint))

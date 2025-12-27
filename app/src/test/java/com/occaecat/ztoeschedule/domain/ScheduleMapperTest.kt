@@ -2,7 +2,6 @@ package com.occaecat.ztoeschedule.domain
 
 import com.occaecat.ztoeschedule.data.model.Schedule
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 class ScheduleMapperTest {
@@ -11,9 +10,9 @@ class ScheduleMapperTest {
     fun `getGroupedSchedule merges consecutive intervals of same color`() {
         // Given: Two consecutive green intervals
         val rawSchedules = listOf(
-            Schedule("25.12.2025", "08:00-09:00", "green", "Світло є", "Світло є", 1),
-            Schedule("25.12.2025", "09:00-10:00", "green", "Світло є", "Світло є", 2),
-            Schedule("25.12.2025", "10:00-11:00", "red", "Світла немає", "Світла немає", 3)
+            Schedule("25.12.2025", "08:00-09:00", "green", "Світло є"),
+            Schedule("25.12.2025", "09:00-10:00", "green", "Світло є"),
+            Schedule("25.12.2025", "10:00-11:00", "red", "Світла немає")
         )
 
         // When
@@ -40,8 +39,8 @@ class ScheduleMapperTest {
     @Test
     fun `getGroupedSchedule handles simple list correctly`() {
         val raw = listOf(
-            Schedule("25.12.2025", "00:00-02:00", "red", "Off", "Off", 1),
-            Schedule("25.12.2025", "02:00-06:00", "green", "On", "On", 2)
+            Schedule("25.12.2025", "00:00-02:00", "red", "Off"),
+            Schedule("25.12.2025", "02:00-06:00", "green", "On")
         )
 
         val grouped = ScheduleMapper.getGroupedSchedule(raw)
@@ -57,10 +56,35 @@ class ScheduleMapperTest {
     }
 
     @Test
-    fun `formatDuration formats correctly`() {
-        assertEquals("2 год", ScheduleMapper.formatDuration(2, 0))
-        assertEquals("30 хв", ScheduleMapper.formatDuration(0, 30))
-        assertEquals("1 год 15 хв", ScheduleMapper.formatDuration(1, 15))
-        assertEquals("0 хв", ScheduleMapper.formatDuration(0, 0))
+    fun `getCurrentGroupedStatus returns correct group for given time`() {
+        val grouped = listOf(
+            createMockGroup("25.12.2025", "08:00", "10:00"),
+            createMockGroup("25.12.2025", "10:00", "12:00")
+        )
+
+        // Time is 09:00 (within first group)
+        val nowMs = parseTimeToMs("25.12.2025", "09:00")
+        val status = ScheduleMapper.getCurrentGroupedStatus(grouped, nowMs)
+        
+        assertEquals("08:00", status?.startTime)
+    }
+
+    private fun createMockGroup(date: String, start: String, end: String): GroupedSchedule {
+        val startMs = parseTimeToMs(date, start)
+        val endMs = parseTimeToMs(date, end)
+        return GroupedSchedule(
+            date = date, span = "$start-$end", startTime = start, endTime = end,
+            color = "green", status = com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE,
+            text = null, displayText = "On", durationHours = 2, durationMinutes = 0,
+            intervalCount = 1, startMs = startMs, endMs = endMs
+        )
+    }
+
+    private fun parseTimeToMs(date: String, time: String): Long {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Kyiv"))
+        val d = date.split("."); val t = time.split(":")
+        cal.set(d[2].toInt(), d[1].toInt() - 1, d[0].toInt(), t[0].toInt(), t[1].toInt(), 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
     }
 }

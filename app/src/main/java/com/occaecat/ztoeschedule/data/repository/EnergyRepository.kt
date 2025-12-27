@@ -171,6 +171,14 @@ class EnergyRepository(
         loadFromCache(cherga, pidcherga)
     }
 
+    /**
+     * Retrieves schedule only from local cache.
+     * Use this for frequent updates (like persistent notifications) to save battery.
+     */
+    suspend fun getCachedScheduleWithMessages(cherga: Int, pidcherga: Int): Result<ScheduleWithMessages> {
+        return loadFromCache(cherga, pidcherga)
+    }
+
     private suspend fun loadFromCache(cherga: Int, pidcherga: Int): Result<ScheduleWithMessages> {
         val cached = scheduleDao.getScheduleOnce(cherga, pidcherga)
         return if (cached != null) {

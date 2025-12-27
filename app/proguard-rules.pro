@@ -22,3 +22,16 @@
 # --- WorkManager ---
 -keep class androidx.work.Worker { *; }
 -keep class androidx.work.ListenableWorker { *; }
+
+# --- Kronos (NTP) ---
+-keep class com.lyft.kronos.** { *; }
+
+# --- Hilt / Dagger ---
+-keep class dagger.hilt.** { *; }
+-keep class javax.inject.** { *; }
+-keep class * extends dagger.hilt.android.internal.managers.ActivityComponentManager
+-keep class * extends dagger.hilt.android.internal.managers.BroadcastReceiverComponentManager
+-keep class * extends dagger.hilt.android.internal.managers.FragmentComponentManager
+-keep class * extends dagger.hilt.android.internal.managers.ServiceComponentManager
+-keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager
+-keep class * extends dagger.hilt.android.internal.managers.ApplicationComponentManager
