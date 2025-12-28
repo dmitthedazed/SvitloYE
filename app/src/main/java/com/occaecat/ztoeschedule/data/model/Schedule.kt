@@ -1,10 +1,12 @@
 package com.occaecat.ztoeschedule.data.model
 
 import com.google.gson.annotations.SerializedName
+import androidx.compose.runtime.Immutable
 
 /**
  * Represents a Schedule entry for power outages
  */
+@Immutable
 data class Schedule(
     @SerializedName("date")
     val date: String,
@@ -26,25 +28,26 @@ data class Schedule(
      */
     val displayText: String
         get() = text ?: when (status) {
-            ScheduleStatus.OUTAGE -> "Відключення"
-            ScheduleStatus.AVAILABLE -> "Світло є"
-            ScheduleStatus.PROBABLE -> "Можливе відключення"
+            ScheduleStatus.Outage -> "Відключення"
+            ScheduleStatus.Available -> "Світло є"
+            ScheduleStatus.Probable -> "Можливе відключення"
             else -> "Невідомо"
         }
 }
 
+@Immutable
 enum class ScheduleStatus {
-    AVAILABLE,   // Green/White
-    OUTAGE,      // Red
-    PROBABLE,    // Yellow
-    UNKNOWN;
+    Available,   // Green/White
+    Outage,      // Red
+    Probable,    // Yellow
+    Unknown;
 
     companion object {
         fun fromColor(color: String): ScheduleStatus = when (color.lowercase()) {
-            "white", "green" -> AVAILABLE
-            "red" -> OUTAGE
-            "yellow" -> PROBABLE
-            else -> UNKNOWN
+            "white", "green" -> Available
+            "red" -> Outage
+            "yellow" -> Probable
+            else -> Unknown
         }
     }
 }

@@ -6,6 +6,9 @@ import java.util.UUID
 /**
  * Represents a saved user address with metadata
  */
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class SavedAddress(
     val id: String = UUID.randomUUID().toString(),
     val name: String, // User defined name: "Home", "Work"

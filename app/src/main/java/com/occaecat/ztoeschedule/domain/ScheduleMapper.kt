@@ -150,6 +150,7 @@ object ScheduleMapper {
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class GroupedSchedule(
     val date: String,
     val span: String,
@@ -169,5 +170,5 @@ data class GroupedSchedule(
         get() = ScheduleMapper.formatDuration(durationHours, durationMinutes)
 
     val isLightOn: Boolean
-        get() = status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
+        get() = status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
 }

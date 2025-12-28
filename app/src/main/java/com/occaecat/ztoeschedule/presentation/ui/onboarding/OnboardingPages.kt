@@ -23,8 +23,8 @@ import com.occaecat.ztoeschedule.data.model.City
 import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
-import com.occaecat.ztoeschedule.presentation.ui.SearchField
 import com.occaecat.ztoeschedule.presentation.ui.SelectionListItem
+import com.occaecat.ztoeschedule.presentation.ui.SearchField
 
 import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
@@ -54,7 +54,7 @@ fun RemSelectionPage(
             ListSkeleton()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
                 items(filteredList) { rem ->
@@ -64,6 +64,15 @@ fun RemSelectionPage(
                     )
                 }
             }
+        }
+        
+        if (!isLoading && query.isEmpty()) {
+            Text(
+                "Оберіть ваш район зі списку або скористайтесь пошуком",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -91,7 +100,7 @@ fun CitySelectionPage(
             ListSkeleton()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
                 items(filteredList) { city ->
@@ -101,6 +110,15 @@ fun CitySelectionPage(
                     )
                 }
             }
+        }
+
+        if (!isLoading && query.isEmpty()) {
+            Text(
+                "Оберіть ваше місто або населений пункт",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -128,7 +146,7 @@ fun StreetSelectionPage(
             ListSkeleton()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
                 items(filteredList) { street ->
@@ -139,10 +157,18 @@ fun StreetSelectionPage(
                 }
             }
         }
+
+        if (!isLoading && query.isEmpty()) {
+            Text(
+                "Почніть вводити назву вулиці для швидкого пошуку",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HouseNumberSelectionPage(
     houseNumbers: List<ParsedHouseNumber>,

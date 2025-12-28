@@ -1,6 +1,8 @@
 package com.occaecat.ztoeschedule.presentation.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.PowerOff
@@ -15,11 +17,19 @@ import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.domain.DailyStats
 
 @Composable
-fun DailyStatisticsCard(stats: DailyStats) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+fun DailyStatisticsCard(
+    stats: DailyStats,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
         shape = MaterialTheme.shapes.extraLarge,
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("daily_statistics_card"),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),

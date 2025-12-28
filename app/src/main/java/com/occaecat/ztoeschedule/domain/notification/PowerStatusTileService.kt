@@ -86,7 +86,7 @@ class PowerStatusTileService : TileService() {
                 val currentStatus = ScheduleMapper.getCurrentGroupedStatus(grouped, timeProvider.now())
 
                 if (currentStatus != null) {
-                    val isLightOn = currentStatus.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
+                    val isLightOn = currentStatus.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
                     val state = if (isLightOn) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
                     val label = if (isLightOn) "Світло є" else "Світла немає"
                     updateTileState(tile, state, label, primaryAddress.name)

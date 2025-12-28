@@ -111,8 +111,8 @@ class MainActivity : ComponentActivity() {
                 handleIntent(intent, viewModel)
             }
 
-            val colorTheme by preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.SYSTEM)
-            val fontScale by preferencesManager.fontScaleFlow.collectAsState(initial = FontScale.NORMAL)
+            val colorTheme by preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.System)
+            val fontScale by preferencesManager.fontScaleFlow.collectAsState(initial = FontScale.Normal)
 
             SvitloYeZhytomyrTheme(
                 themePreference = colorTheme,
@@ -189,6 +189,46 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        ShortcutManagerCompat.setDynamicShortcuts(this, shortcuts)
-    }
-}
+                ShortcutManagerCompat.setDynamicShortcuts(this, shortcuts)
+
+            }
+
+        
+
+            override fun onProvideKeyboardShortcuts(
+
+                data: MutableList<android.view.KeyboardShortcutGroup>?,
+
+                menu: android.view.Menu?,
+
+                deviceId: Int
+
+            ) {
+
+                val navGroup = android.view.KeyboardShortcutGroup(
+
+                    "Навігація",
+
+                    listOf(
+
+                        android.view.KeyboardShortcutGroup("Дії", listOf(
+
+                            android.view.KeyboardShortcutInfo("Додати адресу", android.view.KeyEvent.KEYCODE_N, android.view.KeyEvent.META_CTRL_ON),
+
+                            android.view.KeyboardShortcutInfo("Оновити графіки", android.view.KeyEvent.KEYCODE_R, android.view.KeyEvent.META_CTRL_ON),
+
+                            android.view.KeyboardShortcutInfo("Відкрити меню", android.view.KeyEvent.KEYCODE_M, android.view.KeyEvent.META_CTRL_ON)
+
+                        ))
+
+                    ).flatMap { it.items }
+
+                )
+
+                data?.add(navGroup)
+
+            }
+
+        }
+
+        

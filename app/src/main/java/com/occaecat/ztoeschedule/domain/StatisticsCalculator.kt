@@ -3,7 +3,9 @@ package com.occaecat.ztoeschedule.domain
 import com.occaecat.ztoeschedule.data.model.Schedule
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import androidx.compose.runtime.Immutable
 
+@Immutable
 data class DailyStats(
     val totalOutageMinutes: Int,
     val totalOnMinutes: Int,
@@ -29,13 +31,13 @@ object StatisticsCalculator {
             val duration = getDurationInMinutes(schedule.span)
             
             when (schedule.status) {
-                com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> onMinutes += duration
-                com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> {
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available -> onMinutes += duration
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.Probable -> {
                     // For statistics, we might want to track probable outages separately, 
                     // but for a simple view let's treat it as "potentially off"
                     outageMinutes += duration 
                 }
-                com.occaecat.ztoeschedule.data.model.ScheduleStatus.OUTAGE -> outageMinutes += duration
+                com.occaecat.ztoeschedule.data.model.ScheduleStatus.Outage -> outageMinutes += duration
                 else -> unknownMinutes += duration
             }
         }

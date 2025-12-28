@@ -4,12 +4,14 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.R
@@ -45,9 +48,9 @@ fun SettingsTab(
     statusNotificationEnabled: Boolean = false,
     liveActivityEnabled: Boolean = false,
     lastUpdateTime: String = "",
-    displayMode: DisplayMode = DisplayMode.COMFORTABLE,
-    colorTheme: ColorTheme = ColorTheme.SYSTEM,
-    fontScale: FontScale = FontScale.NORMAL,
+    displayMode: DisplayMode = DisplayMode.Comfortable,
+    colorTheme: ColorTheme = ColorTheme.System,
+    fontScale: FontScale = FontScale.Normal,
     smartNotificationSettings: SmartNotificationSettings = SmartNotificationSettings(),
     notificationMode: Int = 0, // 0: Все, 1: Тільки важливо, 2: Тихо
     onNotificationsEnabledChange: (Boolean) -> Unit = {},
@@ -70,9 +73,7 @@ fun SettingsTab(
 
     var showResetDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
-    var showAdvanceTimeDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
-    var showDisplayModeDialog by remember { mutableStateOf(false) }
     var showFontScaleDialog by remember { mutableStateOf(false) }
     var showSmartSettingsDialog by remember { mutableStateOf(false) }
     
@@ -120,7 +121,35 @@ fun SettingsTab(
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 SettingsListItem(Icons.Default.TextFields, "Розмір тексту", getFontScaleLabel(fontScale), MaterialTheme.colorScheme.secondaryContainer) { showFontScaleDialog = true }
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                SettingsListItem(Icons.Default.ViewAgenda, "Масштаб меню", getDisplayModeLabel(displayMode), MaterialTheme.colorScheme.secondaryContainer) { showDisplayModeDialog = true }
+                
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Масштаб меню",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        DisplayMode.entries.forEachIndexed { index, mode ->
+                            SegmentedButton(
+                                selected = displayMode == mode,
+                                onClick = { onDisplayModeChange(mode) },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = DisplayMode.entries.size),
+                                label = { 
+                                    Text(
+                                        text = when(mode) {
+                                            DisplayMode.Compact -> "Щільний"
+                                            DisplayMode.Comfortable -> "Зручний"
+                                            DisplayMode.Spacious -> "Великий"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -132,7 +161,6 @@ fun SettingsTab(
             color = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                // Main Switch
                 ListItem(
                     headlineContent = { Text("Отримувати сповіщення", fontWeight = FontWeight.Bold) },
                     supportingContent = { Text("Попередження про зміну світла") },
@@ -147,7 +175,10 @@ fun SettingsTab(
                             onCheckedChange = { enabled ->
                                 if (enabled && !notificationManager.hasNotificationPermission()) requestNotificationPermission()
                                 else onNotificationsEnabledChange(enabled)
-                            }
+                            },
+                            thumbContent = if (enableChangeNotifications) {
+                                { Icon(Icons.Default.Check, null, modifier = Modifier.size(SwitchDefaults.IconSize)) }
+                            } else null
                         )
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
@@ -155,18 +186,20 @@ fun SettingsTab(
 
                 if (enableChangeNotifications) {
                     HorizontalDivider(Modifier.padding(16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    
                     Text("Які сповіщення надсилати?", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
-                    
-                    // Simple Mode Selector
                     NotificationModeCard(0, "Все підряд", "Усі зміни та нагадування", notificationMode == 0) { onNotificationModeChange(0) }
                     NotificationModeCard(1, "Тільки важливо", "Тільки коли вимикають світло", notificationMode == 1) { onNotificationModeChange(1) }
                     NotificationModeCard(2, "Тихий режим", "Тільки оновлення в шторці", notificationMode == 2) { onNotificationModeChange(2) }
-
                     Spacer(Modifier.height(8.dp))
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                    SettingsListItem(Icons.Default.Timer, "Попереджати за", "$notificationAdvanceMinutes хв", MaterialTheme.colorScheme.primaryContainer) { showAdvanceTimeDialog = true }
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "Попереджати за", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(text = "$notificationAdvanceMinutes хв", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(value = notificationAdvanceMinutes.toFloat(), onValueChange = { onNotificationAdvanceMinutesChange(it.toInt()) }, valueRange = 0f..60f, steps = 11, colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary, inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant))
+                    }
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     SettingsListItem(Icons.Default.Nightlight, "Тихі години", "${smartNotificationSettings.quietHoursStart}:00 - ${smartNotificationSettings.quietHoursEnd}:00", MaterialTheme.colorScheme.primaryContainer) { showSmartSettingsDialog = true }
                 }
             }
@@ -174,49 +207,32 @@ fun SettingsTab(
 
         // --- 3. ПОСТІЙНИЙ СТАТУС ---
         SectionHeader("Статус у шторці")
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer
-        ) {
+        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
             Column {
                 ListItem(
                     headlineContent = { Text("Постійний статус", fontWeight = FontWeight.SemiBold) },
                     supportingContent = { Text("Бачити стан світла не відкриваючи додаток") },
-                    leadingContent = { 
-                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.size(40.dp)) {
-                            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Bolt, null, tint = MaterialTheme.colorScheme.onTertiaryContainer) }
-                        }
-                    },
-                    trailingContent = {
-                        Switch(checked = localStatusNotification, onCheckedChange = { onStatusNotificationEnabledChange(it) })
-                    },
+                    leadingContent = { Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.size(40.dp)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Bolt, null, tint = MaterialTheme.colorScheme.onTertiaryContainer) } } },
+                    trailingContent = { Switch(checked = localStatusNotification, onCheckedChange = { onStatusNotificationEnabledChange(it) }, thumbContent = if (localStatusNotification) { { Icon(Icons.Default.Check, null, modifier = Modifier.size(SwitchDefaults.IconSize)) } } else null) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
-                if (localStatusNotification) {
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    ListItem(
-                        headlineContent = { Text("Live Activity") },
-                        supportingContent = { Text("Більше інформації та таймер (Android 13+)") },
-                        leadingContent = { 
-                             Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(40.dp)) {
-                                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Widgets, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            }
-                        },
-                        trailingContent = { Switch(checked = liveActivityEnabled, onCheckedChange = onLiveActivityEnabledChange, modifier = Modifier.scale(0.85f)) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
+                AnimatedVisibility(visible = localStatusNotification, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Column {
+                        HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ListItem(
+                            headlineContent = { Text("Live Activity") },
+                            supportingContent = { Text("Більше інформації та таймер (Android 13+)") },
+                            leadingContent = { Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(40.dp)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Widgets, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) } } },
+                            trailingContent = { Switch(checked = liveActivityEnabled, onCheckedChange = onLiveActivityEnabledChange, modifier = Modifier.scale(0.85f), thumbContent = if (liveActivityEnabled) { { Icon(Icons.Default.Check, null, modifier = Modifier.size(SwitchDefaults.IconSize)) } } else null) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                    }
                 }
             }
         }
 
-        // --- 4. ДОДАТОК ---
         SectionHeader("Додаток")
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer
-        ) {
+        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
             Column {
                 SettingsListItem(Icons.Default.Info, "СвітлоЄ? Житомир", "Версія 1.1.0", MaterialTheme.colorScheme.surfaceVariant) {}
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -225,24 +241,21 @@ fun SettingsTab(
                 SettingsListItem(Icons.Default.DeleteForever, "Видалити всі дані", "Очистити пам'ять", MaterialTheme.colorScheme.errorContainer) { showClearDialog = true }
             }
         }
-        
         Spacer(Modifier.height(64.dp))
     }
 
-    // --- DIALOGS (same logic, simplified UI) ---
-    if (showResetDialog) AlertDialog(onDismissRequest = { showResetDialog = false }, title = { Text("Скинути налаштування?") }, confirmButton = { TextButton(onClick = { showResetDialog = false; onResetOnboarding() }) { Text("Так") } }, dismissButton = { TextButton(onClick = { showResetDialog = false }) { Text("Скасувати") } })
-    if (showClearDialog) AlertDialog(onDismissRequest = { showClearDialog = false }, title = { Text("Видалити все?") }, confirmButton = { TextButton(onClick = { showClearDialog = false; onClearData() }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("ВИДАЛИТИ") } })
-    if (showAdvanceTimeDialog) {
-        val options = listOf(5, 10, 15, 30, 60)
-        AlertDialog(onDismissRequest = { showAdvanceTimeDialog = false }, title = { Text("За скільки хвилин?") }, text = { Column { options.forEach { min -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onNotificationAdvanceMinutesChange(min); showAdvanceTimeDialog = false }.padding(12.dp)) { RadioButton(selected = notificationAdvanceMinutes == min, onClick = null); Text("$min хвилин", modifier = Modifier.padding(start = 8.dp)) } } } }, confirmButton = {})
-    }
-    if (showThemeDialog) AlertDialog(onDismissRequest = { showThemeDialog = false }, title = { Text("Тема") }, text = { Column { ColorTheme.entries.forEach { t -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onColorThemeChange(t); showThemeDialog = false }.padding(12.dp)) { RadioButton(selected = colorTheme == t, onClick = null); Text(getColorThemeLabel(t), modifier = Modifier.padding(start = 8.dp)) } } } }, confirmButton = {})
-    if (showDisplayModeDialog) AlertDialog(onDismissRequest = { showDisplayModeDialog = false }, title = { Text("Масштаб") }, text = { Column { DisplayMode.entries.forEach { m -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onDisplayModeChange(m); showDisplayModeDialog = false }.padding(12.dp)) { RadioButton(selected = displayMode == m, onClick = null); Text(getDisplayModeLabel(m), modifier = Modifier.padding(start = 8.dp)) } } } }, confirmButton = {})
-    if (showFontScaleDialog) AlertDialog(onDismissRequest = { showFontScaleDialog = false }, title = { Text("Розмір тексту") }, text = { Column { FontScale.entries.forEach { s -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onFontScaleChange(s); showFontScaleDialog = false }.padding(12.dp)) { RadioButton(selected = fontScale == s, onClick = null); Text(getFontScaleLabel(s), modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyLarge.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize * s.multiplier)) } } } }, confirmButton = {})
+    if (showResetDialog) { AlertDialog(onDismissRequest = { showResetDialog = false }, icon = { Icon(Icons.Default.SettingsBackupRestore, null) }, title = { Text("Скинути налаштування?") }, text = { Text("Додаток повернеться до початкового стану.") }, confirmButton = { TextButton(onClick = { showResetDialog = false; onResetOnboarding() }) { Text("Скинути") } }, dismissButton = { TextButton(onClick = { showResetDialog = false }) { Text("Скасувати") } }) }
+    if (showClearDialog) { AlertDialog(onDismissRequest = { showClearDialog = false }, icon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) }, title = { Text("Видалити всі дані?") }, text = { Text("Всі збережені адреси та налаштування будуть видалені.") }, confirmButton = { Button(onClick = { showClearDialog = false; onClearData() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("ВИДАЛИТИ ВСЕ") } }, dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("Скасувати") } }) }
+    if (showThemeDialog) { AlertDialog(onDismissRequest = { showThemeDialog = false }, title = { Text("Тема") }, text = { Column(Modifier.selectableGroup()) { ColorTheme.entries.forEach { t -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().selectable(selected = (colorTheme == t), onClick = { onColorThemeChange(t); showThemeDialog = false }, role = Role.RadioButton).padding(12.dp)) { RadioButton(selected = colorTheme == t, onClick = null); Text(getColorThemeLabel(t), modifier = Modifier.padding(start = 8.dp)) } } } }, confirmButton = {}) }
+    if (showFontScaleDialog) { AlertDialog(onDismissRequest = { showFontScaleDialog = false }, title = { Text("Розмір тексту") }, text = { Column(Modifier.selectableGroup()) { FontScale.entries.forEach { s -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().selectable(selected = (fontScale == s), onClick = { onFontScaleChange(s); showFontScaleDialog = false }, role = Role.RadioButton).padding(12.dp)) { RadioButton(selected = fontScale == s, onClick = null); Text(getFontScaleLabel(s), modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyLarge.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize * s.multiplier)) } } } }, confirmButton = {}) }
     if (showSmartSettingsDialog) {
-        var startHour by remember { mutableIntStateOf(smartNotificationSettings.quietHoursStart) }
-        var endHour by remember { mutableIntStateOf(smartNotificationSettings.quietHoursEnd) }
-        AlertDialog(onDismissRequest = { showSmartSettingsDialog = false }, title = { Text("Тихі години") }, text = { Column { Text("Додаток не буде турбувати вас у цей час:"); Spacer(Modifier.height(16.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("З"); TextButton(onClick = { startHour = (startHour + 1) % 24 }) { Text("${startHour}:00", style = MaterialTheme.typography.headlineMedium) } }; Text("—", modifier = Modifier.padding(top = 24.dp)); Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("До"); TextButton(onClick = { endHour = (endHour + 1) % 24 }) { Text("${endHour}:00", style = MaterialTheme.typography.headlineMedium) } } } } }, confirmButton = { TextButton(onClick = { onSmartNotificationSettingsChange(smartNotificationSettings.copy(quietHoursStart = startHour, quietHoursEnd = endHour)); showSmartSettingsDialog = false }) { Text("Зберегти") } })
+        var range by remember { mutableStateOf(smartNotificationSettings.quietHoursStart.toFloat()..(if (smartNotificationSettings.quietHoursEnd < smartNotificationSettings.quietHoursStart) smartNotificationSettings.quietHoursEnd + 24f else smartNotificationSettings.quietHoursEnd.toFloat())) }
+        var isWorkdayOnly by remember { mutableStateOf(smartNotificationSettings.workdayMode) }
+        AlertDialog(
+            onDismissRequest = { showSmartSettingsDialog = false }, title = { Text("Тихі години") },
+            text = { Column { Text("Виберіть період без звуку:"); Spacer(Modifier.height(24.dp)); val start = range.start.toInt() % 24; val end = range.endInclusive.toInt() % 24; Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${start}:00", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary); Icon(Icons.Default.ArrowForward, null, modifier = Modifier.padding(top = 4.dp), tint = MaterialTheme.colorScheme.outline); Text("${end}:00", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }; Spacer(Modifier.height(8.dp)); RangeSlider(value = range, onValueChange = { range = it }, valueRange = 0f..24f, steps = 23, colors = SliderDefaults.colors(activeTrackColor = MaterialTheme.colorScheme.primary, inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant)); Text(text = "Тривалість: ${range.endInclusive.toInt() - range.start.toInt()} год", style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally), color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(24.dp)); HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)); Spacer(Modifier.height(16.dp)); Row(Modifier.fillMaxWidth().clickable { isWorkdayOnly = !isWorkdayOnly }, verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = isWorkdayOnly, onCheckedChange = { isWorkdayOnly = it }); Text(text = "Тільки у будні", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 8.dp)) }; Text(text = "У вихідні сповіщення приходитимуть без обмежень", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 48.dp)) } },
+            confirmButton = { TextButton(onClick = { onSmartNotificationSettingsChange(smartNotificationSettings.copy(quietHoursStart = range.start.toInt() % 24, quietHoursEnd = range.endInclusive.toInt() % 24, workdayMode = isWorkdayOnly)); showSmartSettingsDialog = false }) { Text("Зберегти") } }
+        )
     }
 }
 
@@ -254,15 +267,9 @@ private fun SectionHeader(title: String) {
 @Composable
 private fun SettingsListItem(icon: ImageVector, title: String, subtitle: String, color: Color, onClick: () -> Unit) {
     ListItem(
-        headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
-        supportingContent = { Text(subtitle) },
-        leadingContent = { 
-            Surface(shape = CircleShape, color = color, modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)) }
-            }
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable { onClick() }
+        headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) }, supportingContent = { Text(subtitle) },
+        leadingContent = { Surface(shape = CircleShape, color = color, modifier = Modifier.size(40.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)) } } },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent), modifier = Modifier.clickable { onClick() }
     )
 }
 
@@ -270,20 +277,13 @@ private fun SettingsListItem(icon: ImageVector, title: String, subtitle: String,
 private fun NotificationModeCard(id: Int, title: String, desc: String, isSelected: Boolean, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clickable { onClick() },
-        shape = MaterialTheme.shapes.medium,
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        shape = MaterialTheme.shapes.medium, color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = isSelected, onClick = null)
-            Column(Modifier.padding(start = 12.dp)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Text(desc, style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = isSelected, onClick = null); Column(Modifier.padding(start = 12.dp)) { Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold); Text(desc, style = MaterialTheme.typography.bodySmall) } }
     }
 }
 
-private fun getColorThemeLabel(t: ColorTheme) = when(t) { ColorTheme.SYSTEM -> "Системна"; ColorTheme.LIGHT -> "Світла"; ColorTheme.DARK -> "Темна"; ColorTheme.AMOLED -> "AMOLED"; ColorTheme.CONTRAST -> "Контрастна" }
-private fun getFontScaleLabel(s: FontScale) = when(s) { FontScale.SMALL -> "Дрібний"; FontScale.NORMAL -> "Стандарт"; FontScale.LARGE -> "Великий"; FontScale.XLARGE -> "Дуже великий"; FontScale.ACCESSIBILITY -> "Максимальний" }
-private fun getDisplayModeLabel(m: DisplayMode) = when(m) { DisplayMode.COMPACT -> "Щільний"; DisplayMode.COMFORTABLE -> "Зручний"; DisplayMode.SPACIOUS -> "Великий" }
+private fun getColorThemeLabel(t: ColorTheme) = when(t) { ColorTheme.System -> "Системна"; ColorTheme.Light -> "Світла"; ColorTheme.Dark -> "Темна"; ColorTheme.Amoled -> "AMOLED"; ColorTheme.Contrast -> "Контрастна" }
+private fun getFontScaleLabel(s: FontScale) = when(s) { FontScale.Small -> "Дрібний"; FontScale.Normal -> "Стандарт"; FontScale.Large -> "Великий"; FontScale.Xlarge -> "Дуже великий"; FontScale.Accessibility -> "Максимальний" }
+private fun getDisplayModeLabel(m: DisplayMode) = when(m) { DisplayMode.Compact -> "Щільний"; DisplayMode.Comfortable -> "Зручний"; DisplayMode.Spacious -> "Великий" }

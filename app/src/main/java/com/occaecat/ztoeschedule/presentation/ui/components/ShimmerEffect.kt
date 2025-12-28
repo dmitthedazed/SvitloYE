@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.invisibleToUser
 
 fun Modifier.shimmerEffect(): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "shimmer")
@@ -45,6 +47,7 @@ fun Modifier.shimmerEffect(): Modifier = composed {
     background(brush)
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun ShimmerItem(
     height: Dp,
@@ -57,5 +60,6 @@ fun ShimmerItem(
             .height(height)
             .background(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), shape = shape)
             .shimmerEffect()
+            .semantics { invisibleToUser() }
     )
 }

@@ -105,8 +105,8 @@ object ScheduleImageGenerator {
             items.forEach { item ->
                 // Status Indicator
                 val color = when (item.status) {
-                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE -> greenPaint
-                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE -> yellowPaint
+                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available -> greenPaint
+                    com.occaecat.ztoeschedule.data.model.ScheduleStatus.Probable -> yellowPaint
                     else -> redPaint
                 }
                 

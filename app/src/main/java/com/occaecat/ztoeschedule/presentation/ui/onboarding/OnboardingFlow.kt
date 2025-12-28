@@ -63,6 +63,12 @@ fun OnboardingFlow(
     // Step 0: Welcome, 1: Permissions, 2: REM, 3: City, 4: Street, 5: House, 6: Customize
     var step by remember { mutableIntStateOf(if (showWelcome) 0 else 2) }
     
+    // Support system back gesture to go to previous step
+    val canGoBack = step > (if (showWelcome) 0 else 2)
+    androidx.activity.compose.BackHandler(enabled = canGoBack) {
+        step--
+    }
+
     var selectedRem by remember { mutableStateOf<Rem?>(null) }
     var selectedCity by remember { mutableStateOf<City?>(null) }
     var selectedStreet by remember { mutableStateOf<Street?>(null) }
@@ -84,7 +90,9 @@ fun OnboardingFlow(
         if (remList.isEmpty()) onLoadRem()
     }
 
+    // Add statusBarsPadding to the main container
     Scaffold(
+        modifier = Modifier.statusBarsPadding(),
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
