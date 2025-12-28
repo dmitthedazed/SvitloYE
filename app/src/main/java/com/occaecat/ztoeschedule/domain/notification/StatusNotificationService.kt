@@ -30,10 +30,10 @@ import javax.inject.Inject
 class StatusNotificationService : Service() {
 
     companion object {
-        private const val CHANNEL_ID = "power_status_channel"
-        private const val CHANNEL_NAME = "СвітлоЄ? Статус"
-        private const val NOTIFICATION_ID = 2001
-        private const val UPDATE_INTERVAL_MS = 60_000L // 1 minute
+        private const val ChannelId = "power_status_channel"
+        private const val ChannelName = "СвітлоЄ? Статус"
+        private const val NotificationId = 2001
+        private const val UpdateIntervalMs = 60_000L // 1 minute
 
         fun start(context: Context) {
             val intent = Intent(context, StatusNotificationService::class.java)
@@ -64,14 +64,14 @@ class StatusNotificationService : Service() {
         createNotificationChannel()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                startForeground(NotificationId, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
-                startForeground(NOTIFICATION_ID, createNotification())
+                startForeground(NotificationId, createNotification())
             }
         } catch (e: Exception) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(NOTIFICATION_ID, createNotification())
+                notificationManager.notify(NotificationId, createNotification())
             }
             stopSelf()
         }
@@ -89,7 +89,7 @@ class StatusNotificationService : Service() {
 
     private fun createNotificationChannel() {
         val importance = NotificationManager.IMPORTANCE_LOW
-        val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
+        val channel = NotificationChannel(ChannelId, ChannelName, importance).apply {
             description = "Постійне відображення наявності світла"
             setShowBadge(false)
         }
@@ -119,7 +119,7 @@ class StatusNotificationService : Service() {
             val ticker = flow {
                 while (true) {
                     emit(Unit)
-                    delay(UPDATE_INTERVAL_MS)
+                    delay(UpdateIntervalMs)
                 }
             }
 
@@ -149,7 +149,7 @@ class StatusNotificationService : Service() {
                     address = selection.addressName
                 )
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(NOTIFICATION_ID, notification)
+                notificationManager.notify(NotificationId, notification)
             }
         }
     }
@@ -168,8 +168,8 @@ class StatusNotificationService : Service() {
         }
         val refreshPendingIntent = PendingIntent.getBroadcast(this, 1, refreshIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-        val isPowerOn = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE
-        val isWarning = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.PROBABLE
+        val isPowerOn = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
+        val isWarning = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Probable
         
         val endTime = TimeUtils.formatToSystemTime(this, current.endTime)
         

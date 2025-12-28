@@ -31,44 +31,47 @@ fun AddAddressScreen(
 ) {
     var tempSelection by remember { mutableStateOf<TempSelection?>(null) }
 
-    AnimatedContent(
-        targetState = tempSelection != null,
-        transitionSpec = {
-            if (targetState) {
-                (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
-            } else {
-                (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
-            }
-        },
-        label = "add_address_transition"
-    ) { isCustomizing ->
-        if (!isCustomizing) {
-            AddressSelectionFlow(
-                remList = remList,
-                cityList = cityList,
-                streetList = streetList,
-                houseNumbers = houseNumbers,
-                searchQuery = searchQuery,
-                isLoading = isLoading,
-                onLoadRem = onLoadRem,
-                onLoadCity = onLoadCity,
-                onLoadStreet = onLoadStreet,
-                onLoadAddress = onLoadAddress,
-                onSearchQueryChange = onSearchQueryChange,
-                onClearSearch = onClearSearch,
-                onCancel = onBack,
-                onComplete = { rI: String?, rN: String?, cI: String?, cN: String?, sI: String?, sN: String?, aI: String, aN: String, c: Int, p: Int ->
-                    tempSelection = TempSelection(rI ?: "", rN ?: "", cI ?: "", cN ?: "", sI ?: "", sN ?: "", aI, aN, c, p)
+    // Add statusBarsPadding here because this screen doesn't use the main Scaffold's top bar
+    Box(modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
+        AnimatedContent(
+            targetState = tempSelection != null,
+            transitionSpec = {
+                if (targetState) {
+                    (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
+                } else {
+                    (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
                 }
-            )
-        } else {
-            AddressCustomizationScreen(
-                onComplete = { name: String, icon: String ->
-                    val s = tempSelection!!
-                    onSaveAddress(name, icon, s.remId, s.remName, s.cityId, s.cityName, s.streetId, s.streetName, s.addressId, s.addressName, s.cherga, s.pidcherga)
-                },
-                onBack = { tempSelection = null }
-            )
+            },
+            label = "add_address_transition"
+        ) { isCustomizing ->
+            if (!isCustomizing) {
+                AddressSelectionFlow(
+                    remList = remList,
+                    cityList = cityList,
+                    streetList = streetList,
+                    houseNumbers = houseNumbers,
+                    searchQuery = searchQuery,
+                    isLoading = isLoading,
+                    onLoadRem = onLoadRem,
+                    onLoadCity = onLoadCity,
+                    onLoadStreet = onLoadStreet,
+                    onLoadAddress = onLoadAddress,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onClearSearch = onClearSearch,
+                    onCancel = onBack,
+                    onComplete = { rI: String?, rN: String?, cI: String?, cN: String?, sI: String?, sN: String?, aI: String, aN: String, c: Int, p: Int ->
+                        tempSelection = TempSelection(rI ?: "", rN ?: "", cI ?: "", cN ?: "", sI ?: "", sN ?: "", aI, aN, c, p)
+                    }
+                )
+            } else {
+                AddressCustomizationScreen(
+                    onComplete = { name: String, icon: String ->
+                        val s = tempSelection!!
+                        onSaveAddress(name, icon, s.remId, s.remName, s.cityId, s.cityName, s.streetId, s.streetName, s.addressId, s.addressName, s.cherga, s.pidcherga)
+                    },
+                    onBack = { tempSelection = null }
+                )
+            }
         }
     }
 }

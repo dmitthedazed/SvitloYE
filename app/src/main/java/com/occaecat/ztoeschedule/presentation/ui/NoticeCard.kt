@@ -1,6 +1,7 @@
 package com.occaecat.ztoeschedule.presentation.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -9,8 +10,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.fromHtml
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Material 3 Notice Card for displaying important schedule messages
@@ -25,20 +35,35 @@ import androidx.compose.ui.unit.dp
  * @param message The formatted message text to display
  * @param modifier Optional modifier
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun NoticeCard(
     message: String,
     modifier: Modifier = Modifier
 ) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
     // Check if message contains attention keyword
     val isAttention = message.contains("УВАГА", ignoreCase = true) ||
                       message.contains("УВАГА!", ignoreCase = true) ||
                       message.contains("ATTENTION", ignoreCase = true)
 
+    val cardModifier = modifier
+        .fillMaxWidth()
+        .combinedClickable(
+            onClick = { },
+            onLongClick = {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                clipboardManager.setText(AnnotatedString(message))
+            },
+            onLongClickLabel = "копіювати текст повідомлення"
+        )
+
     // Use OutlinedCard for attention messages to show border
     if (isAttention) {
         OutlinedCard(
-            modifier = modifier.fillMaxWidth(),
+            modifier = cardModifier,
             colors = CardDefaults.outlinedCardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
@@ -47,13 +72,10 @@ fun NoticeCard(
             NoticeCardContent(message = message, isAttention = true)
         }
     } else {
-        ElevatedCard(
-            modifier = modifier.fillMaxWidth(),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            elevation = CardDefaults.elevatedCardElevation(
-                defaultElevation = 4.dp
+        Card(
+            modifier = cardModifier,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             )
         ) {
             NoticeCardContent(message = message, isAttention = false)
@@ -105,17 +127,20 @@ private fun NoticeCardContent(
 
         // Divider
         HorizontalDivider(
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
 
         // Selectable message text
         if (message.isNotBlank()) {
             SelectionContainer {
                 Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = AnnotatedString.fromHtml(message),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        lineBreak = LineBreak.Paragraph,
+                        hyphens = Hyphens.Auto
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.2
+                    lineHeight = 20.sp
                 )
             }
         } else {

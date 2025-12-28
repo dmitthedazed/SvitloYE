@@ -1,10 +1,10 @@
 package com.occaecat.ztoeschedule.data.model
 
 data class SmartNotificationSettings(
-    val quietHoursStart: Int = 22, // 22:00
-    val quietHoursEnd: Int = 7,    // 07:00
+    val quietHoursStart: Int = 22,
+    val quietHoursEnd: Int = 7,
     val workdayMode: Boolean = false,
-    val priorityMode: PriorityMode = PriorityMode.SMART
+    val priorityMode: PriorityMode = PriorityMode.Smart
 ) {
     fun isQuietHour(currentHour: Int): Boolean {
         return if (quietHoursStart <= quietHoursEnd) {
@@ -16,8 +16,7 @@ data class SmartNotificationSettings(
 }
 
 enum class PriorityMode {
-    ALL,           // Всі сповіщення (увімк/вимк/попередження)
-    SMART,         // Тільки реальні зміни статусу (без попереджень, якщо статус не змінився)
-    CRITICAL_ONLY, // Тільки про ВІДКЛЮЧЕННЯ (коли світло зникає)
-    SILENT         // Без звуку/вібрації (тільки візуально в шторці)
+    All,
+    Important,
+    Smart
 }

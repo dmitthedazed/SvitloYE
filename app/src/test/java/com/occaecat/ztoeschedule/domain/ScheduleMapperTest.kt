@@ -74,7 +74,7 @@ class ScheduleMapperTest {
         val endMs = parseTimeToMs(date, end)
         return GroupedSchedule(
             date = date, span = "$start-$end", startTime = start, endTime = end,
-            color = "green", status = com.occaecat.ztoeschedule.data.model.ScheduleStatus.AVAILABLE,
+            color = "green", status = com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available,
             text = null, displayText = "On", durationHours = 2, durationMinutes = 0,
             intervalCount = 1, startMs = startMs, endMs = endMs
         )

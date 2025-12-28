@@ -15,43 +15,58 @@ import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.data.model.FontScale
 
 val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = PrimaryDark,
+    secondary = SecondaryDark,
+    tertiary = TertiaryDark
 )
 
 val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = PrimaryLight,
+    onPrimary = OnPrimaryLight,
+    primaryContainer = PrimaryContainerLight,
+    onPrimaryContainer = OnPrimaryContainerLight,
+    secondary = SecondaryLight,
+    onSecondary = OnSecondaryLight,
+    secondaryContainer = SecondaryContainerLight,
+    onSecondaryContainer = OnSecondaryContainerLight,
+    tertiary = TertiaryLight,
+    onTertiary = OnTertiaryLight,
+    tertiaryContainer = TertiaryContainerLight,
+    onTertiaryContainer = OnTertiaryContainerLight
 )
 
 val AmoledColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80,
+    primary = PrimaryDark,
+    secondary = SecondaryDark,
+    tertiary = TertiaryDark,
     background = Color.Black,
     surface = Color.Black,
+    surfaceVariant = Color(0xFF121212),
     onBackground = Color.White,
-    onSurface = Color.White
+    onSurface = Color.White,
+    outline = Color(0xFF333333)
 )
 
 val ContrastColorScheme = lightColorScheme(
     primary = Color.Black,
     onPrimary = Color.White,
-    secondary = Color.DarkGray,
+    primaryContainer = Color(0xFF222222),
+    onPrimaryContainer = Color.White,
+    secondary = Color(0xFF333333),
+    onSecondary = Color.White,
     background = Color.White,
     surface = Color.White,
     onBackground = Color.Black,
     onSurface = Color.Black,
-    error = Color.Red,
-    onError = Color.White
+    error = Color(0xFFB00020),
+    onError = Color.White,
+    outline = Color.Black
 )
 
 @Composable
 fun SvitloYeZhytomyrTheme(
-    themePreference: ColorTheme = ColorTheme.SYSTEM,
-    fontScalePreference: FontScale = FontScale.NORMAL,
+    themePreference: ColorTheme = ColorTheme.System,
+    fontScalePreference: FontScale = FontScale.Normal,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
@@ -61,30 +76,31 @@ fun SvitloYeZhytomyrTheme(
     val isDynamicSupported = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val colorScheme = when (themePreference) {
-        ColorTheme.SYSTEM -> {
+        ColorTheme.System -> {
             if (isDynamicSupported) {
                 if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             } else {
                 if (systemDark) DarkColorScheme else LightColorScheme
             }
         }
-        ColorTheme.LIGHT -> {
+        ColorTheme.Light -> {
             if (isDynamicSupported) dynamicLightColorScheme(context) else LightColorScheme
         }
-        ColorTheme.DARK -> {
+        ColorTheme.Dark -> {
             if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
         }
-        ColorTheme.AMOLED -> {
+        ColorTheme.Amoled -> {
             val base = if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
             base.copy(
                 background = Color.Black,
                 surface = Color.Black,
-                surfaceVariant = Color(0xFF111111), // Slightly lighter for cards
+                surfaceVariant = Color(0xFF121212),
                 onBackground = Color.White,
-                onSurface = Color.White
+                onSurface = Color.White,
+                outline = Color(0xFF333333)
             )
         }
-        ColorTheme.CONTRAST -> ContrastColorScheme
+        ColorTheme.Contrast -> ContrastColorScheme
     }
 
     // Apply font scaling to all typography styles

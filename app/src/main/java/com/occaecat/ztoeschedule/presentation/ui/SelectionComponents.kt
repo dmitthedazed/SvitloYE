@@ -16,6 +16,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.focus.*
+import androidx.compose.ui.input.key.*
+import androidx.compose.animation.animateContentSize
+import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.handwriting.handwritingDetector
 
 /**
  * Stepper для отображения прогресса выбора
@@ -42,14 +50,24 @@ fun SelectionStepper(
                 modifier = Modifier.weight(1f)
             ) {
                 // Номер шага
+                val targetSurfaceColor = when {
+                    isActive -> MaterialTheme.colorScheme.primary
+                    isCompleted -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+                val surfaceColor by androidx.compose.animation.animateColorAsState(targetSurfaceColor, label = "step_bg")
+
+                val targetContentColor = if (isActive) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                val contentColor by androidx.compose.animation.animateColorAsState(targetContentColor, label = "step_content")
+
                 Surface(
                     modifier = Modifier.size(32.dp),
                     shape = CircleShape,
-                    color = when {
-                        isActive -> MaterialTheme.colorScheme.primary
-                        isCompleted -> MaterialTheme.colorScheme.primaryContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
+                    color = surfaceColor
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (isCompleted) {
@@ -62,11 +80,7 @@ fun SelectionStepper(
                         } else {
                             Text(
                                 text = "${index + 1}",
-                                color = if (isActive) {
-                                    MaterialTheme.colorScheme.onPrimary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                                color = contentColor,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                             )
@@ -162,7 +176,91 @@ fun StepHeader(
 }
 
 /**
- * Поле поиска
+ * Современное поле поиска на базе SearchBar
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModernSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+
+    // Handle system back button when search is expanded
+    androidx.activity.compose.BackHandler(enabled = expanded) {
+        expanded = false
+    }
+
+    // Auto-focus when expanded
+    LaunchedEffect(expanded) {
+        if (expanded) {
+            delay(100) // Small delay to ensure SearchBar is ready
+            focusRequester.requestFocus()
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = if (expanded) 0.dp else 16.dp)
+            .animateContentSize()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp && event.key == Key.Escape && expanded) {
+                    expanded = false
+                    true
+                } else false
+            }
+    ) {
+        SearchBar(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp && event.key == Key.Enter) {
+                        onSearch(query)
+                        expanded = false
+                        true
+                    } else false
+                },
+            inputField = {
+                SearchBarDefaults.InputField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onSearch = { 
+                        onSearch(it)
+                        expanded = false 
+                    },
+                    expanded = expanded,
+                    onExpandedChange = { expanded = it },
+                    placeholder = { Text(placeholder) },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { onQueryChange("") }) {
+                                Icon(Icons.Default.Close, "Очистити")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .focusRequester(focusRequester)
+                        .handwritingDetector {
+                            focusRequester.requestFocus()
+                        }
+                )
+            },
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
+            content = content
+        )
+    }
+}
+
+/**
+ * Поле поиска (старая реализация, сохранена для совместимости или простого ввода)
  */
 @Composable
 fun SearchField(
@@ -211,11 +309,18 @@ fun SelectionListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isFocused by remember { mutableStateOf(false) }
     Card(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .onFocusChanged { isFocused = it.isFocused }
+            .border(
+                width = 2.dp,
+                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = MaterialTheme.shapes.large
+            ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),

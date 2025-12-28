@@ -61,7 +61,7 @@ fun AddressCustomizationScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .windowInsetsPadding(WindowInsets.safeDrawing), // Handle gesture nav
+                        .navigationBarsPadding(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedButton(
@@ -108,73 +108,32 @@ fun AddressCustomizationScreen(
                 fontWeight = FontWeight.SemiBold
             )
 
-            // Grid needs fixed height inside scrollable column? No, FlowRow or similar is better for responsiveness.
-            // But LazyVerticalGrid doesn't nest well in Column.
-            // Let's use a FlowRow equivalent or a custom grid layout loop since items are few (6).
-            // Or just calculate rows manually.
-            
-            // Simple grid layout using Rows
-            val rows = availableIcons.chunked(3)
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                rows.forEach { rowItems ->
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                availableIcons.chunked(2).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        rowItems.forEach { item ->
+                        row.forEach { item ->
                             val isSelected = selectedIconName == item.name
-                            AddressIconItem(
-                                item = item,
-                                isSelected = isSelected,
+                            FilterChip(
+                                selected = isSelected,
                                 onClick = { selectedIconName = item.name },
-                                modifier = Modifier.weight(1f)
+                                label = { Text(item.label) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = item.icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.large
                             )
-                        }
-                        // Fill empty space if row is incomplete
-                        repeat(3 - rowItems.size) {
-                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AddressIconItem(
-    item: AddressIcon,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
-            .padding(8.dp)
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.size(64.dp) // Slightly larger touch target
-        ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = null,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxSize(),
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = item.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
     }
 }

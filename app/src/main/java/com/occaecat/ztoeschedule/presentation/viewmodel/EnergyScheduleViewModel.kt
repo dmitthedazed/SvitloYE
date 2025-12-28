@@ -47,9 +47,7 @@ class EnergyScheduleViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // Restore inspected address if process was killed
             val restoredInspectId = savedStateHandle.get<String>("inspected_id")
-
             try {
                 launch {
                     networkObserver.isConnected.collect { connected ->
@@ -60,21 +58,16 @@ class EnergyScheduleViewModel @Inject constructor(
                 }
                 launch { loadNotificationSettings() }
                 launch { loadThemeSettings() }
-                
                 launch {
                     combine(repository.getOnboardingCompletedFlow(), repository.getSavedSelectionFlow()) { completed, selection ->
                         Pair(completed, selection)
                     }.collect { (completed, selection) ->
                         _uiState.update { it.copy(onboardingCompleted = completed, hasSavedSelection = selection != null, isInitialLoadComplete = true) }
                         loadSavedAddresses()
-                        
-                        // Try to restore inspected address after addresses are loaded
                         if (restoredInspectId != null) {
                             val addresses = repository.getSavedAddresses()
                             val found = addresses.find { it.id == restoredInspectId }
-                            if (found != null) {
-                                startInspectingAddress(found)
-                            }
+                            if (found != null) { startInspectingAddress(found) }
                         }
                     }
                 }
@@ -87,14 +80,9 @@ class EnergyScheduleViewModel @Inject constructor(
     fun refreshAllSchedules() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, lastLoadFailed = false) }
-            launch {
-                repository.getMessages().onSuccess { messages ->
-                    _uiState.update { it.copy(infoMessages = messages, formattedMessage = formatMessages(messages)) }
-                }
-            }
+            launch { repository.getMessages().onSuccess { messages -> _uiState.update { it.copy(infoMessages = messages, formattedMessage = formatMessages(messages)) } } }
             val addresses = repository.getSavedAddresses().sortedBy { it.priority }
-            val deferreds = addresses.map { address -> async { loadSingleAddressData(address) } }
-            val results = deferreds.awaitAll()
+            val results = addresses.map { async { loadSingleAddressData(it) } }.awaitAll()
             _uiState.update { it.copy(addressDataList = results, isLoading = false) }
             refreshAllStatuses(addresses)
         }
@@ -104,56 +92,35 @@ class EnergyScheduleViewModel @Inject constructor(
         val result = repository.getScheduleWithMessages(address.cherga, address.pidcherga)
         return if (result.isSuccess) {
             val data = result.getOrThrow()
-            AddressDataState(
-                address = address,
-                scheduleList = data.schedules,
-                groupedSchedule = ScheduleMapper.getGroupedSchedule(data.schedules),
-                currentStatus = repository.getCurrentStatus(data.schedules),
-                isOffline = false,
-                lastUpdateTime = LocalTime.now().withNano(0).toString()
-            )
+            AddressDataState(address, data.schedules, ScheduleMapper.getGroupedSchedule(data.schedules), repository.getCurrentStatus(data.schedules), false, false, LocalTime.now().withNano(0).toString())
         } else {
-            val existing = _uiState.value.addressDataList.find { it.address.id == address.id }
-            existing?.copy(isOffline = true) ?: AddressDataState(address = address, isOffline = true)
+            _uiState.value.addressDataList.find { it.address.id == address.id }?.copy(isOffline = true) ?: AddressDataState(address, isOffline = true)
         }
     }
 
-    fun loadSavedAddresses() {
-        viewModelScope.launch {
-            val addresses = repository.getSavedAddresses().sortedBy { it.priority }
-            _uiState.update { it.copy(savedAddresses = addresses) }
-            refreshAllSchedules()
-        }
-    }
+    fun loadSavedAddresses() { viewModelScope.launch { val addrs = repository.getSavedAddresses().sortedBy { it.priority }; _uiState.update { it.copy(savedAddresses = addrs) }; refreshAllSchedules() } }
 
     private fun refreshAllStatuses(addresses: List<SavedAddress>) {
-        if (addresses.isEmpty()) {
-            _uiState.update { it.copy(addressStatuses = emptyMap()) }; return
-        }
+        if (addresses.isEmpty()) { _uiState.update { it.copy(addressStatuses = emptyMap()) }; return }
         viewModelScope.launch {
             val statusMap = mutableMapOf<String, GroupedSchedule?>()
             val nowMs = timeProvider.now()
             addresses.forEach { address ->
-                val cachedData = _uiState.value.addressDataList.find { it.address.id == address.id }
-                if (cachedData != null && cachedData.groupedSchedule.isNotEmpty()) {
-                    statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(cachedData.groupedSchedule, nowMs)
-                } else {
-                    repository.getSchedule(address.cherga, address.pidcherga).onSuccess { schedules ->
-                        statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(ScheduleMapper.getGroupedSchedule(schedules), nowMs)
-                    }
-                }
+                val cached = _uiState.value.addressDataList.find { it.address.id == address.id }
+                if (cached != null && cached.groupedSchedule.isNotEmpty()) { statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(cached.groupedSchedule, nowMs) }
+                else { repository.getSchedule(address.cherga, address.pidcherga).onSuccess { s -> statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(ScheduleMapper.getGroupedSchedule(s), nowMs) } }
             }
             _uiState.update { it.copy(addressStatuses = statusMap) }
         }
     }
 
-    fun addSavedAddress(name: String, icon: String, remId: String, remName: String, cityId: String, cityName: String, streetId: String, streetName: String, addrId: String, addrName: String, cherga: Int, pid: Int) {
+    fun addSavedAddress(name: String, icon: String, rI: String, rN: String, cI: String, cN: String, sI: String, sN: String, aI: String, aN: String, c: Int, p: Int) {
         viewModelScope.launch {
             val address = SavedAddress(
                 name = name, iconName = icon, priority = repository.getSavedAddresses().size + 1,
-                remId = remId, remName = remName, cityId = cityId, cityName = cityName,
-                streetId = streetId, streetName = streetName, addressId = addrId,
-                addressName = addrName, cherga = cherga, pidcherga = pid
+                remId = rI, remName = rN, cityId = cI, cityName = cN,
+                streetId = sI, streetName = sN, addressId = aI, addressName = aN,
+                cherga = c, pidcherga = p
             )
             repository.saveNewAddress(address)
             loadSavedAddresses()
@@ -162,13 +129,7 @@ class EnergyScheduleViewModel @Inject constructor(
         }
     }
 
-    fun deleteSavedAddress(id: String) {
-        viewModelScope.launch { repository.deleteAddress(id); loadSavedAddresses(); NotificationScheduler.runImmediateCheck(context) }
-    }
-
-    fun updateAddressesOrder(list: List<SavedAddress>) {
-        viewModelScope.launch { repository.reorderAddresses(list); loadSavedAddresses(); NotificationScheduler.runImmediateCheck(context) }
-    }
+    fun deleteSavedAddress(id: String) { viewModelScope.launch { repository.deleteAddress(id); loadSavedAddresses(); NotificationScheduler.runImmediateCheck(context) } }    fun updateAddressesOrder(list: List<SavedAddress>) { viewModelScope.launch { repository.reorderAddresses(list); loadSavedAddresses(); NotificationScheduler.runImmediateCheck(context) } }
 
     private fun loadNotificationSettings() {
         viewModelScope.launch { repository.getNotificationsEnabledFlow().collect { v -> _uiState.update { it.copy(notificationsEnabled = v) } } }
@@ -199,110 +160,58 @@ class EnergyScheduleViewModel @Inject constructor(
     fun startAddingAddress() { _uiState.update { it.copy(isAddingNewAddress = true) } }
     fun cancelAddingAddress() { _uiState.update { it.copy(isAddingNewAddress = false) } }
     fun dismissTimeSyncWarning() { _uiState.update { it.copy(isTimeOutOfSync = false) } }
-    fun clearError() { _uiState.update { it.copy(error = null) } }
     fun clearData() = viewModelScope.launch { repository.clearPreferences(); _uiState.value = UiState() }
     fun setShowWidgetConfig(show: Boolean) { _uiState.update { it.copy(showWidgetConfig = show) } }
-    
-    fun setRequestedAddressId(id: String?) {
-        _uiState.update { it.copy(requestedAddressId = id) }
-    }
-    
-    fun selectWidgetAddress(address: SavedAddress) {
-        viewModelScope.launch {
-            repository.setPrimaryAddress(address.id)
-            loadSavedAddresses()
-            setShowWidgetConfig(false)
-            NotificationScheduler.runImmediateCheck(context)
-        }
-    }
-
-    private fun checkTimeSync() {
-        viewModelScope.launch {
-            repository.getServerTime().onSuccess { serverMs ->
-                if (Math.abs(serverMs - System.currentTimeMillis()) / 60000 > 5) {
-                    _uiState.update { it.copy(isTimeOutOfSync = true) }
-                }
-            }
-        }
-    }
-
-    fun startInspectingAddress(address: SavedAddress) {
-        savedStateHandle["inspected_id"] = address.id // Save state
-        _uiState.update { it.copy(inspectedAddress = address, isInspectingLoading = true) }
-        viewModelScope.launch {
-            val data = loadSingleAddressData(address)
-            _uiState.update { it.copy(inspectedScheduleList = data.scheduleList, inspectedGroupedSchedule = data.groupedSchedule, isInspectingLoading = false) }
-        }
-    }
-    fun stopInspectingAddress() { 
-        savedStateHandle["inspected_id"] = null // Clear state
-        _uiState.update { it.copy(inspectedAddress = null) } 
-    }
-
+    fun setRequestedAddressId(id: String?) { _uiState.update { it.copy(requestedAddressId = id) } }
+    fun selectWidgetAddress(address: SavedAddress) { viewModelScope.launch { repository.setPrimaryAddress(address.id); loadSavedAddresses(); setShowWidgetConfig(false); NotificationScheduler.runImmediateCheck(context) } }
+    fun startInspectingAddress(address: SavedAddress) { savedStateHandle["inspected_id"] = address.id; _uiState.update { it.copy(inspectedAddress = address, isInspectingLoading = true) }; viewModelScope.launch { val data = loadSingleAddressData(address); _uiState.update { it.copy(inspectedScheduleList = data.scheduleList, inspectedGroupedSchedule = data.groupedSchedule, isInspectingLoading = false) } } }
+    fun stopInspectingAddress() { savedStateHandle["inspected_id"] = null; _uiState.update { it.copy(inspectedAddress = null) } }
     fun retryLoading() { refreshAllSchedules() }
     fun loadScheduleWithMessages(cherga: Int, pid: Int) { refreshAllSchedules() }
-
     private fun formatMessages(m: List<ScheduleMessagePart>): String = m.sortedBy { it.id }.joinToString("\n") { it.text }
-        .replace("&quot;", "\"").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ")
-
-    fun saveSelection(remId: String?, remName: String?, cityId: String?, cityName: String?, streetId: String?, streetName: String?, addrId: String, addrName: String, cherga: Int, pid: Int, customName: String = "Дім", icon: String = "home") {
+    fun saveSelection(rI: String?, rN: String?, cI: String?, cN: String?, sI: String?, sN: String?, aI: String, aN: String, c: Int, p: Int, customName: String = "Дім", icon: String = "home") {
         viewModelScope.launch {
-            repository.saveCompleteSelection(remId, remName, cityId, cityName, streetId, streetName, addrId, addrName, cherga, pid)
-            val addr = SavedAddress(name = customName, iconName = icon, priority = 1, remId = remId ?: "", remName = remName ?: "", cityId = cityId ?: "", cityName = cityName ?: "", streetId = streetId ?: "", streetName = streetName ?: "", addressId = addrId, addressName = addrName, cherga = cherga, pidcherga = pid)
-            repository.saveNewAddress(addr)
+            repository.saveCompleteSelection(rI, rN, cI, cN, sI, sN, aI, aN, c, p)
+            val address = SavedAddress(
+                name = customName, iconName = icon, priority = 1,
+                remId = rI ?: "", remName = rN ?: "", cityId = cI ?: "", cityName = cN ?: "",
+                streetId = sI ?: "", streetName = sN ?: "", addressId = aI, addressName = aN,
+                cherga = c, pidcherga = p
+            )
+            repository.saveNewAddress(address)
             loadSavedAddresses()
         }
     }
-
     fun loadRemList() { viewModelScope.launch { repository.getRemList().onSuccess { r -> _uiState.update { it.copy(remList = r) } } } }
     fun loadCityList(id: String) { viewModelScope.launch { repository.getCityList(id).onSuccess { r -> _uiState.update { it.copy(cityList = r) } } } }
     fun loadStreetList(id: String) { viewModelScope.launch { repository.getStreetList(id).onSuccess { r -> _uiState.update { it.copy(streetList = r) } } } }
     fun loadAddressList(id: String) { viewModelScope.launch { repository.getAddressList(id).onSuccess { r -> _uiState.update { it.copy(addressList = r, filteredHouseNumbers = repository.getAllParsedHouseNumbers(r)) } } } }
     fun filterHouseNumbers(q: String) { _uiState.update { it.copy(houseNumberSearchQuery = q) } }
     fun clearHouseNumberSearch() { _uiState.update { it.copy(houseNumberSearchQuery = "") } }
+    fun clearError() { _uiState.update { it.copy(error = null) } }
+    fun showInfoMessage(msg: String) { _uiState.update { it.copy(infoMessage = msg) } }
+    fun clearInfoMessage() { _uiState.update { it.copy(infoMessage = null) } }
 }
 
 @Stable
 data class UiState(
-    val remList: List<Rem> = emptyList(),
-    val cityList: List<City> = emptyList(),
-    val streetList: List<Street> = emptyList(),
-    val addressList: List<Address> = emptyList(),
-    val savedAddresses: List<SavedAddress> = emptyList(),
-    val addressDataList: List<AddressDataState> = emptyList(),
-    val isAddingNewAddress: Boolean = false,
-    val addressStatuses: Map<String, GroupedSchedule?> = emptyMap(),
-    val filteredHouseNumbers: List<ParsedHouseNumber> = emptyList(),
-    val houseNumberSearchQuery: String = "",
-    val scheduleList: List<Schedule> = emptyList(),
-    val groupedSchedule: List<GroupedSchedule> = emptyList(),
-    val infoMessages: List<ScheduleMessagePart> = emptyList(),
-    val formattedMessage: String = "",
-    val currentStatus: Schedule? = null,
-    val lastUpdateTime: String = "",
-    val isLoading: Boolean = false,
-    val isInitialLoadComplete: Boolean = false,
-    val isTimeOutOfSync: Boolean = false,
-    val error: String? = null,
-    val hasSavedSelection: Boolean = false,
-    val onboardingCompleted: Boolean = false,
-    val notificationsEnabled: Boolean = true,
-    val notificationAdvanceMinutes: Int = 15,
-    val statusNotificationEnabled: Boolean = false,
-    val liveActivityEnabled: Boolean = false,
-    val isConnected: Boolean = true,
-    val retryCountdown: Int = 0,
-    val lastLoadFailed: Boolean = false,
-    val isOffline: Boolean = false,
-    val showWidgetConfig: Boolean = false,
-    val notificationMode: Int = 0,
-    val displayMode: DisplayMode = DisplayMode.COMFORTABLE,
-    val colorTheme: ColorTheme = ColorTheme.SYSTEM,
-    val fontScale: FontScale = FontScale.NORMAL,
+    val remList: List<Rem> = emptyList(), val cityList: List<City> = emptyList(), val streetList: List<Street> = emptyList(),
+    val addressList: List<Address> = emptyList(), val savedAddresses: List<SavedAddress> = emptyList(),
+    val addressDataList: List<AddressDataState> = emptyList(), val isAddingNewAddress: Boolean = false,
+    val addressStatuses: Map<String, GroupedSchedule?> = emptyMap(), val filteredHouseNumbers: List<ParsedHouseNumber> = emptyList(),
+    val houseNumberSearchQuery: String = "", val scheduleList: List<Schedule> = emptyList(),
+    val groupedSchedule: List<GroupedSchedule> = emptyList(), val infoMessages: List<ScheduleMessagePart> = emptyList(),
+    val formattedMessage: String = "", val currentStatus: Schedule? = null, val lastUpdateTime: String = "",
+    val isLoading: Boolean = false, val isInitialLoadComplete: Boolean = false, val isTimeOutOfSync: Boolean = false,
+    val error: String? = null, val infoMessage: String? = null, val hasSavedSelection: Boolean = false,
+    val onboardingCompleted: Boolean = false, val notificationsEnabled: Boolean = true,
+    val notificationAdvanceMinutes: Int = 15, val statusNotificationEnabled: Boolean = false,
+    val liveActivityEnabled: Boolean = false, val isConnected: Boolean = true, val retryCountdown: Int = 0,
+    val lastLoadFailed: Boolean = false, val isOffline: Boolean = false, val showWidgetConfig: Boolean = false,
+    val notificationMode: Int = 0, val displayMode: DisplayMode = DisplayMode.Comfortable,
+    val colorTheme: ColorTheme = ColorTheme.System, val fontScale: FontScale = FontScale.Normal,
     val smartNotificationSettings: SmartNotificationSettings = SmartNotificationSettings(),
-    val inspectedAddress: SavedAddress? = null,
-    val inspectedScheduleList: List<Schedule> = emptyList(),
-    val inspectedGroupedSchedule: List<GroupedSchedule> = emptyList(),
-    val isInspectingLoading: Boolean = false,
+    val inspectedAddress: SavedAddress? = null, val inspectedScheduleList: List<Schedule> = emptyList(),
+    val inspectedGroupedSchedule: List<GroupedSchedule> = emptyList(), val isInspectingLoading: Boolean = false,
     val requestedAddressId: String? = null
 )

@@ -88,4 +88,24 @@
     <!-- Shortcuts -->
     <string name="shortcut_add_address">Додати адресу</string>
     <string name="shortcut_check_status">Перевірити статус</string>
+
+    <!-- Android Auto -->
+    <string name="car_no_addresses_title">Немає адрес</string>
+    <string name="car_no_addresses_desc">Додайте адреси в мобільному додатку</string>
+    <string name="car_status_unknown">Статус невідомий</string>
+    <string name="car_error_loading">Помилка завантаження</string>
+
+    <plurals name="hour">
+        <item quantity="one">%1$d година</item>
+        <item quantity="few">%1$d години</item>
+        <item quantity="many">%1$d годин</item>
+        <item quantity="other">%1$d годин</item>
+    </plurals>
+
+    <plurals name="minute">
+        <item quantity="one">%1$d хвилина</item>
+        <item quantity="few">%1$d хвилини</item>
+        <item quantity="many">%1$d хвилин</item>
+        <item quantity="other">%1$d хвилин</item>
+    </plurals>
 </resources>
