@@ -65,9 +65,9 @@ fun NoticeCard(
         OutlinedCard(
             modifier = cardModifier,
             colors = CardDefaults.outlinedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.errorContainer
             ),
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
+            border = BorderStroke(2.dp, MaterialTheme.colorScheme.error)
         ) {
             NoticeCardContent(message = message, isAttention = true)
         }
@@ -75,7 +75,7 @@ fun NoticeCard(
         Card(
             modifier = cardModifier,
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
         ) {
             NoticeCardContent(message = message, isAttention = false)
@@ -127,7 +127,7 @@ private fun NoticeCardContent(
 
         // Divider
         HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            color = MaterialTheme.colorScheme.outlineVariant
         )
 
         // Selectable message text
@@ -147,7 +147,7 @@ private fun NoticeCardContent(
             Text(
                 text = "Немає повідомлень",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
             )
         }
@@ -208,7 +208,7 @@ fun NoticeCardCompact(
                 Text(
                     text = "Немає повідомлень",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                 )
             }

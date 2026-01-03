@@ -3,7 +3,6 @@ package com.occaecat.ztoeschedule.widget.glance
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -13,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.*
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
@@ -20,11 +20,13 @@ import androidx.glance.layout.*
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import com.occaecat.ztoeschedule.MainActivity
 import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
-import com.occaecat.ztoeschedule.data.repository.EnergyRepository
+import com.occaecat.ztoeschedule.widget.data.WidgetDataProvider
+import com.occaecat.ztoeschedule.data.model.ScheduleStatus
+import com.occaecat.ztoeschedule.widget.glance.WidgetPalette
+import com.occaecat.ztoeschedule.widget.glance.paletteForStatus
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -34,7 +36,7 @@ import kotlinx.coroutines.flow.first
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface LightWidgetEntryPoint {
-    fun energyRepository(): EnergyRepository
+    fun widgetDataProvider(): WidgetDataProvider
     fun energyPreferencesManager(): EnergyPreferencesManager
 }
 
@@ -76,18 +78,26 @@ class LightWidget : GlanceAppWidget() {
             
             SvitloYeGlanceTheme {
                 val size = LocalSize.current
+                val statusEnum = when (status) {
+                    "available" -> ScheduleStatus.Available
+                    "outage" -> ScheduleStatus.Outage
+                    "probable" -> ScheduleStatus.Probable
+                    else -> null
+                }
+                val palette = paletteForStatus(statusEnum)
                 
                 Box(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(GlanceTheme.colors.surface)
+                        .background(palette.container)
+                        .cornerRadius(24.dp)
                         .clickable(actionStartActivity(Intent(currentContext, MainActivity::class.java)))
-                        .padding(12.dp),
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (address == null) {
                         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
-                            Text("Налаштуйте адресу", style = TextStyle(color = GlanceTheme.colors.onSurface))
+                            Text("Налаштуйте адресу", style = TextStyle(color = palette.content))
                             Spacer(GlanceModifier.height(8.dp))
                             androidx.glance.Button(
                                 text = "Налаштувати",
@@ -100,9 +110,9 @@ class LightWidget : GlanceAppWidget() {
                         }
                     } else {
                         when {
-                            size.height >= 180.dp -> FullLayout(status, nextEvent, address)
-                            size.width >= 180.dp -> RowLayout(status, nextEvent)
-                            else -> SmallLayout(status, nextEvent)
+                            size.height >= 180.dp -> FullLayout(status, nextEvent, address, palette)
+                            size.width >= 180.dp -> RowLayout(status, nextEvent, palette)
+                            else -> SmallLayout(status, nextEvent, palette)
                         }
                     }
                 }
@@ -111,9 +121,9 @@ class LightWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun SmallLayout(status: String, nextEvent: String) {
+    private fun SmallLayout(status: String, nextEvent: String, palette: WidgetPalette) {
         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
-            StatusIcon(status, 32.dp)
+            StatusIcon(status, 32.dp, palette)
             Spacer(GlanceModifier.height(8.dp))
             val text = when(status) {
                 "outage" -> "Немає"
@@ -123,18 +133,18 @@ class LightWidget : GlanceAppWidget() {
             }
             Text(
                 text = text,
-                style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Bold)
+                style = TextStyle(color = palette.content, fontWeight = FontWeight.Bold)
             )
             if (status != "unknown") {
-                Text(text = nextEvent, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+                Text(text = nextEvent, style = TextStyle(color = palette.muted, fontSize = 12.sp))
             }
         }
     }
 
     @Composable
-    private fun RowLayout(status: String, nextEvent: String) {
+    private fun RowLayout(status: String, nextEvent: String, palette: WidgetPalette) {
         Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
-            StatusIcon(status, 40.dp)
+            StatusIcon(status, 40.dp, palette)
             Spacer(GlanceModifier.width(12.dp))
             Column {
                 val text = when(status) {
@@ -145,35 +155,42 @@ class LightWidget : GlanceAppWidget() {
                 }
                 Text(
                     text = text,
-                    style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    style = TextStyle(color = palette.content, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 )
                 if (status != "unknown") {
-                    Text(text = "До $nextEvent", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant))
+                    Text(text = "До $nextEvent", style = TextStyle(color = palette.muted))
                 }
             }
         }
     }
 
     @Composable
-    private fun FullLayout(status: String, nextEvent: String, address: String) {
+    private fun FullLayout(status: String, nextEvent: String, address: String, palette: WidgetPalette) {
         Column(modifier = GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
-            RowLayout(status, nextEvent)
+            RowLayout(status, nextEvent, palette)
             Spacer(GlanceModifier.height(12.dp))
-            Box(modifier = GlanceModifier.fillMaxWidth().height(1.dp).background(GlanceTheme.colors.outline)) {}
+            Box(modifier = GlanceModifier.fillMaxWidth().height(1.dp).background(palette.muted)) {}
             Spacer(GlanceModifier.height(8.dp))
-            Text(text = address, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp), maxLines = 2)
+            Text(text = address, style = TextStyle(color = palette.muted, fontSize = 12.sp), maxLines = 2)
         }
     }
 
     @Composable
-    private fun StatusIcon(status: String, size: androidx.compose.ui.unit.Dp) {
+    private fun StatusIcon(status: String, size: androidx.compose.ui.unit.Dp, palette: WidgetPalette) {
         val iconRes = if (status == "available") R.drawable.ic_bolt else R.drawable.ic_home_filled
-        val tint = when (status) {
-            "outage" -> ColorProvider(Color.Red)
-            "available" -> ColorProvider(Color.Green)
-            "probable" -> ColorProvider(Color.Yellow)
-            else -> GlanceTheme.colors.onSurfaceVariant
+        val tint = palette.content
+        val contentDescription = when (status) {
+            "outage" -> "Відключення електроенергії"
+            "available" -> "Електроенергія є"
+            "probable" -> "Ймовірне відключення"
+            else -> "Статус невідомий"
         }
-        Image(provider = ImageProvider(iconRes), contentDescription = null, modifier = GlanceModifier.size(size), colorFilter = ColorFilter.tint(tint))
+        
+        Image(
+            provider = ImageProvider(iconRes), 
+            contentDescription = contentDescription, 
+            modifier = GlanceModifier.size(size), 
+            colorFilter = ColorFilter.tint(tint)
+        )
     }
 }

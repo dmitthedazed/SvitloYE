@@ -13,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,7 +162,7 @@ fun AboutScreen(
             Text(
                 text = "Made with ❤️ in Zhytomyr",
                 style = MaterialTheme.typography.labelMedium,
-                color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                color = colorScheme.onSurfaceVariant
             )
         }
     }
@@ -175,6 +177,7 @@ private fun AboutItem(
     subtitle: String,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     ListItem(
         headlineContent = { Text(title, fontWeight = FontWeight.Bold) },
         supportingContent = { Text(subtitle, style = MaterialTheme.typography.bodySmall) },
@@ -182,7 +185,7 @@ private fun AboutItem(
             Surface(
                 modifier = Modifier.size(42.dp),
                 shape = CircleShape,
-                color = containerColor.copy(alpha = 0.4f)
+                color = containerColor.copy(alpha = 0.12f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -194,7 +197,10 @@ private fun AboutItem(
                 }
             }
         },
-        modifier = Modifier.clickable { onClick() },
+        modifier = Modifier.clickable(
+            interactionSource = interactionSource,
+            indication = ripple()
+        ) { onClick() },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
 }
@@ -203,7 +209,7 @@ private fun AboutItem(
 private fun Divider(modifier: Modifier = Modifier) {
     HorizontalDivider(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        color = MaterialTheme.colorScheme.outlineVariant
     )
 }
 

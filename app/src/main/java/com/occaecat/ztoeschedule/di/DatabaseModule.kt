@@ -22,8 +22,9 @@ object DatabaseModule {
             context,
             EnergyDatabase::class.java,
             "energy_database"
-        ).fallbackToDestructiveMigration()
-         .build()
+        )
+            .fallbackToDestructiveMigration(true)
+            .build()
     }
 
     @Provides

@@ -30,6 +30,8 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
 
+import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
+
 /**
  * Modern Onboarding Flow using a step-based approach instead of Pager for better stability.
  */
@@ -42,11 +44,13 @@ fun OnboardingFlow(
     houseNumbers: List<ParsedHouseNumber>,
     searchQuery: String,
     isLoading: Boolean,
+    selectedCategory: ConsumerCategory? = null,
     onLoadRem: () -> Unit,
     onLoadCity: (String) -> Unit,
     onLoadStreet: (String) -> Unit,
     onLoadAddress: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onCategorySelected: (ConsumerCategory?) -> Unit = {},
     onClearSearch: () -> Unit,
     onCancel: (() -> Unit)? = null,
     showWelcome: Boolean = true,
@@ -195,7 +199,9 @@ fun OnboardingFlow(
                             houseNumbers = houseNumbers,
                             searchQuery = searchQuery,
                             isLoading = isLoading,
+                            selectedCategory = selectedCategory,
                             onSearchQueryChange = onSearchQueryChange,
+                            onCategorySelected = onCategorySelected,
                             onClearSearch = onClearSearch,
                             onHouseSelected = {
                                 selectedHouse = it

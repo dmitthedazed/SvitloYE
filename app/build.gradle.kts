@@ -124,6 +124,9 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
 
+    // Google Play Services - Location
+    implementation("com.google.android.gms:play-services-location:21.1.0")
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

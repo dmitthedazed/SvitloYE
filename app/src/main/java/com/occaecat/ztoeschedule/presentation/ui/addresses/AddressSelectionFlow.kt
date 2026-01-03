@@ -1,5 +1,7 @@
 package com.occaecat.ztoeschedule.presentation.ui.addresses
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +22,7 @@ import com.occaecat.ztoeschedule.presentation.ui.onboarding.HouseNumberSelection
 import com.occaecat.ztoeschedule.presentation.ui.onboarding.RemSelectionPage
 import com.occaecat.ztoeschedule.presentation.ui.onboarding.StreetSelectionPage
 
-import androidx.compose.animation.*
+import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
 
 /**
  * A more integrated address selection flow for adding new locations within the app.
@@ -35,11 +37,13 @@ fun AddressSelectionFlow(
     houseNumbers: List<ParsedHouseNumber>,
     searchQuery: String,
     isLoading: Boolean,
+    selectedCategory: ConsumerCategory? = null,
     onLoadRem: () -> Unit,
     onLoadCity: (String) -> Unit,
     onLoadStreet: (String) -> Unit,
     onLoadAddress: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onCategorySelected: (ConsumerCategory?) -> Unit = {},
     onClearSearch: () -> Unit,
     onCancel: () -> Unit,
     onComplete: (
@@ -70,12 +74,13 @@ fun AddressSelectionFlow(
                 title = {
                     Text(
                         text = when (step) {
-                            1 -> "Оберіть РЕМ"
-                            2 -> "Оберіть місто"
-                            3 -> "Оберіть вулицю"
-                            4 -> "Оберіть будинок"
+                            1 -> "РЕМ"
+                            2 -> "Місто"
+                            3 -> "Вулиця"
+                            4 -> "Будинок"
                             else -> "Нова адреса"
-                        }
+                        },
+                        style = MaterialTheme.typography.titleLarge
                     )
                 },
                 navigationIcon = {
@@ -88,21 +93,32 @@ fun AddressSelectionFlow(
                             Icon(Icons.Default.Close, "Закрити")
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) { 
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             AnimatedContent(
                 targetState = step,
                 transitionSpec = {
                     if (targetState > initialState) {
-                        (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
+                        slideInHorizontally { it } + fadeIn() togetherWith
+                        slideOutHorizontally { -it } + fadeOut()
                     } else {
-                        (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
+                        slideInHorizontally { -it } + fadeIn() togetherWith
+                        slideOutHorizontally { it } + fadeOut()
                     }
                 },
-                label = "address_step_transition"
+                label = "address_step_transition",
+                modifier = Modifier.fillMaxSize()
             ) { targetStep ->
                 when (targetStep) {
                     1 -> RemSelectionPage(
@@ -136,7 +152,9 @@ fun AddressSelectionFlow(
                         houseNumbers = houseNumbers,
                         searchQuery = searchQuery,
                         isLoading = isLoading,
+                        selectedCategory = selectedCategory,
                         onSearchQueryChange = onSearchQueryChange,
+                        onCategorySelected = onCategorySelected,
                         onClearSearch = onClearSearch,
                         onHouseSelected = {
                             onComplete(

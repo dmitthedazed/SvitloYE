@@ -24,6 +24,50 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.handwriting.handwritingDetector
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
+
+/**
+ * Row of filter chips for categories
+ */
+@Composable
+fun CategoryFilterRow(
+    selectedCategory: ConsumerCategory?,
+    onCategorySelected: (ConsumerCategory?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // "All" Chip
+        FilterChip(
+            selected = selectedCategory == null,
+            onClick = { onCategorySelected(null) },
+            label = { Text("Всі") },
+            leadingIcon = if (selectedCategory == null) {
+                { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
+            } else null
+        )
+
+        // Category Chips
+        ConsumerCategory.entries.forEach { category ->
+            FilterChip(
+                selected = selectedCategory == category,
+                onClick = { 
+                    // Toggle behavior: if already selected, clear it (null), else select it
+                    if (selectedCategory == category) onCategorySelected(null) else onCategorySelected(category)
+                },
+                label = { Text(category.label) },
+                leadingIcon = if (selectedCategory == category) {
+                    { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
+                } else null
+            )
+        }
+    }
+}
 
 /**
  * Stepper для отображения прогресса выбора
@@ -75,7 +119,7 @@ fun SelectionStepper(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         } else {
                             Text(
@@ -88,7 +132,7 @@ fun SelectionStepper(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Название шага
                 if (steps.size <= 4 || isActive) {
@@ -100,7 +144,7 @@ fun SelectionStepper(
                         } else if (isCompleted) {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         },
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 11.sp,
@@ -140,7 +184,7 @@ fun StepHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 20.dp),
+            .padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Большая иконка
@@ -310,6 +354,8 @@ fun SelectionListItem(
     modifier: Modifier = Modifier
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    
     Card(
         onClick = onClick,
         modifier = modifier
@@ -322,14 +368,15 @@ fun SelectionListItem(
                 shape = MaterialTheme.shapes.large
             ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        shape = MaterialTheme.shapes.large
+        shape = MaterialTheme.shapes.large,
+        interactionSource = interactionSource
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -369,7 +416,7 @@ fun EmptyState(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(64.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
