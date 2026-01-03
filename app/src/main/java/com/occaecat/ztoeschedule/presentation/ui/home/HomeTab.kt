@@ -47,12 +47,15 @@ import com.occaecat.ztoeschedule.domain.TimeUtils
 import com.occaecat.ztoeschedule.presentation.ui.components.ScaleIndication
 import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
 import com.occaecat.ztoeschedule.presentation.util.ScheduleImageGenerator
+import com.occaecat.ztoeschedule.presentation.util.DeepLinkHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.foundation.BorderStroke
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeTab(
     remName: String,
@@ -69,26 +72,51 @@ fun HomeTab(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     lastUpdateTime: String = "",
     isOffline: Boolean = false,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    streetId: String = "",
+    addressId: String = ""
 ) {
     var isRefreshing by rememberSaveable { mutableStateOf(false) }
     val refreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    var showTimePicker by remember { mutableStateOf(false) }
-    val timePickerState = rememberTimePickerState(is24Hour = true)
+    var highlightTrigger by remember { mutableLongStateOf(0L) }
     
-    val activeGroup = remember(groupedSchedule, currentStatus) {
-        val nowMs = System.currentTimeMillis()
-        ScheduleMapper.getCurrentGroupedStatus(groupedSchedule, nowMs) ?: currentStatus?.let { s ->
+    // Smart time update - triggers exactly when current status ends
+    var currentTimeMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(groupedSchedule) {
+        while (true) {
+            val now = System.currentTimeMillis()
+            currentTimeMs = now
+            
+            // Find current status and calculate time until it ends
+            val current = ScheduleMapper.getCurrentGroupedStatus(groupedSchedule, now)
+            val delayMs = if (current != null && current.endMs > now) {
+                // Wait until current status ends, then update immediately
+                (current.endMs - now).coerceAtLeast(1000L)
+            } else {
+                // Fallback: check every 10 seconds
+                10000L
+            }
+            
+            delay(delayMs)
+        }
+    }
+    
+    val activeGroup = remember(groupedSchedule, currentStatus, currentTimeMs) {
+        ScheduleMapper.getCurrentGroupedStatus(groupedSchedule, currentTimeMs) ?: currentStatus?.let { s ->
             groupedSchedule.find { it.date == s.date && it.span.contains(s.span.split("-")[0]) }
         }
     }
     val groupedByDate = remember(groupedSchedule) { groupedSchedule.groupBy { it.date } }
 
     PullToRefreshBox(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(top = contentPadding.calculateTopPadding()),
+        state = refreshState,
         isRefreshing = isRefreshing,
-        onRefresh = { 
+        onRefresh = {
             isRefreshing = true
             onRefresh()
             coroutineScope.launch {
@@ -96,17 +124,14 @@ fun HomeTab(
                 isRefreshing = false
             }
         },
-        state = refreshState,
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.TopCenter,
-        indicator = { 
+        indicator = {
             PullToRefreshDefaults.Indicator(
-                state = refreshState, 
-                isRefreshing = isRefreshing, 
-                modifier = Modifier.align(Alignment.TopCenter), 
-                containerColor = MaterialTheme.colorScheme.primaryContainer, 
+                state = refreshState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
-            ) 
+            )
         }
     ) {
         LazyColumn(
@@ -116,11 +141,11 @@ fun HomeTab(
                 .fillMaxSize(),
             contentPadding = PaddingValues(
                 start = 16.dp, 
-                top = contentPadding.calculateTopPadding() + 16.dp, 
+                top = 16.dp, 
                 end = 16.dp, 
                 bottom = contentPadding.calculateBottomPadding() + 80.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (isLoading && !isRefreshing) {
                 item(contentType = "skeleton") { HomeTabSkeleton() }
@@ -141,7 +166,7 @@ fun HomeTab(
                             ) {
                                 Icon(Icons.Default.CloudOff, null)
                                 Spacer(Modifier.width(12.dp))
-                                Text(stringResource(R.string.error_offline_banner), style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.error_offline_banner), style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
@@ -154,11 +179,15 @@ fun HomeTab(
                         groupedSchedule = groupedSchedule, 
                         onClick = {
                             coroutineScope.launch {
-                                val today = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())
-                                val keys = groupedByDate.keys.toList().sortedBy { it.split(".").reversed().joinToString("") }
-                                val idx = keys.indexOf(today)
-                                if (idx != -1) {
-                                    listState.animateScrollToItem(idx * 2 + 2)
+                                val targetDate = activeGroup?.date ?: SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())
+                                val sortedDates = groupedByDate.keys.toList().sortedBy { it.split(".").reversed().joinToString("") }
+                                val dateIndex = sortedDates.indexOf(targetDate)
+                                
+                                if (dateIndex != -1) {
+                                    val baseOffset = if (isOffline) 3 else 2
+                                    val targetIdx = baseOffset + (dateIndex * 2) + 1
+                                    listState.animateScrollToItem(targetIdx)
+                                    highlightTrigger = System.currentTimeMillis()
                                 }
                             }
                         },
@@ -174,12 +203,22 @@ fun HomeTab(
 
                 item(contentType = "address_card") {
                     Column(modifier = Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AddressInfoCard(cityName, streetName, addressName, cherga, pidcherga, groupedSchedule, { showTimePicker = true })
+                        AddressInfoCard(
+                            cityName = cityName, 
+                            streetName = streetName, 
+                            addressName = addressName, 
+                            cherga = cherga, 
+                            pidcherga = pidcherga, 
+                            groupedSchedule = groupedSchedule,
+                            streetId = streetId,
+                            addressId = addressId,
+                            remName = remName
+                        )
                         if (lastUpdateTime.isNotEmpty()) {
                             Text(
                                 text = stringResource(R.string.home_last_updated, lastUpdateTime), 
                                 style = MaterialTheme.typography.labelSmall, 
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), 
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, 
                                 modifier = Modifier.padding(start = 8.dp)
                             )
                         }
@@ -201,14 +240,22 @@ fun HomeTab(
                         }
                     }
                     item(key = "${date}_content", contentType = "daily_card") {
+                        val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
+                        val vPadding = remember(radius) { if (radius > 32) (radius - 32).toFloat() / 3f else 0f }
+                        
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth().animateItem(), 
                             shape = MaterialTheme.shapes.large
                         ) {
-                            Column {
+                            Column(modifier = Modifier.padding(vertical = vPadding.dp)) {
                                 items.forEachIndexed { idx, group ->
                                     key(group.span) {
-                                        ScheduleListItemSimple(group, (group == activeGroup), fullAddress)
+                                        ScheduleListItemSimple(
+                                            group = group, 
+                                            isActive = (group == activeGroup), 
+                                            address = fullAddress,
+                                            highlightTrigger = highlightTrigger
+                                        )
                                         if (idx < items.lastIndex) {
                                             HorizontalDivider(
                                                 modifier = Modifier.padding(horizontal = 16.dp), 
@@ -224,25 +271,6 @@ fun HomeTab(
             }
         }
     }
-    if (showTimePicker) {
-        TimePickerDialog(
-            onDismiss = { showTimePicker = false }, 
-            onConfirm = { showTimePicker = false }
-        ) {
-            TimeInput(state = timePickerState)
-        }
-    }
-}
-
-@Composable
-private fun TimePickerDialog(onDismiss: () -> Unit, onConfirm: () -> Unit, content: @Composable () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Скасувати") } },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("OK") } },
-        title = { Text("Оберіть час", style = MaterialTheme.typography.titleMedium) },
-        text = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { content() } }
-    )
 }
 
 @Composable
@@ -251,7 +279,7 @@ private fun HomeTabSkeleton() {
         ShimmerItem(height = 200.dp, shape = MaterialTheme.shapes.extraLarge)
         ShimmerItem(height = 64.dp, shape = MaterialTheme.shapes.large)
         Spacer(Modifier.height(8.dp))
-        ShimmerItem(height = 20.dp, modifier = Modifier.width(120.dp).padding(start = 8.dp))
+        ShimmerItem(height = 20.dp, modifier = Modifier.width(120.dp).padding(start = 8.dp), shape = MaterialTheme.shapes.small)
         ElevatedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 repeat(4) {
@@ -259,8 +287,8 @@ private fun HomeTabSkeleton() {
                         ShimmerItem(32.dp, modifier = Modifier.width(4.dp), shape = CircleShape)
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ShimmerItem(18.dp, modifier = Modifier.fillMaxWidth(0.7f))
-                            ShimmerItem(14.dp, modifier = Modifier.fillMaxWidth(0.4f))
+                            ShimmerItem(18.dp, modifier = Modifier.fillMaxWidth(0.7f), shape = MaterialTheme.shapes.small)
+                            ShimmerItem(14.dp, modifier = Modifier.fillMaxWidth(0.4f), shape = MaterialTheme.shapes.small)
                         }
                     }
                     if (it < 3) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
@@ -295,6 +323,14 @@ private fun CurrentStatusCard(
     
     val containerColor by animateColorAsState(containerColorByState, label = "c")
     val contentColor by animateColorAsState(contentColorByState, label = "ct")
+    val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
+    
+    val adaptivePadding = remember(radius) {
+        val base = 16f
+        val extra = if (radius > 16) (radius - 16).toFloat() / 2f else 0f
+        (base + extra).dp
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "p")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f, 
@@ -310,13 +346,12 @@ private fun CurrentStatusCard(
             .animateContentSize()
             .semantics { 
                 liveRegion = LiveRegionMode.Assertive 
-            }
-            .testTag("current_status_card"),
+            },
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.elevatedCardColors(containerColor = containerColor, contentColor = contentColor)
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp), 
+            modifier = Modifier.fillMaxWidth().padding(adaptivePadding), 
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             val statusIcon = when (status) {
@@ -351,7 +386,7 @@ private fun CurrentStatusCard(
                         style = MaterialTheme.typography.bodyLarge, 
                         modifier = Modifier.alpha(0.8f)
                     )
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(24.dp))
                     LiveProgressBar(activeGroup, contentColor, hasElectricity)
                 }
             }
@@ -376,14 +411,24 @@ private fun LiveProgressBar(activeGroup: GroupedSchedule, contentColor: Color, h
     val timeRemainingText by remember(activeGroup, nowMs) {
         derivedStateOf {
             val ms = activeGroup.endMs - nowMs
-            val rem = if (ms > 0) ms / 60000 else 0
-            val h = (rem / 60).toInt()
-            val m = (rem % 60).toInt()
-            
-            val res = context.resources
-            val hStr = if (h > 0) res.getQuantityString(R.plurals.hour, h, h) + " " else ""
-            val mStr = res.getQuantityString(R.plurals.minute, m, m)
-            hStr + mStr
+            if (ms <= 0) {
+                // Status ended - show 0 seconds
+                context.resources.getQuantityString(R.plurals.second, 0, 0)
+            } else if (ms < 60000) {
+                // Less than 1 minute - show seconds
+                val seconds = (ms / 1000).toInt().coerceAtLeast(1)
+                context.resources.getQuantityString(R.plurals.second, seconds, seconds)
+            } else {
+                // 1 minute or more - show hours and minutes
+                val rem = ms / 60000
+                val h = (rem / 60).toInt()
+                val m = (rem % 60).toInt()
+                
+                val res = context.resources
+                val hStr = if (h > 0) res.getQuantityString(R.plurals.hour, h, h) + " " else ""
+                val mStr = res.getQuantityString(R.plurals.minute, m, m)
+                hStr + mStr
+            }
         }
     }
     val animatedProgress by animateFloatAsState(progress, ProgressIndicatorDefaults.ProgressAnimationSpec, label = "pr")
@@ -417,109 +462,144 @@ private fun AddressInfoCard(
     cherga: Int,
     pidcherga: Int,
     groupedSchedule: List<GroupedSchedule>,
-    onJumpToTime: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    streetId: String = "",
+    addressId: String = "",
+    remName: String = ""
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
     val fullAddress = buildString {
         if (cityName.isNotEmpty()) append("$cityName, ")
         if (streetName.isNotEmpty()) append("$streetName, ")
         append(addressName)
     }
+    var showShareMenu by remember { mutableStateOf(false) }
+    val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
+    val hPadding = remember(radius) {
+        val base = 12.0
+        val extra = if (radius > 20) (radius - 20).toDouble() / 2.5 else 0.0
+        (base + extra).dp
+    }
     
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), 
+        color = MaterialTheme.colorScheme.surfaceVariant, 
         shape = MaterialTheme.shapes.large,
-        modifier = modifier.animateContentSize().testTag("address_info_card")
+        modifier = modifier
+            .fillMaxWidth()
+            .animateContentSize()
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp), 
+            modifier = Modifier.padding(horizontal = hPadding, vertical = 8.dp), 
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TooltipBox(
-                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                tooltip = { PlainTooltip { Text("Перейти до часу") } },
-                state = rememberTooltipState()
-            ) {
-                IconButton(onClick = onJumpToTime, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                }
-            }
+            Icon(
+                imageVector = Icons.Default.LocationOn, 
+                contentDescription = null, 
+                modifier = Modifier.size(24.dp), 
+                tint = MaterialTheme.colorScheme.primary
+            )
             
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(8.dp))
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = fullAddress, 
                     style = MaterialTheme.typography.bodyMedium, 
-                    color = MaterialTheme.colorScheme.onSurface, 
-                    maxLines = 1, 
-                    modifier = Modifier.basicMarquee()
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            
-            TooltipBox(
-                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                tooltip = { PlainTooltip { Text("Поділитися") } },
-                state = rememberTooltipState()
-            ) {
-                FilledTonalIconButton(
-                    onClick = {
-                        scope.launch {
-                            val uri = ScheduleImageGenerator.generateAndShare(context, fullAddress, "$cherga.$pidcherga", groupedSchedule)
-                            if (uri != null) {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "image/png"
-                                    putExtra(Intent.EXTRA_STREAM, uri as Parcelable)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(intent, "Поділитися"))
-                            }
-                        }
-                    }, 
-                    modifier = Modifier.size(36.dp)
+
+            Box(modifier = Modifier.padding(start = 4.dp)) {
+                IconButton(
+                    onClick = { showShareMenu = true }, 
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp))
+                    Icon(
+                        imageVector = Icons.Default.Share, 
+                        contentDescription = null, 
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-            }
-            
-            Spacer(Modifier.width(8.dp))
-            
-            TooltipBox(
-                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                tooltip = { PlainTooltip { Text("Копіювати") } },
-                state = rememberTooltipState()
-            ) {
-                val clipboardManager = LocalClipboardManager.current
-                FilledTonalIconButton(
-                    onClick = {
-                        val text = buildString {
-                            appendLine("📍 $fullAddress")
-                            appendLine("⚡ Черга: $cherga.$pidcherga")
-                            appendLine()
-                            groupedSchedule.groupBy { it.date }.forEach { (date, items) ->
-                                appendLine("🗓 $date:")
-                                items.forEach { item ->
-                                    val icon = when (item.status) {
-                                        ScheduleStatus.Available -> "🟢"
-                                        ScheduleStatus.Probable -> "🟡"
-                                        else -> "🔴"
-                                    }
-                                    appendLine("$icon ${item.span} - ${item.displayText}")
-                                }
-                                appendLine()
-                            }
-                            append("Сгенеровано додатком СвітлоЄ? Житомир")
-                        }
-                        clipboardManager.setText(AnnotatedString(text))
-                        if (Build.VERSION.SDK_INT < 33) {
-                            android.widget.Toast.makeText(context, "Скопійовано", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }, 
-                    modifier = Modifier.size(36.dp)
+                
+                DropdownMenu(
+                    expanded = showShareMenu,
+                    onDismissRequest = { showShareMenu = false }
                 ) {
-                    Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp))
+                    DropdownMenuItem(
+                        text = { Text("Поділитися графіком (фото)") },
+                        leadingIcon = { Icon(Icons.Default.Image, null) },
+                        onClick = {
+                            showShareMenu = false
+                            scope.launch {
+                                val uri = ScheduleImageGenerator.generateAndShare(context, fullAddress, "$cherga.$pidcherga", groupedSchedule)
+                                if (uri != null) {
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "image/png"
+                                        putExtra(Intent.EXTRA_STREAM, uri as Parcelable)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "Поділитися"))
+                                }
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Копіювати текст") },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        onClick = {
+                            showShareMenu = false
+                            val text = buildString {
+                                appendLine("📍 $fullAddress")
+                                appendLine("⚡ Черга: $cherga.$pidcherga")
+                                appendLine()
+                                groupedSchedule.groupBy { it.date }.forEach { (date, items) ->
+                                    appendLine("🗓 $date:")
+                                    items.forEach { item ->
+                                        val icon = when (item.status) {
+                                            ScheduleStatus.Available -> "🟢"
+                                            ScheduleStatus.Probable -> "🟡"
+                                            else -> "🔴"
+                                        }
+                                        appendLine("$icon ${item.span} - ${item.displayText}")
+                                    }
+                                    appendLine()
+                                }
+                                append("Сгенеровано додатком СвітлоЄ? Житомир")
+                            }
+                            clipboardManager.setText(AnnotatedString(text))
+                            if (Build.VERSION.SDK_INT < 33) {
+                                android.widget.Toast.makeText(context, "Скопійовано", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Поділитися посиланням") },
+                        leadingIcon = { Icon(Icons.Default.Link, null) },
+                        onClick = {
+                            showShareMenu = false
+                            // Create a temporary SavedAddress object with real IDs for sharing
+                            val address = com.occaecat.ztoeschedule.data.model.SavedAddress(
+                                id = "",
+                                name = addressName,
+                                iconName = "",
+                                priority = 0,
+                                remId = "",
+                                remName = remName,
+                                cityId = "",
+                                cityName = cityName,
+                                streetId = streetId,
+                                streetName = streetName,
+                                addressId = addressId,
+                                addressName = addressName,
+                                cherga = cherga,
+                                pidcherga = pidcherga
+                            )
+                            DeepLinkHelper.shareLink(context, address)
+                        }
+                    )
                 }
             }
             
@@ -541,41 +621,150 @@ private fun AddressInfoCard(
     }
 }
 
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ScheduleListItemSimple(group: GroupedSchedule, isActive: Boolean, address: String, modifier: Modifier = Modifier) {
+private fun ScheduleListItemSimple(
+    group: GroupedSchedule, 
+    isActive: Boolean, 
+    address: String, 
+    highlightTrigger: Long,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     
-    ListItem(
-        headlineContent = { 
-            Text(
-                text = group.displayText, 
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal, 
-                style = if (isActive) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium
-            ) 
-        },
-        supportingContent = { 
-            Text(
-                text = "${TimeUtils.formatSpanToSystem(context, group.span)} • ${group.formattedDuration}", 
-                style = MaterialTheme.typography.bodySmall
-            ) 
-        },
-        leadingContent = { 
-            val color = when (group.status) {
-                ScheduleStatus.Available -> MaterialTheme.colorScheme.primary
-                ScheduleStatus.Probable -> MaterialTheme.colorScheme.tertiary
-                else -> MaterialTheme.colorScheme.error
+    val highlightAlpha = remember { Animatable(0f) }
+    LaunchedEffect(highlightTrigger) {
+        if (highlightTrigger > 0 && isActive) {
+            repeat(2) {
+                highlightAlpha.animateTo(0.4f, tween(400, easing = LinearOutSlowInEasing))
+                highlightAlpha.animateTo(0f, tween(400, easing = FastOutSlowInEasing))
             }
-            Surface(modifier = Modifier.size(4.dp, 32.dp), color = color, shape = CircleShape) {} 
-        },
-        trailingContent = {
+        }
+    }
+    
+    val statusColor = when (group.status) {
+        ScheduleStatus.Available -> MaterialTheme.colorScheme.primary
+        ScheduleStatus.Probable -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.error
+    }
+    
+    val containerColor = if (isActive) {
+        statusColor.copy(alpha = 0.12f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    
+    val shape = MaterialTheme.shapes.medium
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = highlightAlpha.value))
+            .indication(interactionSource, ScaleIndication)
+            .combinedClickable(
+                interactionSource = interactionSource, 
+                indication = ripple(), 
+                onClick = {}, 
+                onLongClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    clipboardManager.setText(AnnotatedString("${group.date}: ${group.span} - ${group.displayText}"))
+                    if (Build.VERSION.SDK_INT < 33) {
+                        android.widget.Toast.makeText(context, "Скопійовано", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+            .testTag("schedule_slot_${group.startTime}"),
+        color = containerColor,
+        shape = shape,
+        border = if (isActive) BorderStroke(1.dp, statusColor.copy(alpha = 0.38f)) else null
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status Icon with background
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = CircleShape,
+                color = statusColor.copy(alpha = 0.12f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = when (group.status) {
+                            ScheduleStatus.Available -> Icons.Default.LightMode
+                            ScheduleStatus.Probable -> Icons.Default.WarningAmber
+                            else -> Icons.Default.FlashOff
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = statusColor
+                    )
+                }
+            }
+            
+            Spacer(Modifier.width(16.dp))
+            
+            // Time and Status Text
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = TimeUtils.formatSpanToSystem(context, group.span), 
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    
+                    // Duration badge
+                    Surface(
+                        color = statusColor,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = group.formattedDuration,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            color = if (group.status == ScheduleStatus.Probable) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = group.displayText, 
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isActive) statusColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+
+            // Actions
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isActive) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.38f))
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_status_now),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                
                 if (group.status != ScheduleStatus.Available) {
                     IconButton(
-                        onClick = { 
+                        onClick = {
                             try {
                                 val kyiv = TimeZone.getTimeZone("Europe/Kyiv")
                                 val d = group.date.split(".")
@@ -604,41 +793,13 @@ private fun ScheduleListItemSimple(group: GroupedSchedule, isActive: Boolean, ad
                                 }
                                 context.startActivity(intent)
                             } catch (ex: Exception) { ex.printStackTrace() }
-                        }, 
-                        modifier = Modifier.size(32.dp)
-                    ) { 
-                        Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) 
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(Icons.Default.Event, null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                }
-                if (isActive) {
-                    Spacer(Modifier.width(4.dp))
-                    SuggestionChip(
-                        onClick = {}, 
-                        label = { Text(stringResource(R.string.home_status_now)) }, 
-                        border = null, 
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer, 
-                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
                 }
             }
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = modifier
-            .indication(interactionSource, ScaleIndication)
-            .combinedClickable(
-                interactionSource = interactionSource, 
-                indication = ripple(), 
-                onClick = {}, 
-                onLongClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    clipboardManager.setText(AnnotatedString("${group.date}: ${group.span} - ${group.displayText}"))
-                    if (Build.VERSION.SDK_INT < 33) {
-                        android.widget.Toast.makeText(context, "Скопійовано", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                }
-            )
-            .testTag("schedule_slot_${group.startTime}")
-    )
+        }
+    }
 }

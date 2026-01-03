@@ -22,7 +22,7 @@ object ScheduleImageGenerator {
         schedules: List<GroupedSchedule>
     ): Uri? {
         return try {
-            val bitmap = drawScheduleBitmap(address, cherga, schedules)
+            val bitmap = drawScheduleBitmap(context, address, cherga, schedules)
             saveBitmapToCache(context, bitmap)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -31,6 +31,7 @@ object ScheduleImageGenerator {
     }
 
     private fun drawScheduleBitmap(
+        context: Context,
         address: String,
         cherga: String,
         schedules: List<GroupedSchedule>
@@ -66,9 +67,9 @@ object ScheduleImageGenerator {
             textSize = 36f
             isAntiAlias = true
         }
-        val greenPaint = Paint().apply { color = Color.parseColor("#4CAF50") }
-        val redPaint = Paint().apply { color = Color.parseColor("#F44336") }
-        val yellowPaint = Paint().apply { color = Color.parseColor("#FFC107") }
+        val greenPaint = Paint().apply { color = androidx.core.content.ContextCompat.getColor(context, com.occaecat.ztoeschedule.R.color.widget_power_on) }
+        val redPaint = Paint().apply { color = androidx.core.content.ContextCompat.getColor(context, com.occaecat.ztoeschedule.R.color.widget_power_off) }
+        val yellowPaint = Paint().apply { color = android.graphics.Color.YELLOW }
 
         // Background
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)

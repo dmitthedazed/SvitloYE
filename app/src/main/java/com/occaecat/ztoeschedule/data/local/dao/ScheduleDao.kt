@@ -17,4 +17,7 @@ interface ScheduleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchedule(schedule: ScheduleCacheEntity)
+
+    @Query("DELETE FROM schedule_cache")
+    suspend fun deleteAll()
 }

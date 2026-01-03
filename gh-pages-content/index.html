@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>СвітлоЄ? - Графік відключень</title>
+    <script>
+        window.onload = function() {
+            // Get parameters from URL
+            const params = new URLSearchParams(window.location.search);
+            const streetId = params.get('streetId');
+            const houseId = params.get('houseId');
+
+            if (streetId && houseId) {
+                // Construct custom scheme link as fallback
+                const deepLink = "zt-energy://schedule?streetId=" + streetId + "&houseId=" + houseId;
+                
+                // Try to open app immediately
+                window.location.href = deepLink;
+            }
+
+            // Redirect to Play Store after a short delay if app not installed
+            setTimeout(function() {
+                window.location.href = "https://play.google.com/store/apps/details?id=com.occaecat.ztoeschedule";
+            }, 2000);
+        };
+    </script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .btn { background: #007bff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h1>СвітлоЄ? Житомир</h1>
+    <p>Відкриваємо графік у додатку...</p>
+    <br>
+    <a href="https://play.google.com/store/apps/details?id=com.occaecat.ztoeschedule" class="btn">Завантажити в Google Play</a>
+</body>
+</html>

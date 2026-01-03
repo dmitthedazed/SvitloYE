@@ -13,6 +13,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:name=".ZTOEApplication"
@@ -33,14 +36,49 @@
             android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
+
+            <!-- Deep Link Filter (Custom Scheme) -->
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="zt-energy" android:host="schedule" />
+            </intent-filter>
+
+            <!-- App Link Filter (Web Links - GitHub Pages) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="dmitthedazed.github.io" android:pathPrefix="/svitlo-ye-zhytomyr" />
+            </intent-filter>
         </activity>
+
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SvitloYeZhytomyr" />
+
+        <activity
+            android:name=".AddressPickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SvitloYeZhytomyr" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SvitloYeZhytomyr" />
+
+        <activity
+            android:name=".InspectActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SvitloYeZhytomyr" />
 
         <!-- Disable default WorkManager initializer -->
         <provider
@@ -54,10 +92,10 @@
                 tools:node="remove" />
         </provider>
 
-        <!-- Power Status Widget (Glance) -->
+        <!-- Glance Widgets -->
         <receiver
-            android:name=".widget.glance.WidgetReceiver"
-            android:exported="true">
+            android:name=".widget.glance.LightWidgetReceiver"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -66,10 +104,20 @@
                 android:resource="@xml/glance_light_widget_info" />
         </receiver>
 
-        <!-- Detailed Schedule Widget (4x2) -->
         <receiver
-            android:name=".widget.DetailedScheduleWidget"
-            android:exported="true">
+            android:name=".widget.glance.PowerStatusWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_power_status_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.glance.DetailedScheduleWidgetReceiver"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -92,19 +140,22 @@
             android:name=".domain.notification.NotificationActionReceiver"
             android:exported="false" />
 
-        <!-- Status Notification Service -->
-        <service
-            android:name=".domain.notification.StatusNotificationService"
+        <!-- Status Change Alarm Receiver (for exact scheduled notifications) -->
+        <receiver
+            android:name=".domain.notification.StatusChangeAlarmReceiver"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:exported="false" />
 
-        <!-- Live Activity Notification Service for Android 16+ -->
+        <!-- Power Status Service (Unified) -->
         <service
-            android:name=".domain.notification.LiveActivityNotificationService"
+            android:name=".domain.notification.PowerStatusService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Відображення статусу електропостачання" />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -119,15 +170,18 @@
         <!-- Android Auto Service -->
         <service
             android:name=".presentation.car.EnergyCarAppService"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
                 <category android:name="androidx.car.app.category.IOT" />
             </intent-filter>
-            <meta-data
-                android:name="androidx.car.app.minCarApiLevel"
-                android:value="1" />
         </service>
+
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
 
         <meta-data
             android:name="com.google.android.gms.car.application"
@@ -150,5 +204,9 @@
             android:value="true" />
 
     </application>
+
+    <uses-feature
+        android:name="android.hardware.type.automotive"
+        android:required="false" />
 
 </manifest>

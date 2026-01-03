@@ -120,4 +120,11 @@ class AddressStorage(private val context: Context) {
         saveAddresses(sorted)
         return sorted
     }
+
+    suspend fun clearAll() = withContext(Dispatchers.IO) {
+        val file = getFile()
+        if (file.exists()) {
+            file.delete()
+        }
+    }
 }

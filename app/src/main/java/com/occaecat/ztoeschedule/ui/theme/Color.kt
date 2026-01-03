@@ -33,8 +33,3 @@ val TertiaryDark = Color(0xFFEFB8C8)
 val OnTertiaryDark = Color(0xFF492532)
 val TertiaryContainerDark = Color(0xFF633B48)
 val OnTertiaryContainerDark = Color(0xFFFFD8E4)
-
-// Custom Status Colors
-val LightOnColor = Color(0xFF4CAF50)
-val LightOffColor = Color(0xFFF44336)
-val WarningColor = Color(0xFFFFC107)

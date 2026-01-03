@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="250dp"
-    android:minHeight="110dp"
+    android:description="@string/widget_detailed_schedule_description"
+    android:minWidth="200dp"
+    android:minHeight="100dp"
     android:targetCellWidth="4"
     android:targetCellHeight="2"
-    android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/widget_detailed_schedule"
-    android:description="@string/widget_detailed_schedule_description"
-    android:previewImage="@drawable/ic_launcher_background"
     android:resizeMode="horizontal|vertical"
+    android:previewImage="@drawable/ic_home_filled"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />
 

@@ -1,5 +1,7 @@
 package com.occaecat.ztoeschedule.presentation.ui.onboarding
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -25,7 +27,8 @@ import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
 import com.occaecat.ztoeschedule.presentation.ui.SelectionListItem
 import com.occaecat.ztoeschedule.presentation.ui.SearchField
-
+import com.occaecat.ztoeschedule.presentation.ui.CategoryFilterRow
+import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
 import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
 
@@ -54,13 +57,18 @@ fun RemSelectionPage(
             ListSkeleton()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .animateContentSize(spring()),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filteredList) { rem ->
+                items(filteredList, key = { it.id }) { rem ->
                     SelectionListItem(
                         title = rem.name,
-                        onClick = { onRemSelected(rem) }
+                        onClick = { onRemSelected(rem) },
+                        modifier = Modifier
                     )
                 }
             }
@@ -100,13 +108,18 @@ fun CitySelectionPage(
             ListSkeleton()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .animateContentSize(spring()),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filteredList) { city ->
+                items(filteredList, key = { it.id }) { city ->
                     SelectionListItem(
                         title = city.name,
-                        onClick = { onCitySelected(city) }
+                        onClick = { onCitySelected(city) },
+                        modifier = Modifier
                     )
                 }
             }
@@ -146,13 +159,18 @@ fun StreetSelectionPage(
             ListSkeleton()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .animateContentSize(spring()),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filteredList) { street ->
+                items(filteredList, key = { it.id }) { street ->
                     SelectionListItem(
                         title = street.name,
-                        onClick = { onStreetSelected(street) }
+                        onClick = { onStreetSelected(street) },
+                        modifier = Modifier
                     )
                 }
             }
@@ -169,21 +187,18 @@ fun StreetSelectionPage(
     }
 }
 
+
 @Composable
 fun HouseNumberSelectionPage(
     houseNumbers: List<ParsedHouseNumber>,
     searchQuery: String,
     isLoading: Boolean,
+    selectedCategory: ConsumerCategory? = null,
     onSearchQueryChange: (String) -> Unit,
+    onCategorySelected: (ConsumerCategory?) -> Unit = {},
     onClearSearch: () -> Unit,
     onHouseSelected: (ParsedHouseNumber) -> Unit
 ) {
-    val filteredList = remember(searchQuery, houseNumbers) {
-        if (searchQuery.isBlank()) houseNumbers else houseNumbers.filter {
-            it.houseNumber.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
     Column(modifier = Modifier.fillMaxSize()) {
         Spacer(modifier = Modifier.height(16.dp))
         SearchField(
@@ -191,41 +206,92 @@ fun HouseNumberSelectionPage(
             onQueryChange = onSearchQueryChange,
             placeholder = stringResource(R.string.search_house_hint)
         )
+        
+        CategoryFilterRow(
+            selectedCategory = selectedCategory,
+            onCategorySelected = onCategorySelected
+        )
 
         if (isLoading) {
             GridSkeleton()
-        } else if (filteredList.isEmpty()) {
+        } else if (houseNumbers.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (searchQuery.isEmpty()) stringResource(R.string.house_empty) else stringResource(R.string.house_not_found),
+                    text = if (searchQuery.isEmpty() && selectedCategory == null) stringResource(R.string.house_empty) else stringResource(R.string.house_not_found),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 100.dp),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .animateContentSize(),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(filteredList) { house ->
+                items(houseNumbers, key = { it.originalAddressId }) { house ->
                     OutlinedCard(
                         onClick = { onHouseSelected(house) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large
                     ) {
-                        Box(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
                                 text = house.houseNumber,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
+                            
+                            // Category + Queue chips
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                if (selectedCategory == null) {
+                                    AssistChip(
+                                        onClick = {},
+                                        label = {
+                                            Text(
+                                                text = house.category.label,
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        },
+                                        modifier = Modifier.height(28.dp)
+                                    )
+                                }
+                                
+                                AssistChip(
+                                    onClick = {},
+                                    label = {
+                                        Text(
+                                            text = "Ч: ${house.cherga}",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                                
+                                AssistChip(
+                                    onClick = {},
+                                    label = {
+                                        Text(
+                                            text = "ПЧ: ${house.pidcherga}",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
                         }
                     }
                 }

@@ -51,7 +51,6 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KeyNotificationMode = intPreferencesKey("notification_mode") // 0: All, 1: Important, 2: Silent
         private val KeyNotificationAdvanceMinutes = intPreferencesKey("notification_advance_minutes")
         private val KeyStatusNotificationEnabled = androidx.datastore.preferences.core.booleanPreferencesKey("status_notification_enabled")
-        private val KeyLiveActivityEnabled = androidx.datastore.preferences.core.booleanPreferencesKey("live_activity_enabled")
         
         // Smart Notification Settings
         private val KeyNotifQuietStart = intPreferencesKey("notif_quiet_start")
@@ -62,7 +61,7 @@ class EnergyPreferencesManager(private val context: Context) {
         // Theme settings
         private val KeyDisplayMode = intPreferencesKey("display_mode")
         private val KeyColorTheme = intPreferencesKey("color_theme")
-        private val KeyFontScale = intPreferencesKey("font_scale")
+        private val KeyCornerRadius = intPreferencesKey("corner_radius")
         
         // Cache
         private val KeyLastScheduleHash = stringPreferencesKey("last_schedule_hash")
@@ -71,6 +70,23 @@ class EnergyPreferencesManager(private val context: Context) {
         private const val DefaultCherga = 0
         private const val DefaultPidcherga = 0
         private const val DefaultNotificationAdvanceMinutes = 15 // 15 minutes before
+        private const val DefaultCornerRadius = -1 // -1 means follow system
+    }
+
+    /**
+     * Flow that emits corner radius preference
+     */
+    val cornerRadiusFlow: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[KeyCornerRadius] ?: DefaultCornerRadius
+    }.distinctUntilChanged()
+
+    /**
+     * Save corner radius
+     */
+    suspend fun setCornerRadius(radius: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[KeyCornerRadius] = radius
+        }
     }
 
     /**
@@ -90,22 +106,14 @@ class EnergyPreferencesManager(private val context: Context) {
     }.distinctUntilChanged()
 
     /**
-     * Flow that emits font scale preference
-     */
-    val fontScaleFlow: Flow<FontScale> = context.dataStore.data.map { preferences ->
-        val ordinal = preferences[KeyFontScale] ?: FontScale.Normal.ordinal
-        FontScale.entries.getOrElse(ordinal) { FontScale.Normal }
-    }.distinctUntilChanged()
-
-    /**
      * Flow that emits smart notification settings
      */
     val smartNotificationSettingsFlow: Flow<SmartNotificationSettings> = context.dataStore.data.map { preferences ->
         val start = preferences[KeyNotifQuietStart] ?: 22
         val end = preferences[KeyNotifQuietEnd] ?: 7
         val workday = preferences[KeyNotifWorkday] ?: false
-        val priorityOrdinal = preferences[KeyNotifPriority] ?: PriorityMode.Smart.ordinal
-        val priority = PriorityMode.entries.getOrElse(priorityOrdinal) { PriorityMode.Smart }
+        val priorityOrdinal = preferences[KeyNotifPriority] ?: PriorityMode.All.ordinal
+        val priority = PriorityMode.entries.getOrElse(priorityOrdinal) { PriorityMode.All }
 
         SmartNotificationSettings(start, end, workday, priority)
     }.distinctUntilChanged()
@@ -154,15 +162,6 @@ class EnergyPreferencesManager(private val context: Context) {
     suspend fun setColorTheme(theme: ColorTheme) {
         context.dataStore.edit { preferences ->
             preferences[KeyColorTheme] = theme.ordinal
-        }
-    }
-
-    /**
-     * Save font scale
-     */
-    suspend fun setFontScale(scale: FontScale) {
-        context.dataStore.edit { preferences ->
-            preferences[KeyFontScale] = scale.ordinal
         }
     }
 
@@ -251,13 +250,6 @@ class EnergyPreferencesManager(private val context: Context) {
         preferences[KeyStatusNotificationEnabled] ?: false
     }.distinctUntilChanged()
 
-    /**
-     * Flow that emits live activity enabled status
-     */
-    val liveActivityEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[KeyLiveActivityEnabled] ?: false
-    }.distinctUntilChanged()
-
     val notificationModeFlow: Flow<Int> = context.dataStore.data.map { it[KeyNotificationMode] ?: 0 }.distinctUntilChanged()
 
     /**
@@ -292,15 +284,6 @@ class EnergyPreferencesManager(private val context: Context) {
     }
 
     /**
-     * Save live activity enabled status
-     */
-    suspend fun setLiveActivityEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KeyLiveActivityEnabled] = enabled
-        }
-    }
-
-    /**
      * Mark onboarding as completed
      */
     suspend fun setOnboardingCompleted() {
@@ -310,11 +293,23 @@ class EnergyPreferencesManager(private val context: Context) {
     }
 
     /**
-     * Reset onboarding status (set to false)
+     * Reset onboarding status and clear all saved selections
+     * This brings the app back to first-launch state
      */
     suspend fun resetOnboarding() {
         context.dataStore.edit { preferences ->
             preferences[KeyOnboardingCompleted] = false
+            // Clear saved selection to force user through address selection
+            preferences.remove(KeyRemId)
+            preferences.remove(KeyRemName)
+            preferences.remove(KeyCityId)
+            preferences.remove(KeyCityName)
+            preferences.remove(KeyStreetId)
+            preferences.remove(KeyStreetName)
+            preferences.remove(KeyAddressId)
+            preferences.remove(KeyAddressName)
+            preferences.remove(KeyCherga)
+            preferences.remove(KeyPidcherga)
         }
     }
 

@@ -21,6 +21,9 @@ import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.runtime.*
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.app.Activity
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,16 +40,19 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.model.*
-import com.occaecat.ztoeschedule.presentation.ui.addresses.AddAddressScreen
+import android.content.Intent
 import com.occaecat.ztoeschedule.presentation.ui.addresses.MyAddressesTab
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
 import com.occaecat.ztoeschedule.presentation.ui.more.AboutScreen
 import com.occaecat.ztoeschedule.presentation.ui.more.DonateScreen
 import com.occaecat.ztoeschedule.presentation.ui.more.FaqScreen
+import com.occaecat.ztoeschedule.presentation.ui.onboarding.ImprovedOnboardingFlow
+import com.occaecat.ztoeschedule.presentation.ui.more.IntegrationsScreen
 import com.occaecat.ztoeschedule.presentation.ui.more.MoreTab
 import com.occaecat.ztoeschedule.presentation.ui.notifications.NotificationsTab
 import com.occaecat.ztoeschedule.presentation.ui.onboarding.OnboardingFlow
@@ -67,16 +73,35 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { uiState.addressDataList.size })
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val snackbarHostState = remember { SnackbarHostState() }
     var showMenu by remember { mutableStateOf(false) }
+    var activityLaunched by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(uiState.error) { uiState.error?.let { snackbarHostState.showSnackbar(it); viewModel.clearError() } }
     LaunchedEffect(uiState.infoMessage) { uiState.infoMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearInfoMessage() } }
-    LaunchedEffect(uiState.isAddingNewAddress) { if (uiState.isAddingNewAddress && currentRoute != "add_address") navController.navigate("add_address") { launchSingleTop = true } }
+    val addAddressLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        viewModel.cancelAddingAddress()
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val data = result.data ?: return@rememberLauncherForActivityResult
+        val name = data.getStringExtra("name") ?: return@rememberLauncherForActivityResult
+        val icon = data.getStringExtra("icon") ?: "home"
+        val remId = data.getStringExtra("remId") ?: return@rememberLauncherForActivityResult
+        val remName = data.getStringExtra("remName") ?: ""
+        val cityId = data.getStringExtra("cityId") ?: return@rememberLauncherForActivityResult
+        val cityName = data.getStringExtra("cityName") ?: ""
+        val streetId = data.getStringExtra("streetId") ?: return@rememberLauncherForActivityResult
+        val streetName = data.getStringExtra("streetName") ?: ""
+        val addressId = data.getStringExtra("addressId") ?: return@rememberLauncherForActivityResult
+        val addressName = data.getStringExtra("addressName") ?: ""
+        val cherga = data.getIntExtra("cherga", 0)
+        val pidcherga = data.getIntExtra("pidcherga", 0)
+        viewModel.addSavedAddress(name, icon, remId, remName, cityId, cityName, streetId, streetName, addressId, addressName, cherga, pidcherga)
+    }
     
     LaunchedEffect(uiState.requestedAddressId, uiState.addressDataList) {
         uiState.requestedAddressId?.let { id ->
@@ -89,6 +114,35 @@ fun MainScreen(
                 } 
             }
             viewModel.setRequestedAddressId(null)
+        }
+    }
+
+    // Auto-navigate to inspect if deep link received
+    LaunchedEffect(uiState.inspectedAddress) {
+        if (uiState.inspectedAddress != null && currentRoute != "inspect" && !useWideLayout && !activityLaunched) {
+            activityLaunched = true
+            val addr = uiState.inspectedAddress!!
+            val intent = Intent(context, com.occaecat.ztoeschedule.InspectActivity::class.java).apply {
+                putExtra("remId", addr.remId)
+                putExtra("remName", addr.remName)
+                putExtra("cityId", addr.cityId)
+                putExtra("cityName", addr.cityName)
+                putExtra("streetId", addr.streetId)
+                putExtra("streetName", addr.streetName)
+                putExtra("addressId", addr.addressId)
+                putExtra("addressName", addr.addressName)
+                putExtra("name", addr.name)
+                putExtra("iconName", addr.iconName)
+                putExtra("priority", addr.priority)
+                putExtra("cherga", addr.cherga)
+                putExtra("pidcherga", addr.pidcherga)
+            }
+            context.startActivity(intent)
+        }
+        
+        // Reset flag when inspectedAddress is cleared
+        if (uiState.inspectedAddress == null) {
+            activityLaunched = false
         }
     }
 
@@ -106,28 +160,36 @@ fun MainScreen(
         }
     }
 
-    if (!uiState.onboardingCompleted || !uiState.hasSavedSelection) {
-        OnboardingFlow(
+    // Wait for initial load to complete before deciding UI flow
+    if (!uiState.isInitialLoadComplete) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    // Helper class for navigation items
+    data class BottomNavItem(val route: String, val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)
+
+    // Show onboarding if: 
+    // 1. Onboarding not completed OR no saved address
+    // 2. AND not in inspection mode (deep link bypass)
+    val needsOnboarding = (!uiState.onboardingCompleted || !uiState.hasSavedSelection) && uiState.inspectedAddress == null
+    
+    if (needsOnboarding) {
+        ImprovedOnboardingFlow(
             uiState.remList, uiState.cityList, uiState.streetList, uiState.filteredHouseNumbers, uiState.houseNumberSearchQuery, uiState.isLoading,
+            uiState.selectedCategory,
             { viewModel.loadRemList() }, { viewModel.loadCityList(it) }, { viewModel.loadStreetList(it) }, { viewModel.loadAddressList(it) },
-            { viewModel.filterHouseNumbers(it) }, { viewModel.clearHouseNumberSearch() }, onComplete = { rI, rN, cI, cN, sI, sN, aI, aN, c, p, n, i ->
+            { viewModel.filterHouseNumbers(it) }, { viewModel.selectCategory(it) }, { viewModel.clearHouseNumberSearch() }, onComplete = { rI, rN, cI, cN, sI, sN, aI, aN, c, p, n, i ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress); viewModel.saveSelection(rI, rN, cI, cN, sI, sN, aI, aN, c, p, n, i); viewModel.completeOnboarding()
             }
         )
         return
     }
 
-    val isInspecting = remember(currentRoute, useWideLayout) { currentRoute == "inspect" && !useWideLayout }
-    val isSettings = remember(currentRoute, useWideLayout) { currentRoute == "settings" && !useWideLayout }
-    val isAdding = remember(currentRoute) { currentRoute == "add_address" }
-    val shouldShowBars = remember(isInspecting, isSettings, isAdding) { !isInspecting && !isSettings && !isAdding }
-
-    if (isInspecting) { 
-        PredictiveBackHandler(enabled = true) { progress -> 
-            try { progress.collect { }; navController.popBackStack() } 
-            catch (e: Exception) { navController.popBackStack() } 
-        } 
-    }
+    val isAdding = remember(uiState.isAddingNewAddress) { uiState.isAddingNewAddress }
+    val shouldShowBars = remember(isAdding) { !isAdding }
 
     val navItems = listOf(
         BottomNavItem("home", "Головна", Icons.Filled.Home, Icons.Outlined.Home),
@@ -150,11 +212,21 @@ fun MainScreen(
                             label = { Column { Text(data.address.name, fontWeight = FontWeight.SemiBold); Text("${data.address.cityName}, ${data.address.streetName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
                             selected = currentRoute == "home" && pagerState.currentPage == index,
                             icon = { Icon(when (data.address.iconName) { "home" -> Icons.Default.Home; "work" -> Icons.Default.Work; "apartment" -> Icons.Default.Apartment; else -> Icons.Default.LocationOn }, null) },
-                            badge = { if (data.isOffline) Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error) else Surface(color = if (data.currentStatus?.status == ScheduleStatus.Available) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error, shape = CircleShape, modifier = Modifier.size(8.dp)) {} },
-                            onClick = { scope.launch { drawerState.close(); if (currentRoute != "home") navController.navigate("home") { popUpTo(navController.graph.startDestinationId) { saveState = true }; launchSingleTop = true; restoreState = true }; pagerState.animateScrollToPage(index) } },
-                            modifier = Modifier.padding(vertical = 2.dp), shape = MaterialTheme.shapes.medium
-                        )
-                    }
+                                                        badge = { 
+                                                            if (data.isOffline) {
+                                                                Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                                                            } else {
+                                                                val statusColor = when (data.currentStatus?.status) {
+                                                                    ScheduleStatus.Available -> MaterialTheme.colorScheme.primary
+                                                                    ScheduleStatus.Probable -> MaterialTheme.colorScheme.tertiary
+                                                                    else -> MaterialTheme.colorScheme.error
+                                                                }
+                                                                Surface(color = statusColor, shape = CircleShape, modifier = Modifier.size(8.dp)) {} 
+                                                            }
+                                                        },
+                                                        onClick = { scope.launch { drawerState.close(); if (currentRoute != "home") navController.navigate("home") { popUpTo(navController.graph.startDestinationId) { saveState = true }; launchSingleTop = true; restoreState = true }; pagerState.animateScrollToPage(index) } },
+                                                        modifier = Modifier.padding(vertical = 2.dp), shape = MaterialTheme.shapes.medium
+                                                    )                    }
                     Spacer(Modifier.weight(1f))
                     HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     NavigationDrawerItem(
@@ -168,6 +240,7 @@ fun MainScreen(
             }
         }
     ) {
+        val context = LocalContext.current
         Row(Modifier.fillMaxSize()) {
             if (useWideLayout) {
                 NavigationRail(
@@ -176,7 +249,7 @@ fun MainScreen(
                     header = {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.Bolt, null, Modifier.padding(vertical = 12.dp), tint = MaterialTheme.colorScheme.primary)
-                            FloatingActionButton(onClick = { viewModel.startAddingAddress(); navController.navigate("add_address") }, containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) { Icon(Icons.Default.Add, "Додати") }; Spacer(Modifier.height(8.dp))
+                            FloatingActionButton(onClick = { addAddressLauncher.launch(Intent(context, com.occaecat.ztoeschedule.AddressPickerActivity::class.java)) }, containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) { Icon(Icons.Default.Add, "Додати") }; Spacer(Modifier.height(8.dp))
                         }
                     }
                 ) {
@@ -258,7 +331,20 @@ fun MainScreen(
                         }
                     }
                 },
-                floatingActionButton = { AnimatedVisibility(visible = !useWideLayout && (currentRoute == "addresses" || (currentRoute == "home" && uiState.addressDataList.isEmpty())), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) { ExtendedFloatingActionButton(onClick = { viewModel.startAddingAddress(); navController.navigate("add_address") }, icon = { Icon(Icons.Default.AddLocation, null) }, text = { Text("Додати") }, containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) } }
+                floatingActionButton = { 
+                    val context = LocalContext.current
+                    AnimatedVisibility(visible = !useWideLayout && (currentRoute == "addresses" || (currentRoute == "home" && uiState.addressDataList.isEmpty())), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) { 
+                        ExtendedFloatingActionButton(
+                            onClick = { 
+                                addAddressLauncher.launch(Intent(context, com.occaecat.ztoeschedule.AddressPickerActivity::class.java)) 
+                            }, 
+                            icon = { Icon(Icons.Default.AddLocation, null) }, 
+                            text = { Text("Додати") }, 
+                            containerColor = MaterialTheme.colorScheme.primaryContainer, 
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ) 
+                    } 
+                }
             ) { padding ->
                 val br = listOf("home", "notifications", "addresses", "more"); fun gRI(r: String?): Int = br.indexOf(r)
                 NavHost(
@@ -290,18 +376,87 @@ fun MainScreen(
                             beyondViewportPageCount = 1
                         ) { page -> 
                             val d = uiState.addressDataList[page]
-                            HomeTab(d.address.remName, d.address.cityName, d.address.streetName, d.address.addressName, d.address.cherga, d.address.pidcherga, d.currentStatus, d.scheduleList, d.groupedSchedule, { viewModel.refreshAllSchedules() }, Modifier.fillMaxSize(), padding, d.lastUpdateTime, d.isOffline, uiState.isLoading) 
+                            HomeTab(d.address.remName, d.address.cityName, d.address.streetName, d.address.addressName, d.address.cherga, d.address.pidcherga, d.currentStatus, d.scheduleList, d.groupedSchedule, { viewModel.refreshAllSchedules() }, Modifier.fillMaxSize(), padding, d.lastUpdateTime, d.isOffline, uiState.isLoading, d.address.streetId, d.address.addressId) 
                         } 
                     }
                     composable("notifications") { NotificationsTab(uiState.infoMessages, uiState.formattedMessage, Modifier.fillMaxSize(), padding, uiState.isLoading) }
-                    composable("addresses") { MyAddressesTab(uiState.savedAddresses, uiState.addressStatuses, uiState.isAddingNewAddress, uiState.remList, uiState.cityList, uiState.streetList, uiState.filteredHouseNumbers, uiState.houseNumberSearchQuery, uiState.isLoading, useWideLayout, uiState.inspectedScheduleList, uiState.inspectedGroupedSchedule, uiState.isInspectingLoading, { viewModel.startAddingAddress(); navController.navigate("add_address") }, { viewModel.cancelAddingAddress() }, { viewModel.loadRemList() }, { viewModel.loadCityList(it) }, { viewModel.loadStreetList(it) }, { viewModel.loadAddressList(it) }, { viewModel.filterHouseNumbers(it) }, { viewModel.clearHouseNumberSearch() }, { n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p -> viewModel.addSavedAddress(n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p) }, { viewModel.deleteSavedAddress(it) }, { viewModel.updateAddressesOrder(it) }, { c, p -> viewModel.loadScheduleWithMessages(c, p) }, { viewModel.startInspectingAddress(it); if (!useWideLayout) navController.navigate("inspect") }, Modifier.fillMaxSize(), padding) }
-                    composable("add_address") { AddAddressScreen(uiState.remList, uiState.cityList, uiState.streetList, uiState.filteredHouseNumbers, uiState.houseNumberSearchQuery, uiState.isLoading, { viewModel.loadRemList() }, { viewModel.loadCityList(it) }, { viewModel.loadStreetList(it) }, { viewModel.loadAddressList(it) }, { viewModel.filterHouseNumbers(it) }, { viewModel.clearHouseNumberSearch() }, { n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p -> viewModel.addSavedAddress(n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p); navController.popBackStack() }, { navController.popBackStack() }) }
-                    composable("more") { MoreTab(scheduleList = uiState.addressDataList.getOrNull(pagerState.currentPage)?.scheduleList ?: emptyList(), onNavigateToSettings = { navController.navigate("settings") }, onNavigateToDonate = { navController.navigate("donate") }, onNavigateToAbout = { navController.navigate("about") }, onNavigateToFaq = { navController.navigate("faq") }, displayMode = uiState.displayMode, modifier = Modifier.fillMaxSize(), contentPadding = padding) }
+                    composable("addresses") { 
+                        val context = LocalContext.current
+                        MyAddressesTab(
+                            addresses = uiState.savedAddresses,
+                            addressStatuses = uiState.addressStatuses,
+                            isAddingNew = uiState.isAddingNewAddress,
+                            remList = uiState.remList,
+                            cityList = uiState.cityList,
+                            streetList = uiState.streetList,
+                            houseNumbers = uiState.filteredHouseNumbers,
+                            searchQuery = uiState.houseNumberSearchQuery,
+                            isLoading = uiState.isLoading,
+                            useWideLayout = useWideLayout,
+                            inspectedScheduleList = uiState.inspectedScheduleList,
+                            inspectedGroupedSchedule = uiState.inspectedGroupedSchedule,
+                            isInspectingLoading = uiState.isInspectingLoading,
+                            onStartAdding = { context.startActivity(Intent(context, com.occaecat.ztoeschedule.AddressPickerActivity::class.java)) },
+                            onCancelAdding = { viewModel.cancelAddingAddress() },
+                            onLoadRem = { viewModel.loadRemList() },
+                            onLoadCity = { viewModel.loadCityList(it) },
+                            onLoadStreet = { viewModel.loadStreetList(it) },
+                            onLoadAddress = { viewModel.loadAddressList(it) },
+                            onSearchQueryChange = { viewModel.filterHouseNumbers(it) },
+                            onClearSearch = { viewModel.clearHouseNumberSearch() },
+                            onSaveAddress = { n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p -> viewModel.addSavedAddress(n, i, rI, rN, cI, cN, sI, sN, aI, aN, c, p) },
+                            onDeleteAddress = { viewModel.deleteSavedAddress(it) },
+                            onUpdateOrder = { viewModel.updateAddressesOrder(it) },
+                            onRefreshAddress = { c, p -> viewModel.loadScheduleWithMessages(c, p) },
+                            onInspectAddress = { savedAddr ->
+                                viewModel.startInspectingAddress(savedAddr)
+                                if (!useWideLayout) {
+                                    activityLaunched = true
+                                    val intent = Intent(context, com.occaecat.ztoeschedule.InspectActivity::class.java).apply {
+                                        putExtra("remId", savedAddr.remId)
+                                        putExtra("remName", savedAddr.remName)
+                                        putExtra("cityId", savedAddr.cityId)
+                                        putExtra("cityName", savedAddr.cityName)
+                                        putExtra("streetId", savedAddr.streetId)
+                                        putExtra("streetName", savedAddr.streetName)
+                                        putExtra("addressId", savedAddr.addressId)
+                                        putExtra("addressName", savedAddr.addressName)
+                                        putExtra("name", savedAddr.name)
+                                        putExtra("iconName", savedAddr.iconName)
+                                        putExtra("priority", savedAddr.priority)
+                                        putExtra("cherga", savedAddr.cherga)
+                                        putExtra("pidcherga", savedAddr.pidcherga)
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = padding
+                        ) 
+                    }
+                    composable("more") { 
+                        val context = LocalContext.current
+                        MoreTab(
+                            scheduleList = uiState.addressDataList.getOrNull(pagerState.currentPage)?.scheduleList ?: emptyList(),
+                            currentAddressRemName = uiState.addressDataList.getOrNull(pagerState.currentPage)?.address?.remName ?: "",
+                            currentAddressCityName = uiState.addressDataList.getOrNull(pagerState.currentPage)?.address?.cityName ?: "",
+                            currentAddressStreetName = uiState.addressDataList.getOrNull(pagerState.currentPage)?.address?.streetName ?: "",
+                            currentAddressHouseName = uiState.addressDataList.getOrNull(pagerState.currentPage)?.address?.addressName ?: "",
+                            onNavigateToSettings = { context.startActivity(Intent(context, com.occaecat.ztoeschedule.SettingsActivity::class.java)) }, 
+                            onNavigateToIntegrations = { navController.navigate("integrations") },
+                            onNavigateToDonate = { navController.navigate("donate") }, 
+                            onNavigateToAbout = { navController.navigate("about") }, 
+                            onNavigateToFaq = { navController.navigate("faq") },
+                            onAddDemoLocation = { viewModel.addDemoLocation() }, 
+                            displayMode = uiState.displayMode, 
+                            modifier = Modifier.fillMaxSize(), 
+                            contentPadding = padding
+                        ) 
+                    }
                     composable("donate") { DonateScreen { navController.popBackStack() } }
                     composable("about") { AboutScreen { navController.popBackStack() } }
                     composable("faq") { FaqScreen { navController.popBackStack() } }
-                    composable("settings") { Scaffold(topBar = { TopAppBar(title = { Text("Налаштування") }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }) }) { innerPadding -> SettingsTab(uiState.notificationsEnabled, uiState.notificationAdvanceMinutes, uiState.statusNotificationEnabled, uiState.liveActivityEnabled, uiState.lastUpdateTime, uiState.displayMode, uiState.colorTheme, uiState.fontScale, uiState.smartNotificationSettings, uiState.notificationMode, { viewModel.setNotificationsEnabled(it) }, { viewModel.setNotificationAdvanceMinutes(it) }, { viewModel.setStatusNotificationEnabled(it) }, { viewModel.setLiveActivityEnabled(it) }, { viewModel.setDisplayMode(it) }, { viewModel.setColorTheme(it) }, { viewModel.setFontScale(it) }, { viewModel.setSmartNotificationSettings(it) }, { viewModel.setNotificationMode(it) }, { viewModel.resetOnboarding() }, { viewModel.clearData() }, Modifier.fillMaxSize(), innerPadding) } }
-                    composable("inspect") { val addr = uiState.inspectedAddress; if (addr != null) { Scaffold(topBar = { TopAppBar(title = { Text(addr.name, fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = { navController.popBackStack(); viewModel.stopInspectingAddress() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }) }) { innerPadding -> HomeTab(addr.remName, addr.cityName, addr.streetName, addr.addressName, addr.cherga, addr.pidcherga, null, uiState.inspectedScheduleList, uiState.inspectedGroupedSchedule, { viewModel.startInspectingAddress(addr) }, Modifier.fillMaxSize(), innerPadding, "", false) } } }
+                    composable("integrations") { IntegrationsScreen { navController.popBackStack() } }
                 }
             }
         }
@@ -312,12 +467,22 @@ fun MainScreen(
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
                     Text(text = "Оберіть адресу для віджета", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
-                    uiState.savedAddresses.forEach { a -> ListItem(headlineContent = { Text(a.name, fontWeight = FontWeight.SemiBold) }, supportingContent = { Text("${a.cityName}, ${a.streetName}") }, leadingContent = { Icon(imageVector = when (a.iconName) { "home" -> Icons.Default.Home; "work" -> Icons.Default.Work; "apartment" -> Icons.Default.Apartment; else -> Icons.Default.LocationOn }, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, modifier = Modifier.clickable { scope.launch { viewModel.selectWidgetAddress(a); sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) { viewModel.setShowWidgetConfig(false) } } }) }
+                    uiState.savedAddresses.forEach { a -> 
+                        ListItem(
+                            headlineContent = { Text(a.name, fontWeight = FontWeight.SemiBold) }, 
+                            supportingContent = { Text("${a.cityName}, ${a.streetName}") }, 
+                            leadingContent = { Icon(imageVector = when (a.iconName) { "home" -> Icons.Default.Home; "work" -> Icons.Default.Work; "apartment" -> Icons.Default.Apartment; else -> Icons.Default.LocationOn }, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, 
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple()
+                            ) { 
+                                scope.launch { viewModel.selectWidgetAddress(a); sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) { viewModel.setShowWidgetConfig(false) } } 
+                            }
+                        ) 
+                    }
                     Spacer(modifier = Modifier.height(8.dp)); OutlinedButton(onClick = { scope.launch { sheetState.hide() }.invokeOnCompletion { viewModel.setShowWidgetConfig(false) } }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = MaterialTheme.shapes.medium) { Text("Скасувати") }
                 }
             }
         }
     }
 }
-
-private data class BottomNavItem(val route: String, val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)

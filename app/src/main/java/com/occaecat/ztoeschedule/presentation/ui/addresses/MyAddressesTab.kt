@@ -39,7 +39,6 @@ import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.TimeUtils
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
-import com.occaecat.ztoeschedule.ui.theme.OctagonShape
 import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
 import com.occaecat.ztoeschedule.presentation.ui.components.ScaleIndication
 import java.util.Collections
@@ -92,7 +91,7 @@ fun MyAddressesTab(
 private fun AddressesSkeleton(cp: PaddingValues, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize().padding(cp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         repeat(3) { ShimmerItem(120.dp, shape = MaterialTheme.shapes.extraLarge) }
-        Spacer(Modifier.height(8.dp)); ShimmerItem(64.dp, shape = OctagonShape)
+        Spacer(Modifier.height(8.dp)); ShimmerItem(64.dp, shape = MaterialTheme.shapes.medium)
     }
 }
 
@@ -130,9 +129,9 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
             Box(Modifier.zIndex(if (isD) 1f else 0f).animateItem()) {
                 SwipeToDismissBox(state = dState, enableDismissFromStartToEnd = false, backgroundContent = {
                     val p = dState.progress
-                    val c = androidx.compose.ui.graphics.lerp(Color.LightGray.copy(alpha = 0.2f), MaterialTheme.colorScheme.errorContainer, if (dState.dismissDirection == SwipeToDismissBoxValue.EndToStart) p else 0f)
+                    val c = androidx.compose.ui.graphics.lerp(Color.LightGray.copy(alpha = 0.12f), MaterialTheme.colorScheme.errorContainer, if (dState.dismissDirection == SwipeToDismissBoxValue.EndToStart) p else 0f)
                     Box(Modifier.fillMaxSize().clip(MaterialTheme.shapes.extraLarge).background(c).padding(horizontal = 20.dp), contentAlignment = Alignment.CenterEnd) {
-                        Icon(Icons.Default.Delete, null, tint = if (p > 0.5f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        Icon(Icons.Default.Delete, null, tint = if (p > 0.5f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }) {
                     AddressItem(
@@ -195,8 +194,14 @@ private fun AddressItem(a: SavedAddress, s: GroupedSchedule?, isP: Boolean, isSe
         }
     }
 
-    val elevation by t.animateDp(label = "e") { state -> if (state.first) 8.dp else 2.dp }
+    val elevation by t.animateDp(label = "e") { state -> if (state.first) 3.dp else 1.dp }
     val interactionSource = remember { MutableInteractionSource() }
+    val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
+    val adaptivePadding = remember(radius) {
+        val base = 16f
+        val extra = if (radius > 24) (radius - 24).toFloat() / 2f else 0f
+        (base + extra).dp
+    }
     
     ElevatedCard(
         onClick = onClick,
@@ -211,14 +216,18 @@ private fun AddressItem(a: SavedAddress, s: GroupedSchedule?, isP: Boolean, isSe
             containerColor = containerColor,
             contentColor = onContainerColor
         ), 
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = elevation),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = elevation,
+            pressedElevation = 3.dp,
+            focusedElevation = 3.dp
+        ),
         interactionSource = interactionSource
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(adaptivePadding)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(44.dp), 
-                    shape = OctagonShape, 
+                    shape = MaterialTheme.shapes.medium, 
                     color = if(isP) colorScheme.primary else colorScheme.surfaceVariant
                 ) { 
                     Box(contentAlignment = Alignment.Center) { 
@@ -241,7 +250,7 @@ private fun AddressItem(a: SavedAddress, s: GroupedSchedule?, isP: Boolean, isSe
                     Text(
                         text = "${a.cityName}, ${a.streetName}", 
                         style = MaterialTheme.typography.bodySmall, 
-                        color = onContainerColor.copy(alpha = 0.8f)
+                        color = onContainerColor
                     ) 
                 }
                 IconButton(
@@ -324,7 +333,7 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, modifier:
             Box(
                 Modifier
                     .size(8.dp)
-                    .clip(OctagonShape)
+                    .clip(MaterialTheme.shapes.small)
                     .background(animatedStatusColor)
             )
             Spacer(Modifier.width(8.dp))
@@ -341,7 +350,7 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, modifier:
             Text(
                 text = "До ${TimeUtils.formatToSystemTime(context, s.endTime)}", 
                 style = MaterialTheme.typography.bodySmall, 
-                color = contentColor.copy(alpha = 0.7f),
+                color = contentColor,
                 maxLines = 1
             ) 
         }
@@ -354,7 +363,7 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, modifier:
                 .height(8.dp)
                 .clip(CircleShape), 
             color = animatedStatusColor, 
-            trackColor = contentColor.copy(alpha = 0.15f), // High contrast track
+            trackColor = contentColor.copy(alpha = 0.12f), // Standard MD3 alpha
             strokeCap = StrokeCap.Round
         )
     }
@@ -362,7 +371,7 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, modifier:
 
 @Composable
 private fun EmptyAddressesView(onAdd: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.testTag("empty_addresses_view"), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { Icon(Icons.Default.LocationOff, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)); Text("Список адрес порожній", style = MaterialTheme.typography.titleMedium); Button(onClick = onAdd, shape = OctagonShape) { Text("Додати адресу") } } }
+    Box(modifier.testTag("empty_addresses_view"), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { Icon(Icons.Default.LocationOff, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Text("Список адрес порожній", style = MaterialTheme.typography.titleMedium); Button(onClick = onAdd, shape = MaterialTheme.shapes.medium) { Text("Додати адресу") } } }
 }
 
 private fun getIconForName(name: String) = when (name) { "home" -> Icons.Default.Home; "apartment" -> Icons.Default.Apartment; "work" -> Icons.Default.Work; "school" -> Icons.Default.School; "star" -> Icons.Default.Star; else -> Icons.Default.LocationOn }

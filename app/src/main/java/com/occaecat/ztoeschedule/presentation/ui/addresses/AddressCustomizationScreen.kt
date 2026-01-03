@@ -16,6 +16,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.BorderStroke
 
 data class AddressIcon(
     val name: String,
@@ -89,17 +96,18 @@ fun AddressCustomizationScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Назва (напр. Додому, Офіс)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Edit, null) }
+                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                shape = MaterialTheme.shapes.large
             )
 
             Text(
@@ -108,31 +116,46 @@ fun AddressCustomizationScreen(
                 fontWeight = FontWeight.SemiBold
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                availableIcons.chunked(2).forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 100.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(availableIcons) { item ->
+                    val isSelected = selectedIconName == item.name
+                    val containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+                    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+
+                    Surface(
+                        onClick = { selectedIconName = item.name },
+                        shape = MaterialTheme.shapes.large,
+                        color = containerColor,
+                        border = BorderStroke(2.dp, borderColor),
+                        modifier = Modifier.aspectRatio(1f)
                     ) {
-                        row.forEach { item ->
-                            val isSelected = selectedIconName == item.name
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { selectedIconName = item.name },
-                                label = { Text(item.label) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                    )
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = MaterialTheme.shapes.large
+                        Column(
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = null,
+                                tint = contentColor,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = item.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = contentColor,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }
                 }
+                item { Spacer(Modifier.height(80.dp)) } // Bottom padding for FAB/BottomBar
             }
         }
     }

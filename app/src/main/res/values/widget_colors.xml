@@ -1,11 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="widget_background_neutral">#FDFDFD</color>
-    <color name="widget_background_accent">#E8DEF8</color>
-    <color name="widget_text_primary">#1D1B20</color>
-    <color name="widget_text_secondary">#49454F</color>
-    <color name="widget_status_positive">#B8F397</color> <!-- Light Green -->
-    <color name="widget_status_negative">#F2B8B5</color> <!-- Light Red -->
-    <color name="widget_status_warning">#FFDDAE</color> <!-- Light Amber -->
-    <color name="widget_on_status">#000000</color>
+    <!-- MD3 Widget Colors - Baseline Palette -->
+    <!-- Surface colors -->
+    <color name="widget_surface">#FEF7FF</color>
+    <color name="widget_on_surface">#1C1B1F</color>
+    <color name="widget_surface_variant">#E7E0EC</color>
+    <color name="widget_on_surface_variant">#49454F</color>
+    
+    <!-- Primary colors -->
+    <color name="widget_primary">#6750A4</color>
+    <color name="widget_on_primary">#FFFFFF</color>
+    <color name="widget_primary_container">#EADDFF</color>
+    <color name="widget_on_primary_container">#21005D</color>
+    
+    <!-- Error colors (для відключень) -->
+    <color name="widget_error">#BA1A1A</color>
+    <color name="widget_on_error">#FFFFFF</color>
+    <color name="widget_error_container">#FFDAD6</color>
+    <color name="widget_on_error_container">#410002</color>
+    
+    <!-- Success colors (для наявності світла) - Extended MD3 -->
+    <color name="widget_success">#1E8E3E</color>
+    <color name="widget_on_success">#FFFFFF</color>
+    <color name="widget_success_container">#C8E6C9</color>
+    <color name="widget_on_success_container">#0D3818</color>
+    
+    <!-- Warning colors (для ймовірного) - Extended MD3 -->
+    <color name="widget_warning">#E65100</color>
+    <color name="widget_on_warning">#FFFFFF</color>
+    <color name="widget_warning_container">#FFE0B2</color>
+    <color name="widget_on_warning_container">#3E2723</color>
+    
+    <!-- Outline -->
+    <color name="widget_outline">#79747E</color>
+    <color name="widget_outline_variant">#CAC4D0</color>
+    
+    <!-- Legacy compatibility (DEPRECATED - використовуйте MD3 токени) -->
+    <color name="widget_background_neutral">@color/widget_surface</color>
+    <color name="widget_background_accent">@color/widget_primary_container</color>
+    <color name="widget_text_primary">@color/widget_on_surface</color>
+    <color name="widget_text_secondary">@color/widget_on_surface_variant</color>
+    <color name="widget_status_positive">@color/widget_success_container</color>
+    <color name="widget_status_negative">@color/widget_error_container</color>
+    <color name="widget_status_warning">@color/widget_warning_container</color>
+    <color name="widget_on_status">@color/widget_on_surface</color>
 </resources>

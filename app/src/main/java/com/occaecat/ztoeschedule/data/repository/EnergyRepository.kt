@@ -38,6 +38,15 @@ class EnergyRepository(
         return addressStorage.getAddresses()
     }
 
+    /**
+     * Check if address already exists based on addressId (unique API identifier)
+     */
+    suspend fun isAddressAlreadyAdded(addressId: String): Boolean {
+        return addressStorage.getAddresses().any { 
+            it.addressId == addressId 
+        }
+    }
+
     suspend fun saveNewAddress(address: com.occaecat.ztoeschedule.data.model.SavedAddress) {
         addressStorage.addAddress(address)
         if (address.priority == 1) {
@@ -51,9 +60,9 @@ class EnergyRepository(
         if (addresses.isNotEmpty()) {
             val primary = addresses.find { it.priority == 1 } ?: addresses.first()
             syncAddressToPreferences(primary)
-        } else {
-            preferencesManager.clearPreferences()
         }
+        // Don't clear preferences - keep showing the last selected address even if deleted
+        // User can stay on the same screen without going to onboarding
     }
 
     suspend fun setPrimaryAddress(id: String) {
@@ -115,28 +124,59 @@ class EnergyRepository(
 
     fun getAllParsedHouseNumbers(addresses: List<Address>): List<ParsedHouseNumber> {
         return addresses.flatMap { address ->
-            parseRawAddressString(address.name).map { houseNumber ->
+            parseRawAddressString(address.name).map { (houseNumber, category) ->
                 ParsedHouseNumber(
                     houseNumber = houseNumber,
                     cherga = address.cherga,
                     pidcherga = address.pidcherga,
-                    originalAddressId = address.id
+                    originalAddressId = address.id,
+                    category = category
                 )
             }
-        }
+        }.sortedWith(Comparator { o1, o2 ->
+            val r1 = Regex("(\\d+)(.*)").find(o1.houseNumber)
+            val r2 = Regex("(\\d+)(.*)").find(o2.houseNumber)
+
+            if (r1 != null && r2 != null) {
+                val (n1, s1) = r1.destructured
+                val (n2, s2) = r2.destructured
+                val numComp = n1.toInt().compareTo(n2.toInt())
+                if (numComp != 0) numComp else s1.compareTo(s2)
+            } else {
+                o1.houseNumber.compareTo(o2.houseNumber)
+            }
+        })
     }
 
-    private fun parseRawAddressString(raw: String): List<String> {
+    private fun parseRawAddressString(raw: String): List<Pair<String, ConsumerCategory>> {
         return raw.split(",")
             .map { it.trim() }
             .mapNotNull { entry ->
+                // Detect category based on suffix
+                val category = when {
+                    entry.contains("побутові", ignoreCase = true) && !entry.contains("непобутові", ignoreCase = true) -> ConsumerCategory.HOUSEHOLD
+                    entry.contains("юридичні", ignoreCase = true) || 
+                    entry.contains("непобутові", ignoreCase = true) ||
+                    entry.contains("фізичні особи", ignoreCase = true) ||
+                    entry.contains("ФОП", ignoreCase = true) ||
+                    entry.contains("підприємство", ignoreCase = true) ||
+                    entry.contains("установа", ignoreCase = true) ||
+                    entry.contains("промислові", ignoreCase = true) -> ConsumerCategory.LEGAL
+                    else -> ConsumerCategory.OTHER
+                }
+
+                // Clean the string from all possible technical suffixes
                 val cleaned = entry
-                    .replace(Regex("""\s*-\s*побутові споживачі\s*"""), "")
-                    .replace(Regex("""\s*-\s*\w+\s+споживачі\s*"""), "")
+                    .replace(Regex("""\s*-\s*побутові споживачі\s*""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""\s*-\s*непобутові\s*\(юридичні\)\s*споживачі\s*""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""\s*-\s*юридичні споживачі\s*""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""\s*-\s*фізичні особи\s*-\s*підприємці\s*""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""\s*-\s*\w+\s+споживачі\s*""", RegexOption.IGNORE_CASE), "")
                     .trim()
-                if (cleaned.isNotEmpty()) cleaned else null
+
+                if (cleaned.isNotEmpty()) Pair(cleaned, category) else null
             }
-            .distinct()
+            .distinctBy { it.first + it.second.name } 
     }
 
     // ========== Schedule and Messages Methods ==========
@@ -145,6 +185,18 @@ class EnergyRepository(
         cherga: Int,
         pidcherga: Int
     ): Result<ScheduleWithMessages> = try {
+        // Check if this is a demo/test location
+        if (com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.isDemoLocation(cherga, pidcherga)) {
+            val mockSchedules = com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generateMockSchedule()
+            val mockMessages = listOf(
+                ScheduleMessagePart(
+                    id = 1,
+                    text = "🔧 ДЕМО-РЕЖИМ: Статус змінюється кожну хвилину для тестування алертів"
+                )
+            )
+            return Result.success(ScheduleWithMessages(mockSchedules, mockMessages))
+        }
+        
         coroutineScope {
             val scheduleDeferred = async { apiService.getSchedule(cherga, pidcherga) }
             val messagesDeferred = async { apiService.getMessages() }
@@ -176,6 +228,18 @@ class EnergyRepository(
      * Use this for frequent updates (like persistent notifications) to save battery.
      */
     suspend fun getCachedScheduleWithMessages(cherga: Int, pidcherga: Int): Result<ScheduleWithMessages> {
+        // Check if this is a demo/test location
+        if (com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.isDemoLocation(cherga, pidcherga)) {
+            val mockSchedules = com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generateMockSchedule()
+            val mockMessages = listOf(
+                ScheduleMessagePart(
+                    id = 1,
+                    text = "🔧 ДЕМО-РЕЖИМ: Статус змінюється кожну хвилину"
+                )
+            )
+            return Result.success(ScheduleWithMessages(mockSchedules, mockMessages))
+        }
+        
         return loadFromCache(cherga, pidcherga)
     }
 
@@ -257,34 +321,48 @@ class EnergyRepository(
     fun getSavedSelectionFlow(): Flow<com.occaecat.ztoeschedule.data.local.SavedSelection?> = preferencesManager.savedSelectionFlow
     fun getOnboardingCompletedFlow(): Flow<Boolean> = preferencesManager.onboardingCompletedFlow
     suspend fun setOnboardingCompleted() = preferencesManager.setOnboardingCompleted()
-    suspend fun resetOnboarding() = preferencesManager.resetOnboarding()
-    suspend fun clearPreferences() = preferencesManager.clearPreferences()
+    suspend fun resetOnboarding() = preferencesManager.resetOnboarding() // Clears onboarding flag AND saved selection
+    
+    suspend fun clearAllData() {
+        scheduleDao.deleteAll()
+        addressStorage.clearAll()
+        preferencesManager.clearPreferences()
+    }
 
     // ========== Theme Settings ==========
     fun getDisplayModeFlow(): Flow<DisplayMode> = preferencesManager.displayModeFlow
     fun getColorThemeFlow(): Flow<ColorTheme> = preferencesManager.colorThemeFlow
-    fun getFontScaleFlow(): Flow<FontScale> = preferencesManager.fontScaleFlow
+    fun getCornerRadiusFlow(): Flow<Int> = preferencesManager.cornerRadiusFlow
     fun getSmartNotificationSettingsFlow(): Flow<SmartNotificationSettings> = preferencesManager.smartNotificationSettingsFlow
     suspend fun setDisplayMode(mode: DisplayMode) = preferencesManager.setDisplayMode(mode)
     suspend fun setColorTheme(theme: ColorTheme) = preferencesManager.setColorTheme(theme)
-    suspend fun setFontScale(scale: FontScale) = preferencesManager.setFontScale(scale)
+    suspend fun setCornerRadius(radius: Int) = preferencesManager.setCornerRadius(radius)
     suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) = preferencesManager.saveSmartNotificationSettings(settings)
 
     // ========== Notification Settings ==========
     fun getNotificationsEnabledFlow(): Flow<Boolean> = preferencesManager.notificationsEnabledFlow
     fun getNotificationAdvanceMinutesFlow(): Flow<Int> = preferencesManager.notificationAdvanceMinutesFlow
     fun getStatusNotificationEnabledFlow(): Flow<Boolean> = preferencesManager.statusNotificationEnabledFlow
-    fun getLiveActivityEnabledFlow(): Flow<Boolean> = preferencesManager.liveActivityEnabledFlow
     fun getNotificationModeFlow(): Flow<Int> = preferencesManager.notificationModeFlow
 
     suspend fun setNotificationsEnabled(enabled: Boolean) = preferencesManager.setNotificationsEnabled(enabled)
     suspend fun setNotificationAdvanceMinutes(minutes: Int) = preferencesManager.setNotificationAdvanceMinutes(minutes)
     suspend fun setStatusNotificationEnabled(enabled: Boolean) = preferencesManager.setStatusNotificationEnabled(enabled)
-    suspend fun setLiveActivityEnabled(enabled: Boolean) = preferencesManager.setLiveActivityEnabled(enabled)
     suspend fun setNotificationMode(mode: Int) = preferencesManager.setNotificationMode(mode)
-
-    // ========== Existing methods ... 
 }
 
 data class ScheduleWithMessages(val schedules: List<Schedule>, val messages: List<ScheduleMessagePart>)
-data class ParsedHouseNumber(val houseNumber: String, val cherga: Int, val pidcherga: Int, val originalAddressId: String)
+
+enum class ConsumerCategory(val label: String) {
+    HOUSEHOLD("Побутові"),
+    LEGAL("Юридичні"),
+    OTHER("Інше")
+}
+
+data class ParsedHouseNumber(
+    val houseNumber: String, 
+    val cherga: Int, 
+    val pidcherga: Int, 
+    val originalAddressId: String,
+    val category: ConsumerCategory
+)

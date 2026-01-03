@@ -42,6 +42,48 @@ object ScheduleDomainLogic {
         }
     }
 
+    fun getNextStatus(schedules: List<Schedule>): Schedule? {
+        if (schedules.isEmpty()) return null
+
+        val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
+        val now = Calendar.getInstance(kyivZone)
+        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+        dateFormat.timeZone = kyivZone
+        val currentDateStr = dateFormat.format(now.time)
+        
+        val currentHour = now.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = now.get(Calendar.MINUTE)
+        val currentTimeInMinutes = currentHour * 60 + currentMinute
+
+        // Filter for today's schedules
+        val todaySchedules = schedules.filter { it.date == currentDateStr }
+        
+        // Find the current one
+        val currentSchedule = todaySchedules.firstOrNull { schedule ->
+            val timeRange = parseTimeSpan(schedule.span)
+            timeRange?.let { (startMinutes, endMinutes) ->
+                isTimeInRange(currentTimeInMinutes, startMinutes, endMinutes)
+            } ?: false
+        }
+
+        if (currentSchedule != null) {
+            val currentIndex = todaySchedules.indexOf(currentSchedule)
+            if (currentIndex != -1 && currentIndex < todaySchedules.size - 1) {
+                return todaySchedules[currentIndex + 1]
+            }
+        }
+        
+        // If no current or last for today, try to find the first one for tomorrow
+        // (Assuming schedules list might contain multiple days)
+        // Simplified: return the first one that starts after current time if no current is active
+        return todaySchedules.firstOrNull { schedule ->
+            val timeRange = parseTimeSpan(schedule.span)
+            timeRange?.let { (startMinutes, _) ->
+                startMinutes > currentTimeInMinutes
+            } ?: false
+        }
+    }
+
     /**
      * Parse time span string in format "HH:mm-HH:mm" to minutes since midnight
      *

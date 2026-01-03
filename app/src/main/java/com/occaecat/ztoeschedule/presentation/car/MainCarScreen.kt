@@ -7,7 +7,9 @@ import android.graphics.Paint
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
+import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.CarIcon
+import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
 import androidx.car.app.model.Row
@@ -88,9 +90,13 @@ class MainCarScreen(
         // If loading, show a loading list. IMPORTANT: ItemList cannot be empty without a message.
         if (isLoading) {
             return ListTemplate.Builder()
-                .setTitle(carContext.getString(R.string.app_name))
+                .setHeader(
+                    Header.Builder()
+                        .setTitle(carContext.getString(R.string.app_name))
+                        .setStartHeaderAction(Action.APP_ICON)
+                        .build()
+                )
                 .setLoading(true)
-                .setHeaderAction(Action.APP_ICON)
                 .setSingleList(
                     ItemList.Builder()
                         .setNoItemsMessage("Завантаження...") // Required to avoid IllegalStateException
@@ -119,8 +125,22 @@ class MainCarScreen(
         }
 
         return ListTemplate.Builder()
-            .setTitle(carContext.getString(R.string.app_name))
-            .setHeaderAction(Action.APP_ICON)
+            .setHeader(
+                Header.Builder()
+                    .setTitle(carContext.getString(R.string.app_name))
+                    .setStartHeaderAction(Action.APP_ICON)
+                    .addEndHeaderAction(
+                        Action.Builder()
+                            .setTitle("Оновити")
+                            .setOnClickListener {
+                                isLoading = true
+                                invalidate()
+                                loadData()
+                            }
+                            .build()
+                    )
+                    .build()
+            )
             .setSingleList(itemListBuilder.build())
             .build()
     }

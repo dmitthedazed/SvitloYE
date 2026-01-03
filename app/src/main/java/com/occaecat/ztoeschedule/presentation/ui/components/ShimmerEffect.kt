@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.invisibleToUser
 
-fun Modifier.shimmerEffect(): Modifier = composed {
+fun Modifier.shimmerEffect(shape: Shape = RoundedCornerShape(0.dp)): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnim by transition.animateFloat(
         initialValue = 0f,
@@ -44,7 +44,7 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         end = Offset(x = translateAnim, y = translateAnim)
     )
 
-    background(brush)
+    background(brush, shape)
 }
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
@@ -52,14 +52,13 @@ fun Modifier.shimmerEffect(): Modifier = composed {
 fun ShimmerItem(
     height: Dp,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp)
+    shape: Shape = MaterialTheme.shapes.medium
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .background(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), shape = shape)
-            .shimmerEffect()
+            .shimmerEffect(shape)
             .semantics { invisibleToUser() }
     )
 }
