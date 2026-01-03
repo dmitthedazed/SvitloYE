@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
@@ -217,7 +220,7 @@ private fun UnifiedAddressPicker(
     showTopBar: Boolean,
     contentPadding: PaddingValues
 ) {
-    var step by remember { mutableIntStateOf(if (initialHouse != null) 5 else 1) }
+    var step by remember { mutableIntStateOf(if (initialHouse != null) 5 else 0) }
     var selectedRem by remember { mutableStateOf(initialRem) }
     var selectedCity by remember { mutableStateOf(initialCity) }
     var selectedStreet by remember { mutableStateOf(initialStreet) }
@@ -232,7 +235,7 @@ private fun UnifiedAddressPicker(
     }
 
     // Handle system back button
-    BackHandler(enabled = step > 1) {
+    BackHandler(enabled = step > 0) {
         step--
     }
 
@@ -251,7 +254,7 @@ private fun UnifiedAddressPicker(
                     title = { Text("Нова адреса", fontWeight = FontWeight.SemiBold) },
                     navigationIcon = {
                         IconButton(onClick = {
-                            if (step > 1) {
+                            if (step > 0) {
                                 step--
                             } else {
                                 onCancel()
@@ -276,7 +279,9 @@ private fun UnifiedAddressPicker(
                 .padding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            StepHeader(step = step, total = 5)
+            if (step > 0) {
+                StepHeader(step = step, total = 5)
+            }
 
             Box(
                 modifier = Modifier
@@ -295,6 +300,11 @@ private fun UnifiedAddressPicker(
                     label = "unified_address_step"
                 ) { targetStep ->
                     when (targetStep) {
+                        0 -> SelectionMethodContent(
+                            onManualSelection = { step = 1 },
+                            onAutoSelection = { /* TODO: implement auto selection */ },
+                            onQRCodeScan = { /* TODO: implement QR code scanner */ }
+                        )
                         1 -> RemSelectionContent(
                             remList = remList,
                             isLoading = isLoading,
@@ -511,6 +521,154 @@ private fun ActionRow(step: Int, canGoBack: Boolean, onBack: () -> Unit, onCance
             shape = MaterialTheme.shapes.medium
         ) {
             Text(if (isLast) "Готово" else "Далі")
+        }
+    }
+}
+
+@Composable
+private fun SelectionMethodContent(
+    onManualSelection: () -> Unit,
+    onAutoSelection: () -> Unit,
+    onQRCodeScan: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Як ви хочете додати адресу?",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        Text(
+            text = "Виберіть зручний для вас спосіб",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(bottom = 32.dp)
+        )
+
+        // Manual selection button
+        ElevatedButton(
+            onClick = onManualSelection,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp),
+            shape = MaterialTheme.shapes.large,
+            colors = ButtonDefaults.elevatedButtonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "Вибрати вручну",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "РЕМ → Місто → Вулиця → Будинок",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Auto selection button
+        ElevatedButton(
+            onClick = onAutoSelection,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.LocationOn,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "Вибрати автоматично",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Визначити за GPS координатами",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // QR code scan button
+        ElevatedButton(
+            onClick = onQRCodeScan,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.QrCodeScanner,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "Відсканувати QR-код",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Швидке додавання з коду",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
