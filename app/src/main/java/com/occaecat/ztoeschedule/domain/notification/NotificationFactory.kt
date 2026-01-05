@@ -276,7 +276,11 @@ class NotificationFactory @Inject constructor(
         }
 
         // Set status chip text (critical info display) - shows in collapsed chip
-        val timeRemaining = TimeUtils.formatDuration(current.endMs - timeProvider.now())
+        val remainingMs = current.endMs - timeProvider.now()
+        val remainingMinutes = if (remainingMs > 0) remainingMs / 60000 else 0
+        val hours = remainingMinutes / 60
+        val minutes = remainingMinutes % 60
+        val timeRemaining = if (hours > 0) "${hours}г ${minutes}хв" else "${minutes}хв"
         builder.setShortCriticalText(timeRemaining)
         
         // Set when time for automatic countdown in status chip
