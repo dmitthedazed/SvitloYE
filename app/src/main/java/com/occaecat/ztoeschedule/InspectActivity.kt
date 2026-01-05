@@ -109,7 +109,14 @@ class InspectActivity : ComponentActivity() {
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text(currentAddr.name, fontWeight = FontWeight.Bold) },
+                                    title = { 
+                                        Text(
+                                            text = currentAddr.name, 
+                                            style = MaterialTheme.typography.titleLarge,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        ) 
+                                    },
                                     navigationIcon = {
                                         IconButton(onClick = { finish() }) {
                                             Icon(Icons.AutoMirrored.Filled.ArrowBack, null)

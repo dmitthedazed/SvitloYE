@@ -2,6 +2,7 @@ package com.occaecat.ztoeschedule.presentation.ui.onboarding
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -9,8 +10,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -68,7 +68,8 @@ fun RemSelectionPage(
                     SelectionListItem(
                         title = rem.name,
                         onClick = { onRemSelected(rem) },
-                        modifier = Modifier
+                        modifier = Modifier,
+                        icon = Icons.Default.Business
                     )
                 }
             }
@@ -119,7 +120,8 @@ fun CitySelectionPage(
                     SelectionListItem(
                         title = city.name,
                         onClick = { onCitySelected(city) },
-                        modifier = Modifier
+                        modifier = Modifier,
+                        icon = Icons.Default.LocationCity
                     )
                 }
             }
@@ -170,7 +172,8 @@ fun StreetSelectionPage(
                     SelectionListItem(
                         title = street.name,
                         onClick = { onStreetSelected(street) },
-                        modifier = Modifier
+                        modifier = Modifier,
+                        icon = Icons.Default.Signpost
                     )
                 }
             }
@@ -235,7 +238,12 @@ fun HouseNumberSelectionPage(
                     OutlinedCard(
                         onClick = { onHouseSelected(house) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Column(
                             modifier = Modifier
@@ -247,7 +255,6 @@ fun HouseNumberSelectionPage(
                             Text(
                                 text = house.houseNumber,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                             

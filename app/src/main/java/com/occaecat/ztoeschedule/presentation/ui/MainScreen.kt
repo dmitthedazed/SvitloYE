@@ -205,11 +205,11 @@ fun MainScreen(
             ModalDrawerSheet {
                 Column(Modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
                     Spacer(Modifier.height(12.dp))
-                    Text("Ваші локації", Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Ваші локації", Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                     HorizontalDivider(Modifier.padding(bottom = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     uiState.addressDataList.forEachIndexed { index, data ->
                         NavigationDrawerItem(
-                            label = { Column { Text(data.address.name, fontWeight = FontWeight.SemiBold); Text("${data.address.cityName}, ${data.address.streetName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+                            label = { Column { Text(data.address.name, style = MaterialTheme.typography.titleMedium); Text("${data.address.cityName}, ${data.address.streetName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
                             selected = currentRoute == "home" && pagerState.currentPage == index,
                             icon = { Icon(when (data.address.iconName) { "home" -> Icons.Default.Home; "work" -> Icons.Default.Work; "apartment" -> Icons.Default.Apartment; else -> Icons.Default.LocationOn }, null) },
                                                         badge = { 
@@ -247,10 +247,12 @@ fun MainScreen(
                     modifier = Modifier.statusBarsPadding(),
                     containerColor = MaterialTheme.colorScheme.surface,
                     header = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Bolt, null, Modifier.padding(vertical = 12.dp), tint = MaterialTheme.colorScheme.primary)
-                            FloatingActionButton(onClick = { addAddressLauncher.launch(Intent(context, com.occaecat.ztoeschedule.AddressPickerActivity::class.java)) }, containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) { Icon(Icons.Default.Add, "Додати") }; Spacer(Modifier.height(8.dp))
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Bolt, 
+                            contentDescription = null, 
+                            modifier = Modifier.padding(vertical = 24.dp), 
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 ) {
                     navItems.forEach { item ->
@@ -287,7 +289,7 @@ fun MainScreen(
                                         label = "title_animation"
                                     ) { title -> 
                                         Column { 
-                                            Text(title, fontWeight = FontWeight.Bold)
+                                            Text(title, style = MaterialTheme.typography.titleLarge)
                                             if (currentRoute == "home" && uiState.addressDataList.size > 1) {
                                                 Text("${pagerState.currentPage + 1} з ${uiState.addressDataList.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                             }
@@ -466,10 +468,10 @@ fun MainScreen(
                 onDismissRequest = { viewModel.setShowWidgetConfig(false) }, sheetState = sheetState, modifier = Modifier.fillMaxHeight().semantics { paneTitle = "Вибір адреси для віджета" }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, dragHandle = { BottomSheetDefaults.DragHandle() }
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
-                    Text(text = "Оберіть адресу для віджета", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
+                    Text(text = "Оберіть адресу для віджета", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
                     uiState.savedAddresses.forEach { a -> 
                         ListItem(
-                            headlineContent = { Text(a.name, fontWeight = FontWeight.SemiBold) }, 
+                            headlineContent = { Text(a.name, style = MaterialTheme.typography.titleMedium) }, 
                             supportingContent = { Text("${a.cityName}, ${a.streetName}") }, 
                             leadingContent = { Icon(imageVector = when (a.iconName) { "home" -> Icons.Default.Home; "work" -> Icons.Default.Work; "apartment" -> Icons.Default.Apartment; else -> Icons.Default.LocationOn }, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, 
                             modifier = Modifier.clickable(

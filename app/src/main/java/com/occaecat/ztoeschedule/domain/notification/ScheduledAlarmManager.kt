@@ -79,10 +79,9 @@ class ScheduledAlarmManager @Inject constructor(
             return
         }
 
-        // Check permission
+        // Check permission - log warning but proceed to fallback logic
         if (!canScheduleExactAlarms()) {
-            Log.w(TAG, "Cannot schedule exact alarms - missing permission")
-            return
+            Log.w(TAG, "Cannot schedule exact alarms - missing permission. Will attempt inexact fallback.")
         }
 
         // Cancel existing alarms for this address
@@ -153,29 +152,35 @@ class ScheduledAlarmManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Use setExactAndAllowWhileIdle for best reliability
-        // Wrap in try-catch to handle SecurityException on Android 14+ if permission was revoked
+        // Use setExactAndAllowWhileIdle if permitted, otherwise setAndAllowWhileIdle
         try {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                transitionTime,
-                pendingIntent
-            )
-            
-            val timeUntil = (transitionTime - System.currentTimeMillis()) / 1000 / 60
-            Log.d(TAG, "Scheduled alarm for ${address.name}: ${previousSchedule.status} → ${currentSchedule.status} in $timeUntil min")
+            if (canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    transitionTime,
+                    pendingIntent
+                )
+                val timeUntil = (transitionTime - System.currentTimeMillis()) / 1000 / 60
+                Log.d(TAG, "Scheduled exact alarm for ${address.name}: ${previousSchedule.status} → ${currentSchedule.status} in $timeUntil min")
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    transitionTime,
+                    pendingIntent
+                )
+                Log.w(TAG, "Scheduled inexact alarm (no permission) for ${address.name}")
+            }
         } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException when scheduling alarm - SCHEDULE_EXACT_ALARM permission may have been revoked", e)
-            // Fallback to inexact alarm
+            Log.e(TAG, "SecurityException when scheduling alarm - trying fallback", e)
+            // Fallback to inexact alarm if exact failed despite check
             try {
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     transitionTime,
                     pendingIntent
                 )
-                Log.w(TAG, "Fell back to inexact alarm for ${address.name}")
-            } catch (fallbackException: Exception) {
-                Log.e(TAG, "Failed to schedule even inexact alarm", fallbackException)
+            } catch (ex: Exception) {
+                Log.e(TAG, "Failed to schedule fallback alarm", ex)
             }
         }
     }

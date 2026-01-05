@@ -22,13 +22,13 @@ import javax.inject.Singleton
  *
  * Different styles for different Android versions with progressively richer features:
  * - SIMPLE: Standard notification (all versions)
- * - LIVE_ACTIVITY: Rich live notification with progress (Android 31+)
- * - PROMOTED: Promoted ongoing notification with inline actions (Android 36+)
+ * - LIVE_ACTIVITY: Rich live notification with progress (Android 12/API 31+)
+ * - PROMOTED: Live Update notification with status chip (Android 15/API 35+)
  */
 enum class StatusNotificationStyle {
     SIMPLE,           // Standard Android notification (all versions)
     LIVE_ACTIVITY,    // Rich/live notification with chronometer (API 31+)
-    PROMOTED          // Promoted ongoing notification with inline UI (API 36+)
+    PROMOTED          // Live Update (Promoted Ongoing) notification (API 35+)
 }
 
 /**
@@ -121,10 +121,10 @@ class NotificationFactory @Inject constructor(
 
         // Automatically downgrade style if not supported
         val actualStyle = when {
-            style == StatusNotificationStyle.PROMOTED && Build.VERSION.SDK_INT >= 36 -> {
+            style == StatusNotificationStyle.PROMOTED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM -> {
                 StatusNotificationStyle.PROMOTED
             }
-            style == StatusNotificationStyle.LIVE_ACTIVITY && Build.VERSION.SDK_INT >= 31 -> {
+            style == StatusNotificationStyle.LIVE_ACTIVITY && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                 StatusNotificationStyle.LIVE_ACTIVITY
             }
             else -> {
@@ -228,26 +228,73 @@ class NotificationFactory @Inject constructor(
     }
 
     /**
-     * Create promoted notification with inline UI (Android 36+).
+     * Create promoted Live Update notification (Android 15+/API 35+).
      *
      * Features:
-     * - Uses new Promoted Ongoing Notification API
-     * - Rich inline UI with status and actions
-     * - Persistent display in notification shade
-     * - Fast-accessible controls
+     * - Uses Promoted Ongoing Notification API
+     * - Persistent display at top of notification shade
+     * - Status chip with critical information
+     * - Expanded by default, uncollapsible
+     * - Requires POST_PROMOTED_NOTIFICATIONS permission
      *
-     * Currently implemented as fallback to LIVE_ACTIVITY pending full API support.
-     * TODO: Implement full Promoted Notification API when available in ComposeUI
+     * Requirements:
+     * - Must use Standard/BigText/Progress style (no RemoteViews)
+     * - Must be ongoing (FLAG_ONGOING_EVENT)
+     * - Must have contentTitle
+     * - Must request promotion via setRequestPromotedOngoing
+     * - Channel must NOT be IMPORTANCE_MIN
      */
     private fun createPromotedNotification(
         current: GroupedSchedule,
         address: String
     ): Notification {
-        Log.d(TAG, "createPromotedNotification")
+        Log.d(TAG, "createPromotedNotification (Live Update)")
 
-        // TODO: Use new Android 16 Promoted Notification API when available
-        // For now, use LIVE_ACTIVITY as fallback for similar visual effect
-        return createLiveActivityNotification(current, address)
+        val pendingIntent = getPendingIntentToApp()
+        val refreshPendingIntent = getRefreshPendingIntent()
+
+        val (title, message, progress) = buildStatusContent(current, address)
+        val isPowerOn = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
+        val isWarning = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Probable
+
+        val builder = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_STATUS_ID)
+            .setSmallIcon(if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true) // Required for Live Update
+            .setContentIntent(pendingIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(R.drawable.ic_bolt, "Оновити", refreshPendingIntent)
+            .setOnlyAlertOnce(true)
+
+        // Request promotion (Live Update) - API 35+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            builder.setRequestPromotedOngoing(true)
+            Log.d(TAG, "Requested Live Update promotion")
+        }
+
+        // Set status chip text (critical info display) - shows in collapsed chip
+        val timeRemaining = TimeUtils.formatDuration(current.endMs - timeProvider.now())
+        builder.setShortCriticalText(timeRemaining)
+        
+        // Set when time for automatic countdown in status chip
+        builder.setWhen(current.endMs)
+        builder.setShowWhen(true)
+        builder.setUsesChronometer(true)
+        builder.setChronometerCountDown(true)
+
+        // Don't colorize (requirement: must NOT setColorized to TRUE)
+        // But we can set the accent color for icon/actions
+        val colorRes = when {
+            isPowerOn -> R.color.widget_power_on
+            isWarning -> android.R.color.holo_orange_light
+            else -> R.color.widget_power_off
+        }
+        builder.setColor(context.getColor(colorRes))
+
+        return builder.build()
     }
 
     /**
@@ -328,5 +375,57 @@ class NotificationFactory @Inject constructor(
             context, 1, refreshIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+    }
+
+    /**
+     * Check if the app can post Live Update (Promoted) notifications.
+     *
+     * This checks:
+     * 1. Android version (API 35+)
+     * 2. User permission settings (canPostPromotedNotifications)
+     *
+     * @return true if Live Updates can be posted
+     */
+    fun canPostLiveUpdates(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            Log.d(TAG, "Live Updates not supported: API ${Build.VERSION.SDK_INT} < 35")
+            return false
+        }
+
+        return try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) 
+                as? android.app.NotificationManager
+            val canPost = notificationManager?.canPostPromotedNotifications() ?: false
+            Log.d(TAG, "Can post Live Updates: $canPost")
+            canPost
+        } catch (e: Exception) {
+            Log.w(TAG, "Error checking Live Update permission", e)
+            false
+        }
+    }
+
+    /**
+     * Get the best supported notification style for current device/settings.
+     *
+     * Priority:
+     * 1. PROMOTED (if API 35+ and user enabled Live Updates)
+     * 2. LIVE_ACTIVITY (if API 31+)
+     * 3. SIMPLE (fallback for all versions)
+     */
+    fun getBestSupportedStyle(): StatusNotificationStyle {
+        return when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM && canPostLiveUpdates() -> {
+                Log.d(TAG, "Using PROMOTED style (Live Update)")
+                StatusNotificationStyle.PROMOTED
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                Log.d(TAG, "Using LIVE_ACTIVITY style")
+                StatusNotificationStyle.LIVE_ACTIVITY
+            }
+            else -> {
+                Log.d(TAG, "Using SIMPLE style")
+                StatusNotificationStyle.SIMPLE
+            }
+        }
     }
 }

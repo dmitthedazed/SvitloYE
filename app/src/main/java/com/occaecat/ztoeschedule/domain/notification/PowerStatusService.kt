@@ -92,6 +92,9 @@ class PowerStatusService : Service() {
     @Inject
     lateinit var notificationCoordinator: NotificationCoordinator
 
+    @Inject
+    lateinit var notificationFactory: NotificationFactory
+
     private var updateJob: Job? = null
     private var lastAddressName: String? = null
 
@@ -161,28 +164,35 @@ class PowerStatusService : Service() {
      * Start periodic updates by combining address selection with timer.
      *
      * Handles address changes immediately by canceling old job and starting new one.
+     * Uses primary address (sorted by priority) instead of saved selection.
      */
     private fun startPeriodicUpdates() {
         Log.d(TAG, "Starting periodic updates")
 
         updateJob = serviceScope.launch {
             try {
-                preferencesManager.savedSelectionFlow
-                    .combine(createTickerFlow()) { selection, _ -> selection }
-                    .collect { selection ->
+                // Create a flow that emits ticker events
+                createTickerFlow().collect { _ ->
+                    // Get primary address (sorted by priority)
+                    val addresses = repository.getSavedAddresses()
+                        .sortedBy { it.priority }
+                    
+                    val primaryAddress = addresses.firstOrNull()
+
+                    if (primaryAddress != null) {
                         // Handle address change - graceful restart
-                        if (selection != null && selection.addressName != lastAddressName) {
-                            Log.i(TAG, "Address changed from $lastAddressName to ${selection.addressName}")
-                            lastAddressName = selection.addressName
+                        if (primaryAddress.name != lastAddressName) {
+                            Log.i(TAG, "Address changed from $lastAddressName to ${primaryAddress.name}")
+                            lastAddressName = primaryAddress.name
                         }
 
-                        // Update if we have valid selection
-                        if (selection != null && selection.cherga != 0) {
-                            updateNotificationForSelection(selection)
-                        } else {
-                            Log.d(TAG, "No valid selection available")
-                        }
+                        // Update notification with primary address
+                        updateNotificationForAddress(primaryAddress)
+                    } else {
+                        Log.d(TAG, "No saved addresses available")
+                        showNoAddressNotification()
                     }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in periodic updates", e)
             }
@@ -200,24 +210,24 @@ class PowerStatusService : Service() {
     }
 
     /**
-     * Update notification for given selection.
+     * Update notification for given address.
      *
      * With network timeout protection to prevent hanging.
      */
-    private suspend fun updateNotificationForSelection(
-        selection: com.occaecat.ztoeschedule.data.local.SavedSelection
+    private suspend fun updateNotificationForAddress(
+        address: com.occaecat.ztoeschedule.data.local.SavedAddress
     ) {
         try {
-            Log.d(TAG, "Updating notification for ${selection.addressName}")
+            Log.d(TAG, "Updating notification for ${address.name}")
 
             // Network call with timeout
             val result = withTimeoutOrNull(NETWORK_TIMEOUT_MS) {
-                repository.getCachedScheduleWithMessages(selection.cherga, selection.pidcherga)
+                repository.getCachedScheduleWithMessages(address.cherga, address.pidcherga)
             }
 
             if (result == null) {
                 Log.w(TAG, "Network timeout fetching schedule")
-                showTimeoutNotification(selection.addressName)
+                showTimeoutNotification(address.name)
                 return
             }
 
@@ -231,25 +241,21 @@ class PowerStatusService : Service() {
                 if (currentStatus != null) {
                     Log.d(TAG, "Current status: ${currentStatus.status}")
 
-                    // Auto-select notification style based on API level
-                    val style = when {
-                        Build.VERSION.SDK_INT >= 36 -> StatusNotificationStyle.PROMOTED
-                        Build.VERSION.SDK_INT >= 31 -> StatusNotificationStyle.LIVE_ACTIVITY
-                        else -> StatusNotificationStyle.SIMPLE
-                    }
+                    // Auto-select best notification style based on device capabilities
+                    val style = notificationFactory.getBestSupportedStyle()
 
                     // Create notification
                     val notification = smartNotificationManager.createStatusNotification(
                         currentStatus = currentStatus,
                         allSchedules = groupedSchedules,
-                        address = selection.addressName,
+                        address = address.name,
                         style = style
                     )
 
                     // Update through coordinator for atomic UI updates
                     smartNotificationManager.updateStatusNotification(notification)
 
-                    Log.d(TAG, "Notification updated successfully")
+                    Log.d(TAG, "Notification updated successfully (style=$style)")
                 } else {
                     Log.w(TAG, "Could not determine current status")
                 }
@@ -282,6 +288,26 @@ class PowerStatusService : Service() {
             smartNotificationManager.updateStatusNotification(notification)
         } catch (e: Exception) {
             Log.e(TAG, "Error showing timeout notification", e)
+        }
+    }
+
+    /**
+     * Show placeholder notification when no addresses are saved.
+     */
+    private fun showNoAddressNotification() {
+        try {
+            val notification = NotificationCompat.Builder(this, NotificationHelper.CHANNEL_STATUS_ID)
+                .setSmallIcon(R.drawable.ic_bolt)
+                .setContentTitle("СвітлоЄ?")
+                .setContentText("Додайте адресу в налаштуваннях")
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setOngoing(true)
+                .setContentIntent(getPendingIntentToApp())
+                .build()
+
+            smartNotificationManager.updateStatusNotification(notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing no address notification", e)
         }
     }
 

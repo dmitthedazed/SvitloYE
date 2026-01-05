@@ -50,7 +50,10 @@ class OnboardingActivity : ComponentActivity() {
                 }
             }
 
-            SvitloYeZhytomyrTheme {
+            SvitloYeZhytomyrTheme(
+                themePreference = uiState.colorTheme,
+                cornerRadius = uiState.cornerRadius
+            ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Scaffold(
                         topBar = {

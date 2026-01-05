@@ -34,7 +34,10 @@ class SettingsActivity : ComponentActivity() {
             val viewModel: EnergyScheduleViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsState()
 
-            SvitloYeZhytomyrTheme {
+            SvitloYeZhytomyrTheme(
+                themePreference = uiState.colorTheme,
+                cornerRadius = uiState.cornerRadius
+            ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Scaffold(
                         topBar = {

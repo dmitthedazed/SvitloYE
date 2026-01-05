@@ -89,12 +89,6 @@ fun MoreTab(
     var sDateMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val sDateStr = remember(sDateMillis) { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sDateMillis)) }
     
-    val vSpace = when (displayMode) { 
-        DisplayMode.Compact -> 12.dp
-        DisplayMode.Comfortable -> 16.dp
-        else -> 24.dp 
-    }
-
     val promo = remember(colorScheme) { 
         listOf(
             PromoItem("Підтримати", "Допоможіть нам", Icons.Default.Favorite, colorScheme.primaryContainer, colorScheme.onPrimaryContainer, onNavigateToDonate), 
@@ -109,23 +103,18 @@ fun MoreTab(
 
     val carouselState = rememberCarouselState { promo.size }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { scaffoldPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(scaffoldPadding)
-                .padding(contentPadding)
-                .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(vSpace)
-        ) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(contentPadding)
+            .padding(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
         HorizontalMultiBrowseCarousel(
             state = carouselState,
-            preferredItemWidth = if (isWideScreen) 240.dp else 152.dp,
-            itemSpacing = 12.dp,
+            preferredItemWidth = if (isWideScreen) 240.dp else 160.dp,
+            itemSpacing = 16.dp,
             contentPadding = PaddingValues(horizontal = 16.dp),
             modifier = Modifier.fillMaxWidth().height(if (isWideScreen) 240.dp else 210.dp)
         ) { index ->
@@ -151,8 +140,8 @@ fun MoreTab(
                         contentDescription = null,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .offset(x = 15.dp, y = (-10).dp)
-                            .size(if (isWideScreen) 140.dp else 110.dp)
+                            .offset(x = 16.dp, y = (-8).dp)
+                            .size(if (isWideScreen) 144.dp else 112.dp)
                             .graphicsLayer { alpha = 0.12f },
                         tint = item.contentColor
                     )
@@ -160,10 +149,10 @@ fun MoreTab(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(if (radius > 32) 24.dp else 16.dp)
+                            .padding(24.dp)
                     ) { 
                         Surface(
-                            color = item.contentColor.copy(alpha = 0.15f),
+                            color = item.contentColor.copy(alpha = 0.12f),
                             shape = CircleShape,
                             modifier = Modifier.size(if (isWideScreen) 48.dp else 32.dp)
                         ) {
@@ -171,9 +160,9 @@ fun MoreTab(
                                 Icon(item.icon, null, Modifier.size(if (isWideScreen) 24.dp else 16.dp), tint = item.contentColor)
                             }
                         }
-                        Spacer(Modifier.height(12.dp))
-                        Text(item.title, style = if (isWideScreen) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = item.contentColor)
-                        Text(item.subtitle, style = MaterialTheme.typography.labelSmall, color = item.contentColor.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(16.dp))
+                        Text(item.title, style = if (isWideScreen) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = item.contentColor)
+                        Text(item.subtitle, style = MaterialTheme.typography.labelSmall, color = item.contentColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     } 
                 } 
             }
@@ -189,7 +178,7 @@ fun MoreTab(
                 .widthIn(max = 1200.dp)
                 .align(Alignment.CenterHorizontally)
                 .padding(horizontal = 16.dp), 
-            verticalArrangement = Arrangement.spacedBy(vSpace)
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // --- ROW: ANALYTICS + SERVICES ---
             val stats = StatisticsCalculator.calculateDailyStats(scheduleList, sDateStr)
@@ -206,9 +195,8 @@ fun MoreTab(
                     Text(
                         text = "Аналітика", 
                         style = MaterialTheme.typography.titleMedium, 
-                        fontWeight = FontWeight.ExtraBold, 
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
+                        modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
                     )
                     
                     if (hasStats) {
@@ -222,7 +210,7 @@ fun MoreTab(
                             shape = MaterialTheme.shapes.extraLarge,
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                         ) { 
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
+                            Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) { 
                                 Text("Немає даних", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) 
                             } 
                         }
@@ -241,14 +229,13 @@ fun MoreTab(
                     Text(
                         text = "Сервіси", 
                         style = MaterialTheme.typography.titleMedium, 
-                        fontWeight = FontWeight.ExtraBold, 
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
+                        modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
                     )
                     
                     Column(
                         modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         services.forEach { item ->
                             Card(
@@ -261,7 +248,7 @@ fun MoreTab(
                                 )
                             ) {
                                 Row(
-                                    Modifier.fillMaxSize().padding(horizontal = 12.dp), 
+                                    Modifier.fillMaxSize().padding(horizontal = 16.dp), 
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Surface(
@@ -273,11 +260,10 @@ fun MoreTab(
                                             Icon(item.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                                         }
                                     }
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(12.dp))
                                     Text(
                                         text = item.title, 
-                                        style = MaterialTheme.typography.bodyMedium, 
-                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleSmall, 
                                         maxLines = 2, 
                                         lineHeight = 16.sp,
                                         overflow = TextOverflow.Ellipsis
@@ -290,21 +276,9 @@ fun MoreTab(
             }
 
             // --- GET ADDRESS BUTTON ---
-            val fullAddress = if (currentAddressRemName.isNotEmpty() || currentAddressCityName.isNotEmpty()) {
-                listOfNotNull(
-                    currentAddressRemName.takeIf { it.isNotEmpty() },
-                    currentAddressCityName.takeIf { it.isNotEmpty() },
-                    currentAddressStreetName.takeIf { it.isNotEmpty() },
-                    currentAddressHouseName.takeIf { it.isNotEmpty() }
-                ).joinToString(", ")
-            } else {
-                ""
-            }
-
             Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -373,7 +347,7 @@ fun MoreTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (isLoadingGps) {
@@ -425,9 +399,6 @@ fun MoreTab(
                                 .size(20.dp)
                                 .clickable {
                                     clipboardManager.setText(AnnotatedString(gpsAddress!!))
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Адреса скопійована")
-                                    }
                                 }
                         )
                     }
@@ -435,7 +406,7 @@ fun MoreTab(
             }
 
             HorizontalDivider(
-                modifier = Modifier.padding(vertical = 4.dp),
+                modifier = Modifier.padding(vertical = 8.dp),
                 color = MaterialTheme.colorScheme.outlineVariant
             )
 
@@ -443,8 +414,7 @@ fun MoreTab(
             if (com.occaecat.ztoeschedule.BuildConfig.DEBUG) {
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp), 
+                        .fillMaxWidth(), 
                     shape = MaterialTheme.shapes.large, 
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
@@ -479,8 +449,6 @@ fun MoreTab(
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
-                
-                Spacer(Modifier.height(8.dp))
             }
 
             // --- SECTION 3: SYSTEM ---
@@ -494,7 +462,7 @@ fun MoreTab(
             ) {
                 Column {
                     ListItem(
-                        headlineContent = { Text("Налаштування", fontWeight = FontWeight.Bold) },
+                        headlineContent = { Text("Налаштування", style = MaterialTheme.typography.titleMedium) },
                         supportingContent = { Text("Сповіщення та тема", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         leadingContent = { 
                             Surface(
@@ -517,7 +485,7 @@ fun MoreTab(
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     
                     ListItem(
-                        headlineContent = { Text("Функції та інтеграції", fontWeight = FontWeight.Bold) },
+                        headlineContent = { Text("Функції та інтеграції", style = MaterialTheme.typography.titleMedium) },
                         supportingContent = { Text("Android Auto, віджети та інше", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         leadingContent = { 
                             Surface(
@@ -539,9 +507,6 @@ fun MoreTab(
                     )
                 }
             }
-        }
-        
-        Spacer(Modifier.height(16.dp))
         }
     }
 }
