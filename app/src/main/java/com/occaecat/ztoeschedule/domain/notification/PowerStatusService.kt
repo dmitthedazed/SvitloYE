@@ -215,7 +215,7 @@ class PowerStatusService : Service() {
      * With network timeout protection to prevent hanging.
      */
     private suspend fun updateNotificationForAddress(
-        address: com.occaecat.ztoeschedule.data.local.SavedAddress
+        address: com.occaecat.ztoeschedule.data.model.SavedAddress
     ) {
         try {
             Log.d(TAG, "Updating notification for ${address.name}")
@@ -263,7 +263,7 @@ class PowerStatusService : Service() {
 
             result.onFailure { error ->
                 Log.e(TAG, "Error fetching schedule: ${error.message}", error)
-                showErrorNotification(selection.addressName)
+                showErrorNotification(address.name)
             }
 
         } catch (e: Exception) {
