@@ -371,7 +371,10 @@ private fun CurrentStatusCard(
             Text(
                 text = activeGroup?.displayText ?: currentStatus?.displayText ?: stringResource(R.string.home_no_data), 
                 style = MaterialTheme.typography.headlineSmall, 
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             if (activeGroup != null) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -504,12 +507,14 @@ private fun AddressInfoCard(
             Spacer(Modifier.width(8.dp))
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = fullAddress, 
-                    style = MaterialTheme.typography.bodyMedium, 
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+                                Text(
+                                    text = fullAddress,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.basicMarquee()
+                                )            }
 
             Box(modifier = Modifier.padding(start = 4.dp)) {
                 IconButton(
@@ -721,6 +726,12 @@ private fun ScheduleListItemSimple(
                     Spacer(Modifier.width(8.dp))
                     
                     // Duration badge
+                    val badgeContentColor = when (group.status) {
+                        ScheduleStatus.Available -> MaterialTheme.colorScheme.onPrimary
+                        ScheduleStatus.Probable -> MaterialTheme.colorScheme.onTertiary
+                        else -> MaterialTheme.colorScheme.onError
+                    }
+                    
                     Surface(
                         color = statusColor,
                         shape = MaterialTheme.shapes.small
@@ -729,7 +740,7 @@ private fun ScheduleListItemSimple(
                             text = group.formattedDuration,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = if (group.status == ScheduleStatus.Probable) Color.Black else Color.White,
+                            color = badgeContentColor,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -738,8 +749,10 @@ private fun ScheduleListItemSimple(
                 Text(
                     text = group.displayText, 
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isActive) statusColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                    color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
 

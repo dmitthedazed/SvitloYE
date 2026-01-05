@@ -112,8 +112,7 @@ fun AddressCustomizationScreen(
 
             Text(
                 text = "Виберіть іконку",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium
             )
 
             LazyVerticalGrid(

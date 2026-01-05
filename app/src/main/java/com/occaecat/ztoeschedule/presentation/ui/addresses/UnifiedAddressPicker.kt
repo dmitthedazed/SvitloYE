@@ -27,6 +27,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Stable
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material.icons.filled.Signpost
+import androidx.compose.ui.graphics.Color
 import com.occaecat.ztoeschedule.data.model.City
 import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Street
@@ -234,9 +239,32 @@ private fun UnifiedAddressPicker(
         onStepChanged?.invoke(step)
     }
 
+    // Handle back navigation logic
+    val navigateBack = {
+        if (step > 0) {
+            val prevStep = step - 1
+            // Clear selection based on where we are going back TO
+            when (prevStep) {
+                0 -> selectedRem = null // Going back to method selection clears REM
+                1 -> selectedCity = null // Going back to REM clears City
+                2 -> selectedStreet = null // Going back to City clears Street
+                3 -> selectedHouse = null // Going back to Street clears House
+            }
+            // Clear subsequent selections recursively (cascade)
+            if (prevStep < 4) selectedHouse = null
+            if (prevStep < 3) selectedStreet = null
+            if (prevStep < 2) selectedCity = null
+            if (prevStep < 1) selectedRem = null
+            
+            step = prevStep
+        } else {
+            onCancel()
+        }
+    }
+
     // Handle system back button
     BackHandler(enabled = step > 0) {
-        step--
+        navigateBack()
     }
 
     LaunchedEffect(selectedRem) { if (selectedRem != null && cityList.isEmpty()) onLoadCity(selectedRem!!.id) }
@@ -246,20 +274,19 @@ private fun UnifiedAddressPicker(
 
     Scaffold(
         modifier = modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.95f),
+            .fillMaxSize(),
         topBar = {
             if (showTopBar) {
                 TopAppBar(
-                    title = { Text("Нова адреса", fontWeight = FontWeight.SemiBold) },
+                    title = { 
+                        Text(
+                            text = "Нова адреса", 
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold 
+                        ) 
+                    },
                     navigationIcon = {
-                        IconButton(onClick = {
-                            if (step > 0) {
-                                step--
-                            } else {
-                                onCancel()
-                            }
-                        }) {
+                        IconButton(onClick = { navigateBack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                         }
                     },
@@ -267,7 +294,11 @@ private fun UnifiedAddressPicker(
                         IconButton(onClick = onCancel) {
                             Icon(Icons.Filled.Close, contentDescription = "Закрити")
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 )
             }
         }
@@ -276,11 +307,25 @@ private fun UnifiedAddressPicker(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (step > 0) {
-                StepHeader(step = step, total = 5)
+                StepHeader(
+                    step = step,
+                    selectedRem = selectedRem,
+                    selectedCity = selectedCity,
+                    selectedStreet = selectedStreet,
+                    onJumpToStep = { targetStep ->
+                        if (targetStep < step) {
+                            // Logic similar to back navigation but jumping
+                            when (targetStep) {
+                                1 -> { selectedCity = null; selectedStreet = null; selectedHouse = null }
+                                2 -> { selectedStreet = null; selectedHouse = null }
+                                3 -> { selectedHouse = null }
+                            }
+                            step = targetStep
+                        }
+                    }
+                )
             }
 
             Box(
@@ -292,12 +337,15 @@ private fun UnifiedAddressPicker(
                     targetState = step,
                     transitionSpec = {
                         if (targetState > initialState) {
-                            (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
+                            slideInHorizontally { it } + fadeIn() togetherWith
+                            slideOutHorizontally { -it } + fadeOut()
                         } else {
-                            (slideInHorizontally { -it } + fadeIn()).togetherWith(slideOutHorizontally { it } + fadeOut())
+                            slideInHorizontally { -it } + fadeIn() togetherWith
+                            slideOutHorizontally { it } + fadeOut()
                         }
                     },
-                    label = "unified_address_step"
+                    label = "unified_address_step",
+                    modifier = Modifier.fillMaxSize()
                 ) { targetStep ->
                     when (targetStep) {
                         0 -> SelectionMethodContent(
@@ -341,7 +389,7 @@ private fun UnifiedAddressPicker(
                             onStreetSelected = {
                                 selectedStreet = it
                                 selectedHouse = null
-                                onClearSearch()  // Clear house search when selecting new street
+                                onClearSearch()
                                 onLoadAddress(it.id)
                                 step = 4
                             },
@@ -356,7 +404,6 @@ private fun UnifiedAddressPicker(
                             onCategorySelected = onCategorySelected,
                             onHouseSelected = {
                                 selectedHouse = it
-                                // Set default name to icon label if user hasn't edited name
                                 if (!userEditedName) {
                                     val iconLabel = availableIcons.find { iconItem -> iconItem.name == icon }?.label ?: "Дім"
                                     name = iconLabel
@@ -374,7 +421,6 @@ private fun UnifiedAddressPicker(
                             },
                             onIconChange = { 
                                 icon = it
-                                // Update name to icon label if user hasn't manually edited it
                                 if (!userEditedName) {
                                     val iconLabel = availableIcons.find { iconItem -> iconItem.name == it }?.label ?: "Дім"
                                     name = iconLabel
@@ -385,74 +431,147 @@ private fun UnifiedAddressPicker(
                 }
             }
 
-            ActionRow(
-                step = step,
-                canGoBack = step > 1,
-                onBack = { if (step > 1) step-- else onCancel() },
-                onCancel = onCancel,
-                onContinue = {
-                    if (step < 5) {
-                        step++
-                    } else if (selectedRem != null && selectedCity != null && selectedStreet != null && selectedHouse != null) {
-                        onComplete(
-                            AddressPickerResult(
-                                remId = selectedRem!!.id,
-                                remName = selectedRem!!.name,
-                                cityId = selectedCity!!.id,
-                                cityName = selectedCity!!.name,
-                                streetId = selectedStreet!!.id,
-                                streetName = selectedStreet!!.name,
-                                addressId = selectedHouse!!.originalAddressId,
-                                addressName = selectedHouse!!.houseNumber,
-                                cherga = selectedHouse!!.cherga,
-                                pidcherga = selectedHouse!!.pidcherga,
-                                displayName = name.ifBlank { buildAddressLabel(selectedCity, selectedStreet, selectedHouse) },
-                                iconName = icon
+            Surface(
+                tonalElevation = 2.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                ActionRow(
+                    step = step,
+                    canGoBack = step > 1,
+                    onBack = { if (step > 1) step-- else onCancel() },
+                    onCancel = onCancel,
+                    onContinue = {
+                        if (step < 5) {
+                            step++
+                        } else if (selectedRem != null && selectedCity != null && selectedStreet != null && selectedHouse != null) {
+                            onComplete(
+                                AddressPickerResult(
+                                    remId = selectedRem!!.id,
+                                    remName = selectedRem!!.name,
+                                    cityId = selectedCity!!.id,
+                                    cityName = selectedCity!!.name,
+                                    streetId = selectedStreet!!.id,
+                                    streetName = selectedStreet!!.name,
+                                    addressId = selectedHouse!!.originalAddressId,
+                                    addressName = selectedHouse!!.houseNumber,
+                                    cherga = selectedHouse!!.cherga,
+                                    pidcherga = selectedHouse!!.pidcherga,
+                                    displayName = name.ifBlank { buildAddressLabel(selectedCity, selectedStreet, selectedHouse) },
+                                    iconName = icon
+                                )
                             )
-                        )
-                    }
-                },
-                canContinue = when (step) {
-                    1 -> selectedRem != null
-                    2 -> selectedCity != null
-                    3 -> selectedStreet != null
-                    4 -> selectedHouse != null
-                    else -> selectedRem != null && selectedCity != null && selectedStreet != null && selectedHouse != null && name.isNotBlank()
-                },
-                isLast = step == 5
-            )
+                        }
+                    },
+                    canContinue = when (step) {
+                        0 -> true
+                        1 -> selectedRem != null
+                        2 -> selectedCity != null
+                        3 -> selectedStreet != null
+                        4 -> selectedHouse != null
+                        else -> selectedRem != null && selectedCity != null && selectedStreet != null && selectedHouse != null && name.isNotBlank()
+                    },
+                    isLast = step == 5,
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .navigationBarsPadding()
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun StepHeader(step: Int, total: Int) {
+private fun StepHeader(
+    step: Int,
+    selectedRem: Rem?,
+    selectedCity: City?,
+    selectedStreet: Street?,
+    onJumpToStep: (Int) -> Unit
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 1.dp
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+            // Title based on current step
+            val title = when (step) {
+                1 -> "Оберіть район (РЕМ)"
+                2 -> "Оберіть населений пункт"
+                3 -> "Оберіть вулицю"
+                4 -> "Оберіть будинок"
+                else -> "Налаштування"
+            }
+            
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Breadcrumbs (Scrollable Row)
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Крок $step з $total", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                Text("Вибір адреси", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                item {
+                    AssistChip(
+                        onClick = { onJumpToStep(1) },
+                        label = { Text(selectedRem?.name ?: "РЕМ") },
+                        leadingIcon = { Icon(Icons.Default.Business, null, Modifier.size(16.dp)) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (step == 1) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            labelColor = if (step == 1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = if (step == 1) null else AssistChipDefaults.assistChipBorder(true)
+                    )
+                }
+
+                if (step > 1) {
+                    item {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    }
+                    item {
+                        AssistChip(
+                            onClick = { onJumpToStep(2) },
+                            label = { Text(selectedCity?.name ?: "Місто") },
+                            leadingIcon = { Icon(Icons.Default.LocationCity, null, Modifier.size(16.dp)) },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = if (step == 2) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                labelColor = if (step == 2) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            border = if (step == 2) null else AssistChipDefaults.assistChipBorder(true)
+                        )
+                    }
+                }
+
+                if (step > 2) {
+                    item {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    }
+                    item {
+                        AssistChip(
+                            onClick = { onJumpToStep(3) },
+                            label = { Text(selectedStreet?.name ?: "Вулиця") },
+                            leadingIcon = { Icon(Icons.Default.Signpost, null, Modifier.size(16.dp)) },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = if (step == 3) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                labelColor = if (step == 3) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            border = if (step == 3) null else AssistChipDefaults.assistChipBorder(true)
+                        )
+                    }
+                }
             }
-            LinearProgressIndicator(
-                progress = { step.toFloat() / total },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(MaterialTheme.shapes.extraSmall)
-            )
         }
     }
 }
@@ -465,7 +584,12 @@ private fun CustomizationStep(
     onNameChange: (String) -> Unit,
     onIconChange: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
         OutlinedTextField(
             value = name,
             onValueChange = onNameChange,
@@ -496,11 +620,10 @@ private fun CustomizationStep(
 }
 
 @Composable
-private fun ActionRow(step: Int, canGoBack: Boolean, onBack: () -> Unit, onCancel: () -> Unit, onContinue: () -> Unit, canContinue: Boolean, isLast: Boolean) {
+private fun ActionRow(step: Int, canGoBack: Boolean, onBack: () -> Unit, onCancel: () -> Unit, onContinue: () -> Unit, canContinue: Boolean, isLast: Boolean, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 16.dp),
+        modifier = modifier
+            .fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         OutlinedButton(

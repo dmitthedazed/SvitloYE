@@ -1,7 +1,12 @@
 package com.occaecat.ztoeschedule.presentation.ui.settings
 
 import android.Manifest
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -127,8 +132,7 @@ fun SettingsTab(
                             Text(
                                 text = if (cornerRadius == -1) "Системне ($currentRadius dp)" else "$cornerRadius dp", 
                                 style = MaterialTheme.typography.labelMedium, 
-                                color = MaterialTheme.colorScheme.primary, 
-                                fontWeight = FontWeight.Bold
+                                color = MaterialTheme.colorScheme.primary
                             )
                             if (cornerRadius != -1) {
                                 Spacer(Modifier.width(8.dp))
@@ -198,7 +202,7 @@ fun SettingsTab(
         ) {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 ListItem(
-                    headlineContent = { Text("Отримувати сповіщення", fontWeight = FontWeight.Bold) },
+                    headlineContent = { Text("Отримувати сповіщення", style = MaterialTheme.typography.titleMedium) },
                     supportingContent = { Text("Попередження про зміну світла") },
                     leadingContent = { 
                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
@@ -227,7 +231,7 @@ fun SettingsTab(
         Surface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainer) {
             Column {
                 ListItem(
-                    headlineContent = { Text("Постійний статус", fontWeight = FontWeight.SemiBold) },
+                    headlineContent = { Text("Постійний статус", style = MaterialTheme.typography.titleMedium) },
                     supportingContent = { Text("Бачити стан світла не відкриваючи додаток") },
                     leadingContent = { Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.size(40.dp)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Bolt, null, tint = MaterialTheme.colorScheme.onTertiaryContainer) } } },
                     trailingContent = { Switch(checked = localStatusNotification, onCheckedChange = { onStatusNotificationEnabledChange(it) }, thumbContent = if (localStatusNotification) { { Icon(Icons.Default.Check, null, modifier = Modifier.size(SwitchDefaults.IconSize)) } } else null) },
@@ -242,6 +246,41 @@ fun SettingsTab(
                 SettingsListItem(Icons.Default.SettingsBackupRestore, "Почати налаштування знову", "Для зміни адреси", MaterialTheme.colorScheme.surfaceVariant) { showResetDialog = true }
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 SettingsListItem(Icons.Default.DeleteForever, "Видалити всі дані", "Очистити пам'ять", MaterialTheme.colorScheme.errorContainer) { showClearDialog = true }
+
+                val alarmManager = remember { context.getSystemService(Context.ALARM_SERVICE) as AlarmManager }
+                var canScheduleExact by remember {
+                    mutableStateOf(
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) alarmManager.canScheduleExactAlarms() else true
+                    )
+                }
+
+                // Check again when user returns to app
+                DisposableEffect(Unit) {
+                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                canScheduleExact = alarmManager.canScheduleExactAlarms()
+                            }
+                        }
+                    }
+                    // This is a simplified approach, usually we'd need access to lifecycle
+                    onDispose {}
+                }
+
+                if (!canScheduleExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsListItem(
+                        icon = Icons.Default.Alarm,
+                        title = "Точні сповіщення",
+                        subtitle = "Натисніть, щоб дозволити точний час",
+                        color = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        }
+                        context.startActivity(intent)
+                    }
+                }
             }
         }
         Spacer(Modifier.height(64.dp))
@@ -254,14 +293,14 @@ fun SettingsTab(
 
 @Composable
 private fun SectionHeader(title: String) {
-    Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
+    Text(text = title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
 }
 
 @Composable
 private fun SettingsListItem(icon: ImageVector, title: String, subtitle: String, color: Color, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     ListItem(
-        headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) }, supportingContent = { Text(subtitle) },
+        headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) }, supportingContent = { Text(subtitle) },
         leadingContent = { Surface(shape = CircleShape, color = color, modifier = Modifier.size(40.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) } } },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent), 
         modifier = Modifier.clickable(

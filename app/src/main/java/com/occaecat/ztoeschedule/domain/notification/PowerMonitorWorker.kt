@@ -59,85 +59,86 @@ class PowerMonitorWorker @AssistedInject constructor(
 
         return try {
             val addresses = repository.getSavedAddresses()
+                .sortedBy { it.priority }
 
             if (addresses.isEmpty()) {
                 Log.i(TAG, "No saved addresses, nothing to check")
                 return Result.success()
             }
 
-            Log.d(TAG, "Checking ${addresses.size} addresses")
+            // Only check primary address (first by priority)
+            val primaryAddress = addresses.first()
+            Log.d(TAG, "Checking primary address: ${primaryAddress.name} (priority: ${primaryAddress.priority})")
 
             val notificationsEnabled = preferencesManager.notificationsEnabledFlow.first()
 
             var hadChanges = false
 
-            // Check each saved address
-            addresses.forEach { address ->
-                try {
-                    val result = repository.getScheduleWithMessages(address.cherga, address.pidcherga)
+            // Check only primary address
+            try {
+                val result = repository.getScheduleWithMessages(primaryAddress.cherga, primaryAddress.pidcherga)
 
-                    if (result.isSuccess) {
-                        val data = result.getOrThrow()
-                        val groupedSchedules = ScheduleMapper.getGroupedSchedule(data.schedules)
+                if (result.isSuccess) {
+                    val data = result.getOrThrow()
+                    val groupedSchedules = ScheduleMapper.getGroupedSchedule(data.schedules)
 
-                        Log.d(TAG, "Schedule for ${address.name}: ${groupedSchedules.size} groups")
+                    Log.d(TAG, "Schedule for ${primaryAddress.name}: ${groupedSchedules.size} groups")
 
-                        // 1. Check for schedule hash change
-                        if (data.schedules.isNotEmpty()) {
-                            val currentHash = data.schedules.hashCode().toString()
-                            val lastHash = preferencesManager.lastScheduleHashFlow.first()
+                    // 1. Check for schedule hash change
+                    if (data.schedules.isNotEmpty()) {
+                        val currentHash = data.schedules.hashCode().toString()
+                        val lastHash = preferencesManager.lastScheduleHashFlow.first()
 
-                            if (lastHash != null && lastHash != currentHash) {
-                                Log.i(TAG, "Schedule hash changed for ${address.name}")
-                                preferencesManager.saveLastScheduleHash(currentHash)
-                                hadChanges = true
-                            } else if (lastHash == null) {
-                                preferencesManager.saveLastScheduleHash(currentHash)
-                            }
+                        if (lastHash != null && lastHash != currentHash) {
+                            Log.i(TAG, "Schedule hash changed for ${primaryAddress.name}")
+                            preferencesManager.saveLastScheduleHash(currentHash)
+                            hadChanges = true
+                        } else if (lastHash == null) {
+                            preferencesManager.saveLastScheduleHash(currentHash)
                         }
-
-                        // 2. Check for status changes RIGHT NOW (no advance warning)
-                        if (notificationsEnabled && groupedSchedules.isNotEmpty()) {
-                            val now = timeProvider.now()
-                            val currentStatus = ScheduleMapper.getCurrentGroupedStatus(groupedSchedules, now)
-
-                            if (currentStatus != null) {
-                                // Check if current status just started (within last 16 min, worker runs every 15 min)
-                                val statusJustChanged = (now - currentStatus.startMs) < (16 * 60 * 1000)
-                                
-                                if (statusJustChanged) {
-                                    Log.i(TAG, "✓ Status just changed for ${address.name}: now ${currentStatus.status}")
-                                    
-                                    // Find previous schedule entry
-                                    val previousSchedule = groupedSchedules.firstOrNull { 
-                                        it.endMs == currentStatus.startMs 
-                                    }
-                                    
-                                    if (previousSchedule != null && previousSchedule.status != currentStatus.status) {
-                                        notificationCoordinator.notifyStatusChange(
-                                            address,
-                                            previousSchedule,
-                                            currentStatus
-                                        )
-                                    }
-                                }
-
-                                // Update status notification and UI
-                                notificationCoordinator.updateAllUI(
-                                    address,
-                                    currentStatus,
-                                    groupedSchedules
-                                )
-                            }
-                        }
-
-                    } else {
-                        Log.w(TAG, "Failed to fetch schedule for ${address.name}: ${result.exceptionOrNull()}")
                     }
 
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error processing address ${address.name}", e)
+                    // 2. Check for status changes RIGHT NOW (no advance warning)
+                    if (notificationsEnabled && groupedSchedules.isNotEmpty()) {
+                        val now = timeProvider.now()
+                        val currentStatus = ScheduleMapper.getCurrentGroupedStatus(groupedSchedules, now)
+
+                        if (currentStatus != null) {
+                            // Check if current status just started (within last 16 min, worker runs every 15 min)
+                            val statusJustChanged = (now - currentStatus.startMs) < (16 * 60 * 1000)
+                            
+                            if (statusJustChanged) {
+                                Log.i(TAG, "✓ Status just changed for ${primaryAddress.name}: now ${currentStatus.status}")
+                                
+                                // Find previous schedule entry
+                                val previousSchedule = groupedSchedules.firstOrNull { 
+                                    it.endMs == currentStatus.startMs 
+                                }
+                                
+                                if (previousSchedule != null && previousSchedule.status != currentStatus.status) {
+                                    notificationCoordinator.notifyStatusChange(
+                                        primaryAddress,
+                                        previousSchedule,
+                                        currentStatus
+                                    )
+                                }
+                            }
+
+                            // Update status notification and UI
+                            notificationCoordinator.updateAllUI(
+                                primaryAddress,
+                                currentStatus,
+                                groupedSchedules
+                            )
+                        }
+                    }
+
+                } else {
+                    Log.w(TAG, "Failed to fetch schedule for ${primaryAddress.name}: ${result.exceptionOrNull()}")
                 }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing primary address ${primaryAddress.name}", e)
             }
 
             Log.d(TAG, "Worker execution completed successfully. Changes detected: $hadChanges")
