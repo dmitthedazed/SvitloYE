@@ -1,16 +1,20 @@
 package com.occaecat.ztoeschedule.presentation.ui.addresses
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -23,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Stable
@@ -37,14 +42,51 @@ import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
-import com.occaecat.ztoeschedule.presentation.ui.onboarding.CitySelectionContent
-import com.occaecat.ztoeschedule.presentation.ui.onboarding.HouseSelectionContent
-import com.occaecat.ztoeschedule.presentation.ui.onboarding.RemSelectionContent
-import com.occaecat.ztoeschedule.presentation.ui.onboarding.StreetSelectionContent
-import com.occaecat.ztoeschedule.presentation.ui.addresses.availableIcons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.School
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
 
 /**
- * Unified address picker used by onboarding and the Add Address flow.
+ * Icon item for customization step
+ */
+private data class IconItem(
+    val name: String,
+    val label: String,
+    val icon: ImageVector
+)
+
+/**
+ * Available icons for address customization
+ */
+private val availableIcons = listOf(
+    IconItem("home", "Дім", Icons.Default.Home),
+    IconItem("work", "Робота", Icons.Default.Work),
+    IconItem("person", "Рідні", Icons.Default.Person),
+    IconItem("favorite", "Улюблене", Icons.Default.Favorite),
+    IconItem("star", "Важливе", Icons.Default.Star),
+    IconItem("place", "Місце", Icons.Default.Place),
+    IconItem("store", "Магазин", Icons.Default.Store),
+    IconItem("school", "Школа", Icons.Default.School)
+)
+
+/**
+ * Unified address picker used by the Add Address flow.
  * Presents REM -> City -> Street -> House -> Customize steps with shared logic.
  */
 @Stable
@@ -88,7 +130,8 @@ fun AddressPickerDialog(
     initialStreet: Street? = null,
     initialHouse: ParsedHouseNumber? = null,
     initialName: String = "",
-    initialIcon: String = "home"
+    initialIcon: String = "home",
+    skipConfirmation: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -129,7 +172,8 @@ fun AddressPickerDialog(
             initialName = initialName,
             initialIcon = initialIcon,
             showTopBar = false,
-            contentPadding = PaddingValues(16.dp)
+            contentPadding = PaddingValues(16.dp),
+            skipConfirmation = skipConfirmation
         )
         }
     }
@@ -161,7 +205,10 @@ fun AddressPickerScreen(
     initialStreet: Street? = null,
     initialHouse: ParsedHouseNumber? = null,
     initialName: String = "",
-    initialIcon: String = "home"
+    initialIcon: String = "home",
+    startAtManual: Boolean = false,
+    showTopBar: Boolean = true,
+    skipConfirmation: Boolean = false
 ) {
     UnifiedAddressPicker(
         remList = remList,
@@ -188,13 +235,15 @@ fun AddressPickerScreen(
         initialHouse = initialHouse,
         initialName = initialName,
         initialIcon = initialIcon,
+        startAtManual = startAtManual,
         modifier = modifier,
-        showTopBar = true,
-        contentPadding = PaddingValues(16.dp)
+        showTopBar = showTopBar,
+        contentPadding = PaddingValues(16.dp),
+        skipConfirmation = skipConfirmation
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun UnifiedAddressPicker(
     remList: List<Rem>,
@@ -221,11 +270,19 @@ private fun UnifiedAddressPicker(
     initialHouse: ParsedHouseNumber?,
     initialName: String,
     initialIcon: String,
+    startAtManual: Boolean = false,
     modifier: Modifier = Modifier,
     showTopBar: Boolean,
-    contentPadding: PaddingValues
+    contentPadding: PaddingValues,
+    skipConfirmation: Boolean
 ) {
-    var step by remember { mutableIntStateOf(if (initialHouse != null) 5 else 0) }
+    var step by remember { 
+        mutableIntStateOf(
+            if (initialHouse != null) 5 
+            else if (startAtManual) 1 
+            else 0
+        ) 
+    }
     var selectedRem by remember { mutableStateOf(initialRem) }
     var selectedCity by remember { mutableStateOf(initialCity) }
     var selectedStreet by remember { mutableStateOf(initialStreet) }
@@ -233,6 +290,8 @@ private fun UnifiedAddressPicker(
     var name by remember { mutableStateOf(initialName) }
     var icon by remember { mutableStateOf(initialIcon) }
     var userEditedName by remember { mutableStateOf(initialName.isNotBlank()) }
+    val context = LocalContext.current
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     // Notify about step changes
     LaunchedEffect(step) {
@@ -241,7 +300,7 @@ private fun UnifiedAddressPicker(
 
     // Handle back navigation logic
     val navigateBack = {
-        if (step > 0) {
+        if (step > 1) {
             val prevStep = step - 1
             // Clear selection based on where we are going back TO
             when (prevStep) {
@@ -277,7 +336,7 @@ private fun UnifiedAddressPicker(
             .fillMaxSize(),
         topBar = {
             if (showTopBar) {
-                TopAppBar(
+                LargeFlexibleTopAppBar(
                     title = { 
                         Text(
                             text = "Нова адреса", 
@@ -296,9 +355,10 @@ private fun UnifiedAddressPicker(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    scrollBehavior = null // Pinned behavior
                 )
             }
         }
@@ -308,26 +368,6 @@ private fun UnifiedAddressPicker(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (step > 0) {
-                StepHeader(
-                    step = step,
-                    selectedRem = selectedRem,
-                    selectedCity = selectedCity,
-                    selectedStreet = selectedStreet,
-                    onJumpToStep = { targetStep ->
-                        if (targetStep < step) {
-                            // Logic similar to back navigation but jumping
-                            when (targetStep) {
-                                1 -> { selectedCity = null; selectedStreet = null; selectedHouse = null }
-                                2 -> { selectedStreet = null; selectedHouse = null }
-                                3 -> { selectedHouse = null }
-                            }
-                            step = targetStep
-                        }
-                    }
-                )
-            }
-
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -336,12 +376,15 @@ private fun UnifiedAddressPicker(
                 AnimatedContent(
                     targetState = step,
                     transitionSpec = {
+                        val slideSpec = tween<IntOffset>(400, easing = FastOutSlowInEasing)
+                        val fadeSpec = tween<Float>(200)
+
                         if (targetState > initialState) {
-                            slideInHorizontally { it } + fadeIn() togetherWith
-                            slideOutHorizontally { -it } + fadeOut()
+                            (slideInHorizontally(slideSpec) { it / 3 } + fadeIn(fadeSpec))
+                                .togetherWith(slideOutHorizontally(slideSpec) { -it / 3 } + fadeOut(fadeSpec))
                         } else {
-                            slideInHorizontally { -it } + fadeIn() togetherWith
-                            slideOutHorizontally { it } + fadeOut()
+                            (slideInHorizontally(slideSpec) { -it / 3 } + fadeIn(fadeSpec))
+                                .togetherWith(slideOutHorizontally(slideSpec) { it / 3 } + fadeOut(fadeSpec))
                         }
                     },
                     label = "unified_address_step",
@@ -350,79 +393,168 @@ private fun UnifiedAddressPicker(
                     when (targetStep) {
                         0 -> SelectionMethodContent(
                             onManualSelection = { step = 1 },
-                            onAutoSelection = { /* TODO: implement auto selection */ },
-                            onQRCodeScan = { /* TODO: implement QR code scanner */ }
+                            onAutoSelection = { step = -1 }, // Auto-location step
+                            onQRCodeScan = { step = -2 } // QR scan step
                         )
-                        1 -> RemSelectionContent(
+                        -1 -> AutoLocationScreen(
                             remList = remList,
-                            isLoading = isLoading,
-                            onLoadRem = onLoadRem,
-                            onRemSelected = {
-                                selectedRem = it
+                            onRemSelected = { rem ->
+                                selectedRem = rem
                                 selectedCity = null
                                 selectedStreet = null
                                 selectedHouse = null
-                                onLoadCity(it.id)
+                                onLoadCity(rem.id)
                                 step = 2
                             },
-                            selectedRem = selectedRem
+                            onManualSelection = { step = 1 },
+                            onDismiss = { step = 0 }
                         )
-                        2 -> CitySelectionContent(
-                            cityList = cityList,
+                        -2 -> QRScannerScreen(
+                            onResult = { result ->
+                                when (result) {
+                                    is QRScanResult.Success -> {
+                                        // QR code contains full address data - go to customization
+                                        val data = result.data
+                                        if (data.isFullData()) {
+                                            val houseName = data.houseName?.takeIf { it.isNotBlank() }
+                                            val resolvedAddressName = data.addressName?.takeIf { it.isNotBlank() } ?: houseName ?: ""
+                                            val resolvedDisplayName = data.displayName?.takeIf { it.isNotBlank() } ?: resolvedAddressName
+                                            
+                                            // Populate state objects
+                                            selectedRem = Rem(id = data.remId!!, name = data.remName ?: "")
+                                            selectedCity = City(id = data.cityId!!, name = data.cityName ?: "", remId = data.remId)
+                                            selectedStreet = Street(id = data.streetId, name = data.streetName ?: "", cityId = data.cityId)
+                                            selectedHouse = ParsedHouseNumber(
+                                                houseNumber = resolvedAddressName,
+                                                cherga = data.cherga!!,
+                                                pidcherga = data.pidcherga!!,
+                                                originalAddressId = data.addressId,
+                                                category = ConsumerCategory.OTHER // Default as we don't know
+                                            )
+                                            
+                                            name = resolvedDisplayName
+                                            icon = "home"
+                                            
+                                            // Go to customization step
+                                            step = 5
+                                        } else {
+                                            val houseName = data.preferredHouseName()
+                                            val intent = Intent(context, com.occaecat.ztoeschedule.InspectActivity::class.java).apply {
+                                                putExtra("streetId", data.streetId)
+                                                putExtra("addressId", data.addressId)
+                                                putExtra("houseName", houseName ?: "")
+                                            }
+                                            context.startActivity(intent)
+                                            onCancel()
+                                        }
+                                    }
+                                    is QRScanResult.Error -> {
+                                        // Show error and return to method selection
+                                        step = 0
+                                    }
+                                    is QRScanResult.Cancelled -> {
+                                        step = 0
+                                    }
+                                }
+                            },
+                            onDismiss = { step = 0 }
+                        )
+                        1 -> RemSelectionPage(
+                            rems = remList,
                             isLoading = isLoading,
-                            remName = selectedRem?.name ?: "",
-                            selectedCity = selectedCity,
-                            onCitySelected = {
-                                selectedCity = it
+                            onRemSelected = { rem ->
+                                selectedRem = rem
+                                selectedCity = null
                                 selectedStreet = null
                                 selectedHouse = null
-                                onLoadStreet(it.id)
+                                onLoadCity(rem.id)
+                                step = 2
+                            }
+                        )
+                        2 -> CitySelectionPage(
+                            cities = cityList,
+                            isLoading = isLoading,
+                            onCitySelected = { city ->
+                                selectedCity = city
+                                selectedStreet = null
+                                selectedHouse = null
+                                onLoadStreet(city.id)
                                 step = 3
                             }
                         )
-                        3 -> StreetSelectionContent(
-                            streetList = streetList,
+                        3 -> StreetSelectionPage(
+                            streets = streetList,
                             isLoading = isLoading,
-                            searchQuery = searchQuery,
-                            onSearchQueryChange = onSearchQueryChange,
-                            onClearSearch = onClearSearch,
-                            onStreetSelected = {
-                                selectedStreet = it
+                            onStreetSelected = { street ->
+                                selectedStreet = street
                                 selectedHouse = null
                                 onClearSearch()
-                                onLoadAddress(it.id)
+                                onLoadAddress(street.id)
                                 step = 4
-                            },
-                            selectedStreet = selectedStreet
+                            }
                         )
-                        4 -> HouseSelectionContent(
+                        4 -> HouseNumberSelectionPage(
                             houseNumbers = houseNumbers,
-                            isLoading = isLoading,
                             searchQuery = searchQuery,
+                            isLoading = isLoading,
                             selectedCategory = selectedCategory,
                             onSearchQueryChange = onSearchQueryChange,
                             onCategorySelected = onCategorySelected,
-                            onHouseSelected = {
-                                selectedHouse = it
-                                if (!userEditedName) {
-                                    val iconLabel = availableIcons.find { iconItem -> iconItem.name == icon }?.label ?: "Дім"
-                                    name = iconLabel
+                            onClearSearch = onClearSearch,
+                            onHouseSelected = { house ->
+                                selectedHouse = house
+                                val defaultName = availableIcons.find { iconItem -> iconItem.name == icon }?.label ?: "Дім"
+                                val finalName = if (userEditedName) name else defaultName
+                                name = finalName
+
+                                if (skipConfirmation) {
+                                    // IMMEDIATE COMPLETION
+                                    if (selectedRem != null && selectedCity != null && selectedStreet != null) {
+                                        onComplete(
+                                            AddressPickerResult(
+                                                remId = selectedRem!!.id,
+                                                remName = selectedRem!!.name,
+                                                cityId = selectedCity!!.id,
+                                                cityName = selectedCity!!.name,
+                                                streetId = selectedStreet!!.id,
+                                                streetName = selectedStreet!!.name,
+                                                addressId = house.originalAddressId,
+                                                addressName = house.houseNumber,
+                                                cherga = house.cherga,
+                                                pidcherga = house.pidcherga,
+                                                displayName = finalName.ifBlank { buildAddressLabel(selectedCity, selectedStreet, house) },
+                                                iconName = icon
+                                            )
+                                        )
+                                    }
+                                } else {
+                                    // ORIGINAL FLOW
+                                    if (!userEditedName) {
+                                        name = defaultName
+                                    }
+                                    step = 5
                                 }
-                                step = 5
-                            },
-                            selectedHouse = selectedHouse
+                            }
                         )
-                        5 -> CustomizationStep(
+                        5 -> ConfirmationStep(
+                            remName = selectedRem?.name ?: "",
+                            cityName = selectedCity?.name ?: "",
+                            streetName = selectedStreet?.name ?: "",
+                            addressName = selectedHouse?.houseNumber ?: "",
+                            cherga = selectedHouse?.cherga ?: 0,
+                            pidcherga = selectedHouse?.pidcherga ?: 0
+                        )
+                        6 -> CustomizationStep(
                             name = name,
                             icon = icon,
-                            onNameChange = { 
-                                name = it
+                            onNameChange = { newName -> 
+                                name = newName
                                 userEditedName = true
                             },
-                            onIconChange = { 
-                                icon = it
+                            onIconChange = { newIcon -> 
+                                icon = newIcon
                                 if (!userEditedName) {
-                                    val iconLabel = availableIcons.find { iconItem -> iconItem.name == it }?.label ?: "Дім"
+                                    val iconLabel = availableIcons.find { iconItem -> iconItem.name == newIcon }?.label ?: "Дім"
                                     name = iconLabel
                                 }
                             }
@@ -442,7 +574,7 @@ private fun UnifiedAddressPicker(
                     onBack = { if (step > 1) step-- else onCancel() },
                     onCancel = onCancel,
                     onContinue = {
-                        if (step < 5) {
+                        if (step < 6) {
                             step++
                         } else if (selectedRem != null && selectedCity != null && selectedStreet != null && selectedHouse != null) {
                             onComplete(
@@ -469,14 +601,110 @@ private fun UnifiedAddressPicker(
                         2 -> selectedCity != null
                         3 -> selectedStreet != null
                         4 -> selectedHouse != null
+                        5 -> true // Confirmation is always valid if we got here
                         else -> selectedRem != null && selectedCity != null && selectedStreet != null && selectedHouse != null && name.isNotBlank()
                     },
-                    isLast = step == 5,
+                    isLast = step == 6,
                     modifier = Modifier
-                        .padding(16.dp)
+                        .padding(24.dp)
                         .navigationBarsPadding()
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ConfirmationStep(
+    remName: String,
+    cityName: String,
+    streetName: String,
+    addressName: String,
+    cherga: Int,
+    pidcherga: Int
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Перевірте дані",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Spacer(Modifier.height(32.dp))
+        
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            ),
+            shape = MaterialTheme.shapes.extraLarge,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SummaryItem(Icons.Default.Business, "РЕМ", remName)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SummaryItem(Icons.Default.LocationCity, "Місто", cityName)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SummaryItem(Icons.Default.Signpost, "Вулиця", streetName)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SummaryItem(Icons.Default.Home, "Будинок", addressName)
+            }
+        }
+        
+        Spacer(Modifier.height(24.dp))
+        
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.extraLarge,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Черга",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "$cherga.$pidcherga",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryItem(icon: ImageVector, label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
@@ -498,11 +726,11 @@ private fun StepHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             // Title based on current step
             val title = when (step) {
-                1 -> "Оберіть район (РЕМ)"
+                1 -> "Оберіть район (РЕМ)" 
                 2 -> "Оберіть населений пункт"
                 3 -> "Оберіть вулицю"
                 4 -> "Оберіть будинок"
@@ -516,7 +744,7 @@ private fun StepHeader(
                 color = MaterialTheme.colorScheme.onSurface
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Breadcrumbs (Scrollable Row)
             androidx.compose.foundation.lazy.LazyRow(
@@ -530,7 +758,8 @@ private fun StepHeader(
                         leadingIcon = { Icon(Icons.Default.Business, null, Modifier.size(16.dp)) },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = if (step == 1) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            labelColor = if (step == 1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            labelColor = if (step == 1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            leadingIconContentColor = if (step == 1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         border = if (step == 1) null else AssistChipDefaults.assistChipBorder(true)
                     )
@@ -547,7 +776,8 @@ private fun StepHeader(
                             leadingIcon = { Icon(Icons.Default.LocationCity, null, Modifier.size(16.dp)) },
                             colors = AssistChipDefaults.assistChipColors(
                                 containerColor = if (step == 2) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                labelColor = if (step == 2) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                labelColor = if (step == 2) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                leadingIconContentColor = if (step == 2) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             border = if (step == 2) null else AssistChipDefaults.assistChipBorder(true)
                         )
@@ -565,7 +795,8 @@ private fun StepHeader(
                             leadingIcon = { Icon(Icons.Default.Signpost, null, Modifier.size(16.dp)) },
                             colors = AssistChipDefaults.assistChipColors(
                                 containerColor = if (step == 3) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                labelColor = if (step == 3) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                labelColor = if (step == 3) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                leadingIconContentColor = if (step == 3) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             border = if (step == 3) null else AssistChipDefaults.assistChipBorder(true)
                         )
@@ -576,7 +807,6 @@ private fun StepHeader(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CustomizationStep(
     name: String,
@@ -587,7 +817,7 @@ private fun CustomizationStep(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         OutlinedTextField(
@@ -596,54 +826,118 @@ private fun CustomizationStep(
             label = { Text("Назва локації") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            supportingText = { Text("Введіть назву для цієї адреси") }
+            shape =  RoundedCornerShape(16.dp),
+            supportingText = { Text("Введіть назву для цієї адреси") },
+            colors = OutlinedTextFieldDefaults.colors()
         )
 
-        HorizontalDivider(modifier = Modifier.fillMaxWidth())
+        Text(
+            text = "Оберіть іконку",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
 
-        Text("Іконка", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            availableIcons.forEach { item ->
-                val selected = icon == item.name
-                AssistChip(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4), // Increased columns for more compact look
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) {
+            items(availableIcons) { item ->
+                val isSelected = icon == item.name
+                val color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+                val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                
+                Surface(
                     onClick = { onIconChange(item.name) },
-                    label = { Text(item.label) },
-                    leadingIcon = { Icon(item.icon, contentDescription = null) },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
-                    )
-                )
+                    modifier = Modifier.aspectRatio(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    color = color,
+                    tonalElevation = if (isSelected) 8.dp else 0.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = contentColor
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = item.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = contentColor,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ActionRow(step: Int, canGoBack: Boolean, onBack: () -> Unit, onCancel: () -> Unit, onContinue: () -> Unit, canContinue: Boolean, isLast: Boolean, modifier: Modifier = Modifier) {
+private fun ActionRow(
+    step: Int, 
+    canGoBack: Boolean, 
+    onBack: () -> Unit, 
+    onCancel: () -> Unit, 
+    onContinue: () -> Unit, 
+    canContinue: Boolean, 
+    isLast: Boolean, 
+    modifier: Modifier = Modifier
+) {
     Row(
         modifier = modifier
             .fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         OutlinedButton(
             onClick = if (canGoBack) onBack else onCancel,
             modifier = Modifier
                 .weight(1f)
-                .height(40.dp),
-            shape = MaterialTheme.shapes.medium
+                .height(64.dp), // Height 64dp
+            shape = RoundedCornerShape(32.dp), // Radius 32dp
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = ButtonDefaults.outlinedButtonBorder(enabled = true)
         ) {
-            Text(if (canGoBack) "Назад" else "Скасувати")
+            Text(
+                if (canGoBack) "Назад" else "Скасувати",
+                style = MaterialTheme.typography.titleMedium
+            )
         }
         Button(
             onClick = onContinue,
             enabled = canContinue,
             modifier = Modifier
                 .weight(1f)
-                .height(40.dp),
-            shape = MaterialTheme.shapes.medium
+                .height(64.dp), // Height 64dp
+            shape = RoundedCornerShape(32.dp), // Radius 32dp
+            colors = ButtonDefaults.buttonColors(
+                // Use default Primary color
+            )
         ) {
-            Text(if (isLast) "Готово" else "Далі")
+            Text(
+                if (isLast) "Готово" else "Далі", 
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                if (isLast) Icons.Default.Check else Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -662,135 +956,41 @@ private fun SelectionMethodContent(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Як ви хочете додати адресу?",
+            text = "Додавання адреси",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        
-        Text(
-            text = "Виберіть зручний для вас спосіб",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.padding(bottom = 32.dp)
+            modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        // Manual selection button
-        ElevatedButton(
-            onClick = onManualSelection,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp),
-            shape = MaterialTheme.shapes.large,
-            colors = ButtonDefaults.elevatedButtonColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            val items = listOf(
+                Triple("Вибрати вручну", "РЕМ → Місто → Вулиця → Будинок", Icons.Filled.Edit) to onManualSelection,
+                Triple("Вибрати автоматично", "Визначити найближчий РЕМ за GPS", Icons.Filled.LocationOn) to onAutoSelection,
+                Triple("Відсканувати QR-код", "Швидке додавання з QR-коду", Icons.Filled.QrCodeScanner) to onQRCodeScan
             )
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Edit,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+
+            items.forEachIndexed { index, (data, action) ->
+                val (title, subtitle, icon) = data
+                
+                SettingsGroupItem(
+                    index = index,
+                    totalCount = items.size,
+                    headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text(subtitle) },
+                    leadingContent = {
+                        Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp))
+                            }
+                        }
+                    },
+                    onClick = action
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "Вибрати вручну",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = "РЕМ → Місто → Вулиця → Будинок",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Auto selection button
-        ElevatedButton(
-            onClick = onAutoSelection,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.LocationOn,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "Вибрати автоматично",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Визначити за GPS координатами",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // QR code scan button
-        ElevatedButton(
-            onClick = onQRCodeScan,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.QrCodeScanner,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "Відсканувати QR-код",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Швидке додавання з коду",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
     }
@@ -800,3 +1000,4 @@ private fun buildAddressLabel(city: City?, street: Street?, house: ParsedHouseNu
     val parts = listOfNotNull(city?.name, street?.name, house?.houseNumber)
     return parts.joinToString(", ")
 }
+

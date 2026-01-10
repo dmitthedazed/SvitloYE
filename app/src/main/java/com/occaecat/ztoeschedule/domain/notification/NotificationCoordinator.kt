@@ -92,7 +92,7 @@ class NotificationCoordinator @Inject constructor(
 
         try {
             // 1. Check deduplication
-            if (config.enableDedupAlerts && shouldDebounceAlert(oldStatus, newStatus)) {
+            if (config.enableDedupAlerts && shouldDebounceAlert(address.name, oldStatus, newStatus)) {
                 log("Alert debounced for ${address.name} - already sent recently", Log.DEBUG)
                 return
             }
@@ -116,7 +116,11 @@ class NotificationCoordinator @Inject constructor(
 
             // 3. Send alert
             log("Sending alert: $title")
-            smartNotificationManager.sendAlert(title, message, isOutage)
+            val sent = smartNotificationManager.sendAlert(title, message, isOutage)
+            if (!sent) {
+                log("Alert not sent for ${address.name} (blocked or failed)", Log.DEBUG)
+                return
+            }
 
             // 4. Record in history
             recordAlert(alertInfo)
@@ -155,7 +159,7 @@ class NotificationCoordinator @Inject constructor(
             // 1. Update status notification
             updates.add {
                 try {
-                    val notification = smartNotificationManager.createStatusNotification(
+                    val notification = smartNotificationManager.createStatusNotificationAuto(
                         currentStatus = currentStatus,
                         allSchedules = allSchedules,
                         address = address.name
@@ -298,13 +302,14 @@ class NotificationCoordinator @Inject constructor(
     /**
      * Check if this alert should be debounced based on recent history.
      */
-    private fun shouldDebounceAlert(oldStatus: GroupedSchedule, newStatus: GroupedSchedule): Boolean {
+    private fun shouldDebounceAlert(addressName: String, oldStatus: GroupedSchedule, newStatus: GroupedSchedule): Boolean {
         if (!config.enableDedupAlerts) return false
 
         val currentTimeMs = System.currentTimeMillis()
         val isOutage = newStatus.status != com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
 
         return _alertHistory.value.any { recent ->
+            recent.addressName == addressName &&
             recent.previousStatus == oldStatus.status &&
             recent.newStatus == newStatus.status &&
             recent.isOutage == isOutage &&

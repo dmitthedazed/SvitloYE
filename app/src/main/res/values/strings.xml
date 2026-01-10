@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">СвітлоЄ? Житомир</string>
+    <string name="app_name">СвітлоЄ!</string>
     <string name="package_name">com.occaecat.svitloye</string>
 
     <!-- Navigation -->
@@ -9,11 +9,53 @@
     <string name="nav_more">Додатково</string>
     <string name="more_settings">Налаштування</string>
     <string name="more_donate">Підтримати проект</string>
-    <string name="more_about">О приложении</string>
+    <string name="more_about">Про додаток</string>
     <string name="more_faq">FAQ</string>
-    <string name="more_contact">Написать нам</string>
+    <string name="more_contact">Написати нам</string>
     <string name="dev_signature">Розроблено dmitthedazed</string>
     <string name="github_url">https://github.com/dmitthedazed</string>
+
+    <!-- Auto Location Screen -->
+    <string name="loc_permission_title">Дозвіл на геолокацію</string>
+    <string name="loc_permission_desc">Для автоматичного визначення найближчого РЕМ потрібен доступ до вашого місцезнаходження</string>
+    <string name="loc_grant_btn">Надати дозвіл</string>
+    <string name="loc_manual_btn">Вибрати вручну</string>
+    <string name="loc_status_getting">Визначення місцезнаходження…</string>
+    <string name="loc_status_getting_sub">Це може зайняти кілька секунд</string>
+    <string name="loc_status_geocoding">Визначення адреси…</string>
+    <string name="loc_status_geocoding_sub">Конвертуємо координати в адресу</string>
+    <string name="loc_status_searching">Пошук найближчого РЕМ…</string>
+    <string name="loc_status_searching_sub">Шукаємо оптимальний варіант</string>
+    <string name="loc_status_loading">Завантаження…</string>
+    <string name="loc_success_title">Місцезнаходження визначено</string>
+    <string name="loc_suggested_rem">Рекомендований РЕМ:</string>
+    <string name="loc_other_rems">Інші найближчі РЕМ:</string>
+    <string name="loc_manual_rem_btn">Вибрати інший РЕМ вручну</string>
+    <string name="loc_error_title">Помилка</string>
+    <string name="loc_retry_btn">Спробувати знову</string>
+
+    <!-- QR Scanner Screen -->
+    <string name="qr_title">Сканування QR-коду</string>
+    <string name="qr_close">Закрити</string>
+    <string name="qr_flash_on">Увімкнути спалах</string>
+    <string name="qr_flash_off">Вимкнути спалах</string>
+    <string name="qr_instruction_title">Наведіть камеру на QR-код</string>
+    <string name="qr_instruction_desc">QR-код з адресою буде автоматично розпізнано</string>
+    <string name="qr_success_title">QR-код розпізнано!</string>
+    <string name="qr_error_title">Помилка</string>
+    <string name="qr_cancel_btn">Скасувати</string>
+    <string name="qr_retry_btn">Спробувати знову</string>
+    <string name="qr_permission_title">Потрібен дозвіл на камеру</string>
+    <string name="qr_permission_rationale">Для сканування QR-кодів потрібен доступ до камери. Без цього дозволу функція сканування недоступна.</string>
+    <string name="qr_permission_request">Надайте дозвіл на використання камери для сканування QR-кодів з адресами.</string>
+    <string name="qr_permission_btn">Надати дозвіл</string>
+    <string name="qr_error_permission">Дозвіл на камеру не надано</string>
+    <string name="qr_error_unknown">Помилка розбору QR-коду</string>
+    <string name="qr_show_code">Показати QR-код</string>
+    <string name="qr_share_title">QR-код адреси</string>
+    <string name="qr_share_desc">Відскануйте QR-код, щоб швидко додати адресу</string>
+    <string name="qr_share_missing_data">Недостатньо даних для QR-коду</string>
+    <string name="qr_share_content_desc">QR-код адреси</string>
 
     <!-- Home Screen -->
     <string name="home_last_updated">Оновлено: %1$s</string>
@@ -23,16 +65,29 @@
     <string name="home_time_to_outage">До відключення: %1$s</string>
     <string name="home_time_to_restore">До увімкнення: %1$s</string>
     <string name="home_status_now">Зараз</string>
+    <string name="home_page_indicator">%1$d з %2$d</string>
+    <string name="home_menu">Меню</string>
+    <string name="home_refresh_all">Оновити все</string>
+    <string name="home_configure_widget">Налаштувати віджет</string>
+    <string name="home_help_faq">Допомога (FAQ)</string>
+    <string name="home_add">Додати</string>
+
+    <!-- Widget Selection -->
+    <string name="widget_select_address_title">Оберіть адресу для віджета</string>
+    <string name="widget_select_pane_title">Оберіть адресу віджета</string>
 
     <!-- Status descriptions for accessibility -->
     <string name="status_available">Світло є</string>
     <string name="status_probable">Можливе відключення</string>
     <string name="status_outage">Відключення</string>
+    <string name="status_unknown">Невідомо</string>
+    <string name="status_display_outage">Відключення</string>
+    <string name="status_display_available">Світло є</string>
+    <string name="status_display_probable">Можливе відключення</string>
 
-    <!-- Onboarding & Address Selection -->
-    <string name="onboarding_welcome_title">Світло під контролем</string>
-    <string name="onboarding_welcome_desc">Давайте налаштуємо вашу адресу, щоб ви завжди знали актуальний графік відключень</string>
-    <string name="onboarding_start_btn">Почати налаштування</string>
+
+    <string name="address_picker_title">Оберіть адресу</string>
+    <string name="address_picker_back">Назад</string>
     
     <string name="step_welcome">Ласкаво просимо</string>
     <string name="step_notifications">Сповіщення</string>
@@ -41,19 +96,30 @@
     <string name="step_street">Вибір вулиці</string>
     <string name="step_house">Вибір будинку</string>
     <string name="step_customize">Налаштування</string>
+    
 
-    <string name="search_rem_hint">Пошук РЕМ...</string>
-    <string name="search_city_hint">Пошук міста...</string>
-    <string name="search_street_hint">Пошук вулиці...</string>
-    <string name="search_house_hint">Пошук будинку...</string>
+    <string name="settings_title">Налаштування</string>
+
+    <string name="search_rem_hint">Пошук РЕМ…</string>
+    <string name="search_city_hint">Пошук міста…</string>
+    <string name="search_street_hint">Пошук вулиці…</string>
+    <string name="search_house_hint">Пошук будинку…</string>
     
     <string name="house_empty">Немає доступних будинків</string>
     <string name="house_not_found">Будинків не знайдено</string>
+
+    <!-- Actions -->
+    <string name="action_cancel">Скасувати</string>
+    <string name="action_save_address">Зберегти адресу</string>
+    <string name="action_saved">Збережено</string>
+    <string name="action_back">Назад</string>
 
     <!-- Settings -->
     <string name="settings_notifications_title">Сповіщення</string>
     <string name="settings_status_notif">Постійне сповіщення статусу</string>
     <string name="settings_status_notif_desc">Показувати поточний статус світла</string>
+    <string name="settings_live_updates_manage_title">Manage Live Updates</string>
+    <string name="settings_live_updates_manage_desc">Open system settings to allow promoted notifications.</string>
     <string name="settings_live_activity">Live Activity (Rich Style)</string>
     <string name="settings_live_activity_desc">Розширений стиль сповіщення (Android 12+)</string>
     <string name="settings_change_notif">Сповіщення про зміни</string>
@@ -70,12 +136,12 @@
 
     <!-- Errors & Connection -->
     <string name="error_no_connection">Немає зв\'язку з сервером</string>
-    <string name="error_update_data">Оновлення даних...</string>
+    <string name="error_update_data">Оновлення даних…</string>
     <string name="error_wait_msg">Будь ласка, зачекайте, ми намагаємось отримати графік.</string>
     <string name="error_check_conn_msg">Будь ласка, перевірте підключення, щоб завантажити актуальний графік.</string>
-    <string name="error_retry_countdown">Повторна спроба через %1$d сек...</string>
+    <string name="error_retry_countdown">Повторна спроба через %1$d сек…</string>
     <string name="error_retry_now">Спробувати зараз</string>
-    <string name="error_wait_btn">Зачекайте...</string>
+    <string name="error_wait_btn">Зачекайте…</string>
     <string name="error_offline_banner">Офлайн режим. Дані можуть бути застарілими</string>
 
     <!-- Widget strings -->
@@ -84,9 +150,61 @@
     <string name="widget_not_configured">Налаштуйте адресу в додатку</string>
     <string name="widget_loading">Завантаження…</string>
     <string name="widget_error">Помилка завантаження</string>
+    <string name="widget_configure_btn">Налаштувати</string>
+    <string name="widget_configure_address">Налаштувати адресу</string>
+    <string name="widget_status_outage">Немає світла</string>
+    <string name="widget_status_available">Світло є</string>
+    <string name="widget_status_probable">Можливо</string>
+    <string name="widget_status_loading">Завантаження</string>
+    <string name="widget_status_error">Помилка</string>
+    <string name="widget_status_outage_full">Відключення</string>
+    <string name="widget_status_available_full">Світло є</string>
+    <string name="widget_status_probable_full">Можливе відключення</string>
+    <string name="widget_status_syncing">Синхронізація…</string>
+    <string name="widget_until">До %1$s</string>
+    <string name="widget_content_desc_outage">Відключення світла</string>
+    <string name="widget_content_desc_available">Світло є</string>
+    <string name="widget_content_desc_probable">Можливе відключення</string>
+    <string name="widget_content_desc_unknown">Статус невідомий</string>
 
-    <!-- Shortcuts -->
+    <!-- Notification Channels -->
+    <string name="channel_alerts_name">Сповіщення про графік</string>
+    <string name="channel_alerts_desc">Попередження про майбутні відключення та увімкнення світла</string>
+    <string name="channel_status_name">Статус світла</string>
+    <string name="channel_status_desc">Постійне сповіщення з поточним статусом світла</string>
+    <string name="channel_live_update_name">Живі оновлення</string>
+    <string name="channel_live_update_desc">Статус світла в реальному часі на екрані блокування</string>
+    <string name="channel_info_name">Інформація</string>
+    <string name="channel_info_desc">Загальна інформація та оновлення від додатку</string>
+    
+    <!-- Notification Actions -->
+    <string name="notif_action_refresh">Оновити</string>
+    <string name="notif_action_dismiss">Закрити</string>
+    <string name="notif_action_open">Відкрити</string>
+    
+    <!-- Notification Content -->
+    <string name="notif_network_unavailable">Мережа недоступна…</string>
+    <string name="notif_add_address">Додайте адресу в налаштуваннях</string>
+    <string name="notif_loading_error">Помилка завантаження…</string>
+    <string name="notif_loading_data">Завантаження даних…</string>
+    <string name="notif_title_with_address">СвітлоЄ! - %1$s</string>
+    
+    <!-- Notification Status -->
+    <string name="notif_status_power_on">Світло є</string>
+    <string name="notif_status_probable">Можливо</string>
+    <string name="notif_status_outage">Відключення</string>
+    <string name="notif_title_format">%1$s %2$s • До %3$s</string>
+    <string name="notif_remaining_hm">%1$d год %2$d хв</string>
+    <string name="notif_remaining_m">%1$d хв</string>
+    <string name="notif_message_format">Залишилось: %1$s
+📍 %2$s</string>
+
+    <!-- Keyboard Shortcuts -->
+    <string name="shortcut_group_navigation">Навігація</string>
+    <string name="shortcut_group_actions">Дії</string>
     <string name="shortcut_add_address">Додати адресу</string>
+    <string name="shortcut_refresh_schedules">Оновити графіки</string>
+    <string name="shortcut_open_menu">Відкрити меню</string>
     <string name="shortcut_check_status">Перевірити статус</string>
 
     <!-- Android Auto -->
@@ -94,6 +212,10 @@
     <string name="car_no_addresses_desc">Додайте адреси в мобільному додатку</string>
     <string name="car_status_unknown">Статус невідомий</string>
     <string name="car_error_loading">Помилка завантаження</string>
+    <string name="car_loading">Завантаження…</string>
+    <string name="car_action_refresh">Оновити</string>
+    <string name="car_until">До %1$s</string>
+    <string name="car_offline_banner">Офлайн — кешовані дані</string>
 
     <plurals name="hour">
         <item quantity="one">%1$d година</item>
@@ -115,4 +237,36 @@
         <item quantity="many">%1$d секунд</item>
         <item quantity="other">%1$d секунд</item>
     </plurals>
+
+    <string name="icon_home">Дім</string>
+    <string name="icon_work">Робота</string>
+    <string name="icon_person">Рідні</string>
+    <string name="icon_favorite">Улюблене</string>
+    <string name="icon_star">Важливо</string>
+    <string name="icon_place">Місце</string>
+    <string name="icon_store">Магазин</string>
+    <string name="icon_school">Школа</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Вітаємо у СвітлоЄ!</string>
+    <string name="onboarding_welcome_subtitle">Дізнавайтесь про відключення світла заздалегідь</string>
+    <string name="onboarding_continue">Продовжити</string>
+    <string name="onboarding_skip">Пропустити</string>
+    <string name="onboarding_skip_dialog_title">Пропустити налаштування?</string>
+    <string name="onboarding_skip_dialog_message">Ви можете додати адресу пізніше у розділі \"Мої адреси\"</string>
+    <string name="onboarding_skip_dialog_confirm">Пропустити</string>
+    <string name="onboarding_skip_dialog_cancel">Залишитись</string>
+    <string name="onboarding_add_address_title">Додамо адресу?</string>
+    <string name="onboarding_add_address_subtitle">Оберіть вашу адресу для відслідковування графіку</string>
+    <string name="onboarding_confirm_title">Перевірте адресу</string>
+    <string name="onboarding_confirm_edit">Змінити</string>
+    <string name="onboarding_customize_title">Налаштуйте адресу</string>
+    <string name="onboarding_customize_name_label">Назва адреси</string>
+    <string name="onboarding_customize_icon_label">Оберіть іконку</string>
+    <string name="onboarding_permissions_title">Сповіщення</string>
+    <string name="onboarding_permissions_subtitle">Дозвольте сповіщення та будильники для своєчасних нагадувань</string>
+    <string name="onboarding_permissions_notifications">Сповіщення про зміни статусу</string>
+    <string name="onboarding_permissions_alarms">Точні будильники</string>
+    <string name="onboarding_permissions_grant">Надати дозволи</string>
+    <string name="onboarding_finish">Завершити</string>
 </resources>

@@ -44,16 +44,22 @@ class SmartNotificationManager @Inject constructor(
 
     /**
      * Sends a high-priority alert about power status change.
-     * Simple: just send the alert, no policy checks.
+     * Respects NotificationPolicy (quiet hours, DND, user preferences).
      *
      * Called by NotificationCoordinator after deduplication checks pass.
      */
-    suspend fun sendAlert(title: String, message: String, isOutage: Boolean) {
+    suspend fun sendAlert(title: String, message: String, isOutage: Boolean): Boolean {
         Log.d(TAG, "sendAlert called: $title")
 
         if (!hasPermission()) {
             Log.w(TAG, "Cannot post alert - POST_NOTIFICATIONS permission not granted")
-            return
+            return false
+        }
+
+        // Check notification policy (quiet hours, DND, global switch)
+        if (!notificationPolicy.canSendAlert()) {
+            Log.i(TAG, "Alert blocked by notification policy: $title")
+            return false
         }
 
         try {
@@ -61,8 +67,10 @@ class SmartNotificationManager @Inject constructor(
             notify(NotificationIds.ALERT, notification)
             notificationState.notificationShown(NotificationIds.ALERT)
             Log.i(TAG, "✓ Alert sent successfully: $title")
+            return true
         } catch (e: Exception) {
             Log.e(TAG, "✗ Error sending alert: ${e.message}", e)
+            return false
         }
     }
 
@@ -78,11 +86,31 @@ class SmartNotificationManager @Inject constructor(
         address: String,
         style: StatusNotificationStyle = StatusNotificationStyle.SIMPLE
     ): Notification {
-        Log.d(TAG, "createStatusNotification for $address: ${currentStatus.status}")
+        Log.i(TAG, ">>> createStatusNotification for $address, style=$style, status=${currentStatus.status}")
 
-        return notificationFactory.createStatus(
+        val notification = notificationFactory.createStatus(
             current = currentStatus,
             schedules = allSchedules,
+            address = address,
+            style = style
+        )
+        
+        Log.i(TAG, "<<< createStatusNotification complete")
+        return notification
+    }
+
+    /**
+     * Creates a status notification using the best supported style for the device/settings.
+     */
+    fun createStatusNotificationAuto(
+        currentStatus: GroupedSchedule,
+        allSchedules: List<GroupedSchedule>,
+        address: String
+    ): Notification {
+        val style = notificationFactory.getBestSupportedStyle()
+        return createStatusNotification(
+            currentStatus = currentStatus,
+            allSchedules = allSchedules,
             address = address,
             style = style
         )
@@ -93,11 +121,12 @@ class SmartNotificationManager @Inject constructor(
      * Safe to call from anywhere (thread-safe via NotificationManagerCompat).
      */
     fun updateStatusNotification(notification: Notification) {
-        Log.d(TAG, "updateStatusNotification")
+        Log.i(TAG, ">>> updateStatusNotification, flags=${notification.flags}")
 
         try {
             notify(NotificationIds.STATUS, notification)
             notificationState.notificationShown(NotificationIds.STATUS)
+            Log.i(TAG, "<<< updateStatusNotification: posted notification id=${NotificationIds.STATUS}")
         } catch (e: Exception) {
             Log.e(TAG, "Error updating status notification", e)
         }

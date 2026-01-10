@@ -1,4 +1,4 @@
-package com.occaecat.ztoeschedule.presentation.ui.onboarding
+package com.occaecat.ztoeschedule.presentation.ui.addresses
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
@@ -8,7 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -25,14 +25,15 @@ import com.occaecat.ztoeschedule.data.model.City
 import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
-import com.occaecat.ztoeschedule.presentation.ui.SelectionListItem
 import com.occaecat.ztoeschedule.presentation.ui.SearchField
 import com.occaecat.ztoeschedule.presentation.ui.CategoryFilterRow
 import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
 import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
-
+import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
 import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 
 @Composable
 fun RemSelectionPage(
@@ -53,23 +54,25 @@ fun RemSelectionPage(
             placeholder = stringResource(R.string.search_rem_hint)
         )
 
-        if (isLoading) {
+        if (isLoading && rems.isEmpty()) {
             ListSkeleton()
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .animateContentSize(spring()),
+                    .animateContentSize(spring())
+                    .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(filteredList, key = { it.id }) { rem ->
-                    SelectionListItem(
-                        title = rem.name,
-                        onClick = { onRemSelected(rem) },
-                        modifier = Modifier,
-                        icon = Icons.Default.Business
+                itemsIndexed(filteredList, key = { _, item -> item.id }) { index, rem ->
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = filteredList.size,
+                        headlineContent = { Text(rem.name) },
+                        leadingContent = { Icon(Icons.Default.Business, null) },
+                        onClick = { onRemSelected(rem) }
                     )
                 }
             }
@@ -105,23 +108,25 @@ fun CitySelectionPage(
             placeholder = stringResource(R.string.search_city_hint)
         )
 
-        if (isLoading) {
+        if (isLoading && cities.isEmpty()) {
             ListSkeleton()
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .animateContentSize(spring()),
+                    .animateContentSize(spring())
+                    .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(filteredList, key = { it.id }) { city ->
-                    SelectionListItem(
-                        title = city.name,
-                        onClick = { onCitySelected(city) },
-                        modifier = Modifier,
-                        icon = Icons.Default.LocationCity
+                itemsIndexed(filteredList, key = { _, item -> item.id }) { index, city ->
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = filteredList.size,
+                        headlineContent = { Text(city.name) },
+                        leadingContent = { Icon(Icons.Default.LocationCity, null) },
+                        onClick = { onCitySelected(city) }
                     )
                 }
             }
@@ -157,23 +162,25 @@ fun StreetSelectionPage(
             placeholder = stringResource(R.string.search_street_hint)
         )
 
-        if (isLoading) {
+        if (isLoading && streets.isEmpty()) {
             ListSkeleton()
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .animateContentSize(spring()),
+                    .animateContentSize(spring())
+                    .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(filteredList, key = { it.id }) { street ->
-                    SelectionListItem(
-                        title = street.name,
-                        onClick = { onStreetSelected(street) },
-                        modifier = Modifier,
-                        icon = Icons.Default.Signpost
+                itemsIndexed(filteredList, key = { _, item -> item.id }) { index, street ->
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = filteredList.size,
+                        headlineContent = { Text(street.name) },
+                        leadingContent = { Icon(Icons.Default.Signpost, null) },
+                        onClick = { onStreetSelected(street) }
                     )
                 }
             }
@@ -215,8 +222,8 @@ fun HouseNumberSelectionPage(
             onCategorySelected = onCategorySelected
         )
 
-        if (isLoading) {
-            GridSkeleton()
+        if (isLoading && houseNumbers.isEmpty()) {
+            ListSkeleton()
         } else if (houseNumbers.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -225,109 +232,71 @@ fun HouseNumberSelectionPage(
                 )
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 100.dp),
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .animateContentSize(),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .animateContentSize(spring())
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(houseNumbers, key = { it.originalAddressId }) { house ->
-                    OutlinedCard(
-                        onClick = { onHouseSelected(house) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.outlinedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = house.houseNumber,
-                                style = MaterialTheme.typography.titleMedium,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                            
-                            // Category + Queue chips
+                itemsIndexed(houseNumbers, key = { _, item -> "${item.originalAddressId}_${item.houseNumber}" }) { index, house ->
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = houseNumbers.size,
+                        headlineContent = { Text(house.houseNumber) },
+                        supportingContent = {
+                            @OptIn(ExperimentalLayoutApi::class)
                             FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(top = 4.dp)
                             ) {
                                 if (selectedCategory == null) {
-                                    AssistChip(
-                                        onClick = {},
-                                        label = {
-                                            Text(
-                                                text = house.category.label,
-                                                style = MaterialTheme.typography.labelSmall
-                                            )
-                                        },
-                                        modifier = Modifier.height(28.dp)
-                                    )
+                                    ReadOnlyChip(text = house.category.label)
                                 }
-                                
-                                AssistChip(
-                                    onClick = {},
-                                    label = {
-                                        Text(
-                                            text = "Ч: ${house.cherga}",
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                    },
-                                    modifier = Modifier.height(28.dp)
-                                )
-                                
-                                AssistChip(
-                                    onClick = {},
-                                    label = {
-                                        Text(
-                                            text = "ПЧ: ${house.pidcherga}",
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                    },
-                                    modifier = Modifier.height(28.dp)
-                                )
+                                ReadOnlyChip(text = "Черга: ${house.cherga}.${house.pidcherga}")
                             }
-                        }
-                    }
+                        },
+                        leadingContent = { Icon(Icons.Default.Home, null) },
+                        onClick = { onHouseSelected(house) }
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReadOnlyChip(text: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
     }
 }
 
 @Composable
 private fun ListSkeleton() {
     Column(
-        modifier = Modifier.fillMaxSize().padding(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        repeat(8) {
-            ShimmerItem(height = 56.dp, modifier = Modifier.padding(horizontal = 16.dp), shape = MaterialTheme.shapes.medium)
-        }
-    }
-}
-
-@Composable
-private fun GridSkeleton() {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        repeat(4) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                repeat(3) {
-                    ShimmerItem(height = 60.dp, modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.large)
-                }
-            }
+        repeat(8) { index ->
+            SettingsGroupItem(
+                index = index,
+                totalCount = 8,
+                headlineContent = { ShimmerItem(height = 16.dp, modifier = Modifier.width(120.dp)) },
+                leadingContent = { ShimmerItem(height = 24.dp, modifier = Modifier.width(24.dp), shape = CircleShape) },
+                onClick = {} // No-op
+            )
         }
     }
 }

@@ -53,3 +53,10 @@ keystore.properties
 google-services.json
 .gemini/
 gha-creds-*.json
+
+# Agent and API Documentation
+GEMINI.md
+AGENTS.md
+API_DOCUMENTATION.md
+AUDIT_REPORT.md
+AUDIT_REPORT.md

@@ -14,12 +14,16 @@ import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 import com.occaecat.ztoeschedule.data.network.GpvApiService
 import com.occaecat.ztoeschedule.domain.ScheduleDomainLogic
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.supervisorScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.occaecat.ztoeschedule.data.local.dao.ScheduleDao
 import com.occaecat.ztoeschedule.data.local.entity.ScheduleCacheEntity
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Repository for managing energy outage data
@@ -54,6 +58,13 @@ class EnergyRepository(
         }
     }
 
+    suspend fun updateAddress(address: com.occaecat.ztoeschedule.data.model.SavedAddress) {
+        addressStorage.updateAddress(address)
+        if (address.priority == 1) {
+            syncAddressToPreferences(address)
+        }
+    }
+
     suspend fun deleteAddress(id: String) {
         addressStorage.deleteAddress(id)
         val addresses = addressStorage.getAddresses()
@@ -62,7 +73,6 @@ class EnergyRepository(
             syncAddressToPreferences(primary)
         }
         // Don't clear preferences - keep showing the last selected address even if deleted
-        // User can stay on the same screen without going to onboarding
     }
 
     suspend fun setPrimaryAddress(id: String) {
@@ -197,25 +207,52 @@ class EnergyRepository(
             return Result.success(ScheduleWithMessages(mockSchedules, mockMessages))
         }
         
-        coroutineScope {
+        supervisorScope {
             val scheduleDeferred = async { apiService.getSchedule(cherga, pidcherga) }
             val messagesDeferred = async { apiService.getMessages() }
 
-            val schedules = try { scheduleDeferred.await() } catch (e: Exception) { null }
-            val messages = try { messagesDeferred.await() } catch (e: Exception) { null }
+            val scheduleResponse = try { scheduleDeferred.await() } catch (e: Exception) { null }
+            val messagesResponse = try { messagesDeferred.await() } catch (e: Exception) { null }
+
+            val schedules = scheduleResponse?.takeIf { it.isSuccessful }?.body()
+            val messages = messagesResponse?.takeIf { it.isSuccessful }?.body()
+
+            val scheduleHeader = scheduleResponse?.headers()?.get("Last-Modified-Shedules-Date")
+            val messagesHeader = messagesResponse?.headers()?.get("Last-Modified-Shedules-Date")
+            val serverUpdatedMs = parseServerLastModified(scheduleHeader)
+                ?: parseServerLastModified(messagesHeader)
 
             if (schedules == null && messages == null) {
+                // Both failed - load from cache
                 loadFromCache(cherga, pidcherga)
             } else {
-                val result = ScheduleWithMessages(schedules ?: emptyList(), messages ?: emptyList())
+                // At least one succeeded - merge with cached data for partial fails
+                val cached = scheduleDao.getScheduleOnce(cherga, pidcherga)
+                val cachedData = if (cached != null) {
+                    val typeS = object : TypeToken<List<Schedule>>() {}.type
+                    val typeM = object : TypeToken<List<ScheduleMessagePart>>() {}.type
+                    ScheduleWithMessages(
+                        gson.fromJson(cached.scheduleJson, typeS) ?: emptyList(),
+                        gson.fromJson(cached.messagesJson, typeM) ?: emptyList()
+                    )
+                } else null
+                
+                // Use fresh data where available, fall back to cached
+                val finalSchedules = schedules ?: cachedData?.schedules ?: emptyList()
+                val finalMessages = messages ?: cachedData?.messages ?: emptyList()
+                
+                val result = ScheduleWithMessages(finalSchedules, finalMessages)
+                
+                // Only update cache with non-empty data
                 val entity = ScheduleCacheEntity(
                     cherga = cherga,
                     pidcherga = pidcherga,
-                    scheduleJson = gson.toJson(result.schedules),
-                    messagesJson = gson.toJson(result.messages),
-                    lastUpdated = System.currentTimeMillis()
+                    scheduleJson = if (schedules != null) gson.toJson(schedules) else cached?.scheduleJson ?: "[]",
+                    messagesJson = if (messages != null) gson.toJson(messages) else cached?.messagesJson ?: "[]",
+                    lastUpdated = serverUpdatedMs ?: cached?.lastUpdated ?: System.currentTimeMillis()
                 )
                 scheduleDao.insertSchedule(entity)
+                serverUpdatedMs?.let { preferencesManager.saveLastScheduleServerUpdatedMs(it) }
                 Result.success(result)
             }
         }
@@ -256,14 +293,32 @@ class EnergyRepository(
         }
     }
 
+    suspend fun getCacheLastUpdated(cherga: Int, pidcherga: Int): Long? {
+        return scheduleDao.getScheduleOnce(cherga, pidcherga)?.lastUpdated
+    }
+
     suspend fun getMessages(): Result<List<ScheduleMessagePart>> = try {
-        Result.success(apiService.getMessages())
+        val response = apiService.getMessages()
+        if (response.isSuccessful) {
+            val header = response.headers().get("Last-Modified-Shedules-Date")
+            parseServerLastModified(header)?.let { preferencesManager.saveLastScheduleServerUpdatedMs(it) }
+            Result.success(response.body() ?: emptyList())
+        } else {
+            Result.failure(Exception("HTTP error: ${response.code()}"))
+        }
     } catch (e: Exception) {
         Result.failure(e)
     }
 
     suspend fun getSchedule(cherga: Int, pidcherga: Int): Result<List<Schedule>> = try {
-        Result.success(apiService.getSchedule(cherga, pidcherga))
+        val response = apiService.getSchedule(cherga, pidcherga)
+        if (response.isSuccessful) {
+            val header = response.headers().get("Last-Modified-Shedules-Date")
+            parseServerLastModified(header)?.let { preferencesManager.saveLastScheduleServerUpdatedMs(it) }
+            Result.success(response.body() ?: emptyList())
+        } else {
+            Result.failure(Exception("HTTP error: ${response.code()}"))
+        }
     } catch (e: Exception) {
         Result.failure(e)
     }
@@ -285,6 +340,8 @@ class EnergyRepository(
     fun getCurrentStatus(schedules: List<Schedule>): Schedule? {
         return ScheduleDomainLogic.getCurrentStatus(schedules)
     }
+
+    fun getLastScheduleServerUpdatedFlow(): Flow<Long?> = preferencesManager.lastScheduleServerUpdatedFlow
 
     // ========== Persistence & Flows ==========
 
@@ -319,9 +376,6 @@ class EnergyRepository(
     }
 
     fun getSavedSelectionFlow(): Flow<com.occaecat.ztoeschedule.data.local.SavedSelection?> = preferencesManager.savedSelectionFlow
-    fun getOnboardingCompletedFlow(): Flow<Boolean> = preferencesManager.onboardingCompletedFlow
-    suspend fun setOnboardingCompleted() = preferencesManager.setOnboardingCompleted()
-    suspend fun resetOnboarding() = preferencesManager.resetOnboarding() // Clears onboarding flag AND saved selection
     
     suspend fun clearAllData() {
         scheduleDao.deleteAll()
@@ -333,10 +387,14 @@ class EnergyRepository(
     fun getDisplayModeFlow(): Flow<DisplayMode> = preferencesManager.displayModeFlow
     fun getColorThemeFlow(): Flow<ColorTheme> = preferencesManager.colorThemeFlow
     fun getCornerRadiusFlow(): Flow<Int> = preferencesManager.cornerRadiusFlow
+    fun getDynamicColorsFlow(): Flow<Boolean> = preferencesManager.dynamicColorsFlow
+    fun getIsAmoledFlow(): Flow<Boolean> = preferencesManager.isAmoledFlow
     fun getSmartNotificationSettingsFlow(): Flow<SmartNotificationSettings> = preferencesManager.smartNotificationSettingsFlow
     suspend fun setDisplayMode(mode: DisplayMode) = preferencesManager.setDisplayMode(mode)
     suspend fun setColorTheme(theme: ColorTheme) = preferencesManager.setColorTheme(theme)
     suspend fun setCornerRadius(radius: Int) = preferencesManager.setCornerRadius(radius)
+    suspend fun setDynamicColors(enabled: Boolean) = preferencesManager.setDynamicColors(enabled)
+    suspend fun setIsAmoled(enabled: Boolean) = preferencesManager.setIsAmoled(enabled)
     suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) = preferencesManager.saveSmartNotificationSettings(settings)
 
     // ========== Notification Settings ==========
@@ -352,6 +410,20 @@ class EnergyRepository(
 }
 
 data class ScheduleWithMessages(val schedules: List<Schedule>, val messages: List<ScheduleMessagePart>)
+
+private fun parseServerLastModified(value: String?): Long? {
+    if (value.isNullOrBlank()) return null
+    return try {
+        val formatter = SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getDefault()
+        }
+        formatter.parse(value)?.time
+    } catch (_: ParseException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+}
 
 enum class ConsumerCategory(val label: String) {
     HOUSEHOLD("Побутові"),

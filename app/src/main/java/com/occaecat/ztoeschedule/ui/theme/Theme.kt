@@ -18,6 +18,8 @@ import androidx.compose.material3.Shapes
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.data.model.ColorTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 
 val LocalCornerRadius = staticCompositionLocalOf { 24 }
 
@@ -114,12 +116,14 @@ val ContrastColorScheme = lightColorScheme(
     outline = Color.Black
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SvitloYeZhytomyrTheme(
     themePreference: ColorTheme = ColorTheme.System,
     cornerRadius: Int = -1,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
+    isAmoled: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -150,7 +154,13 @@ fun SvitloYeZhytomyrTheme(
         }
     }
 
-    val colorScheme = when (themePreference) {
+    val effectiveTheme = if (isAmoled && (themePreference == ColorTheme.Dark || (themePreference == ColorTheme.System && systemDark))) {
+        ColorTheme.Amoled
+    } else {
+        themePreference
+    }
+
+    val colorScheme = when (effectiveTheme) {
         ColorTheme.System -> {
             if (isDynamicSupported) {
                 if (systemDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -165,6 +175,8 @@ fun SvitloYeZhytomyrTheme(
             if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
         }
         ColorTheme.Amoled -> {
+            // Force disable dynamic color for background/surface in AMOLED mode, but maybe keep accents?
+            // Current implementation ignores dynamic colors for Amoled background
             val base = if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
             base.copy(
                 background = Color.Black,
@@ -191,6 +203,7 @@ fun SvitloYeZhytomyrTheme(
             colorScheme = colorScheme,
             typography = Typography, // Use standard typography
             shapes = customShapes,
+            motionScheme = MotionScheme.expressive(),
             content = content
         )
     }

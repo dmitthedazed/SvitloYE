@@ -5,8 +5,10 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -16,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
@@ -26,66 +29,81 @@ import javax.inject.Inject
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
-
-import com.occaecat.ztoeschedule.data.model.FontScale
 import com.occaecat.ztoeschedule.data.model.SavedAddress
 
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.runBlocking
 
 /**
  * Main Activity for ZTOE Schedule Application
  *
- * Displays onboarding for new users, then shows the main app
+ * Main Activity that hosts the single-activity Compose UI.
  * with bottom navigation: Home, My Addresses, Settings
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var preferencesManager: EnergyPreferencesManager
+    private val activityViewModel: EnergyScheduleViewModel by viewModels()
+    private val addAddressLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
+        val name = data.getStringExtra("name") ?: return@registerForActivityResult
+        val icon = data.getStringExtra("icon") ?: "home"
+        val remId = data.getStringExtra("remId") ?: return@registerForActivityResult
+        val remName = data.getStringExtra("remName") ?: ""
+        val cityId = data.getStringExtra("cityId") ?: return@registerForActivityResult
+        val cityName = data.getStringExtra("cityName") ?: ""
+        val streetId = data.getStringExtra("streetId") ?: return@registerForActivityResult
+        val streetName = data.getStringExtra("streetName") ?: ""
+        val addressId = data.getStringExtra("addressId") ?: return@registerForActivityResult
+        val addressName = data.getStringExtra("addressName") ?: ""
+        val cherga = data.getIntExtra("cherga", 0)
+        val pidcherga = data.getIntExtra("pidcherga", 0)
+        activityViewModel.addSavedAddress(name, icon, remId, remName, cityId, cityName, streetId, streetName, addressId, addressName, cherga, pidcherga)
+    }
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        var keepSplash = true
+        splashScreen.setKeepOnScreenCondition { keepSplash }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // If onboarding is not completed or no saved selection, redirect to dedicated OnboardingActivity
-        if (shouldStartOnboarding()) {
-            startActivity(Intent(this, OnboardingActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
-            })
-            finish()
-            return
-        }
+        lifecycleScope.launch {
+            // Check if onboarding is completed
+            val onboardingCompleted = preferencesManager.onboardingCompletedFlow.first()
+            if (!onboardingCompleted) {
+                startActivity(Intent(this@MainActivity, OnboardingActivity::class.java))
+                finish()
+                return@launch
+            }
 
-        // Schedule notification monitoring
-        NotificationScheduler.schedulePowerMonitoring(this)
-        
-        // Trigger immediate check to update widgets
-        NotificationScheduler.runImmediateCheck(this)
+            // Schedule notification monitoring
+            NotificationScheduler.schedulePowerMonitoring(this@MainActivity)
 
-        // Ensure persistent notification services are running if enabled
-        CoroutineScope(Dispatchers.Main).launch {
+            // Trigger immediate check to update widgets
+            NotificationScheduler.runImmediateCheck(this@MainActivity)
+
+            // Ensure persistent notification services are running if enabled
             val statusEnabled = preferencesManager.statusNotificationEnabledFlow.first()
             if (statusEnabled) {
                 // Unified service handles both standard and live activity styles internally
                 com.occaecat.ztoeschedule.domain.notification.PowerStatusService.start(this@MainActivity)
             }
-        }
 
-        setContent {
-            val viewModel: EnergyScheduleViewModel = hiltViewModel()
-            val uiState by viewModel.uiState.collectAsState()
+            keepSplash = false
+
+            setContent {
+                val viewModel = activityViewModel
+                val uiState by viewModel.uiState.collectAsState()
 
             // Update Dynamic Shortcuts whenever addresses change
             LaunchedEffect(uiState.savedAddresses) {
@@ -118,12 +136,16 @@ class MainActivity : ComponentActivity() {
 
             val colorTheme by preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.System)
             val cornerRadius by preferencesManager.cornerRadiusFlow.collectAsState(initial = 24)
+            val dynamicColors by preferencesManager.dynamicColorsFlow.collectAsState(initial = true)
+            val isAmoled by preferencesManager.isAmoledFlow.collectAsState(initial = false)
 
             SvitloYeZhytomyrTheme(
                 themePreference = colorTheme,
-                cornerRadius = cornerRadius
+                cornerRadius = cornerRadius,
+                dynamicColor = dynamicColors,
+                isAmoled = isAmoled
             ) {
-                val windowSizeClass = calculateWindowSizeClass(this)
+                val windowSizeClass = calculateWindowSizeClass(this@MainActivity)
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -133,6 +155,7 @@ class MainActivity : ComponentActivity() {
                         windowSizeClass = windowSizeClass
                     )
                 }
+            }
             }
         }
     }
@@ -146,10 +169,13 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra("configure_widget", false)) {
             viewModel.setShowWidgetConfig(true)
         }
-        
         val shortcutId = intent.getStringExtra("shortcut_id")
         if (shortcutId == "add_address") {
-            startActivity(Intent(this, AddressPickerActivity::class.java))
+            if (!viewModel.uiState.value.isConnected) {
+                viewModel.showInfoMessage(getString(R.string.error_no_connection))
+                return
+            }
+            addAddressLauncher.launch(Intent(this, AddressPickerActivity::class.java))
         } else if (intent.hasExtra("address_id")) {
             val addressId = intent.getStringExtra("address_id")
             viewModel.setRequestedAddressId(addressId)
@@ -158,18 +184,18 @@ class MainActivity : ComponentActivity() {
         // Handle Deep Link
         intent.data?.let { uri ->
             val params = com.occaecat.ztoeschedule.presentation.util.DeepLinkHelper.parseUri(uri)
-            params?.let { (streetId, houseId) ->
-                if (streetId != null && houseId != null) {
+            params?.let { (streetId, addressId, houseName) ->
+                if (streetId != null && addressId != null) {
                     // 1. Try to find in already saved addresses
                     val existing = viewModel.uiState.value.savedAddresses.find { 
-                        it.streetId == streetId && it.addressId == houseId 
+                        it.streetId == streetId && it.addressId == addressId 
                     }
                     
                     if (existing != null) {
                         viewModel.setRequestedAddressId(existing.id)
                     } else {
                         // 2. If not saved, use the new inspect logic
-                        viewModel.inspectAddressByIds(streetId, houseId)
+                        viewModel.inspectAddressByIds(streetId, addressId, houseName)
                     }
                 }
             }
@@ -223,23 +249,15 @@ class MainActivity : ComponentActivity() {
         deviceId: Int
     ) {
         val navGroup = android.view.KeyboardShortcutGroup(
-            "Навігація",
+            getString(R.string.shortcut_group_navigation),
             listOf(
-                android.view.KeyboardShortcutGroup("Дії", listOf(
-                    android.view.KeyboardShortcutInfo("Додати адресу", android.view.KeyEvent.KEYCODE_N, android.view.KeyEvent.META_CTRL_ON),
-                    android.view.KeyboardShortcutInfo("Оновити графіки", android.view.KeyEvent.KEYCODE_R, android.view.KeyEvent.META_CTRL_ON),
-                    android.view.KeyboardShortcutInfo("Відкрити меню", android.view.KeyEvent.KEYCODE_M, android.view.KeyEvent.META_CTRL_ON)
+                android.view.KeyboardShortcutGroup(getString(R.string.shortcut_group_actions), listOf(
+                    android.view.KeyboardShortcutInfo(getString(R.string.shortcut_add_address), android.view.KeyEvent.KEYCODE_N, android.view.KeyEvent.META_CTRL_ON),
+                    android.view.KeyboardShortcutInfo(getString(R.string.shortcut_refresh_schedules), android.view.KeyEvent.KEYCODE_R, android.view.KeyEvent.META_CTRL_ON),
+                    android.view.KeyboardShortcutInfo(getString(R.string.shortcut_open_menu), android.view.KeyEvent.KEYCODE_M, android.view.KeyEvent.META_CTRL_ON)
                 ))
             ).flatMap { it.items }
         )
         data?.add(navGroup)
     }
-
-    private fun shouldStartOnboarding(): Boolean = runBlocking {
-        val completed = preferencesManager.onboardingCompletedFlow.first()
-        val selection = preferencesManager.savedSelectionFlow.first()
-        return@runBlocking !completed || selection == null
-    }
 }
-
-        

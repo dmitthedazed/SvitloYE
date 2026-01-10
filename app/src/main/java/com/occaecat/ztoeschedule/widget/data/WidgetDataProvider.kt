@@ -32,7 +32,7 @@ class WidgetDataProvider @Inject constructor(
         }
         
         // Отримання даних з репозиторію
-        return repository.getScheduleWithMessages(selection.cherga, selection.pidcherga)
+        return repository.getCachedScheduleWithMessages(selection.cherga, selection.pidcherga)
             .fold(
                 onSuccess = { data ->
                     val currentStatus = ScheduleDomainLogic.getCurrentStatus(data.schedules)
@@ -66,7 +66,7 @@ class WidgetDataProvider @Inject constructor(
             return WidgetData.NotConfigured
         }
         
-        return repository.getScheduleWithMessages(cherga, pidcherga)
+        return repository.getCachedScheduleWithMessages(cherga, pidcherga)
             .fold(
                 onSuccess = { data ->
                     val currentStatus = ScheduleDomainLogic.getCurrentStatus(data.schedules)

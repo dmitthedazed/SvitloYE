@@ -97,10 +97,10 @@ class LightWidget : GlanceAppWidget() {
                 ) {
                     if (address == null) {
                         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
-                            Text("Налаштуйте адресу", style = TextStyle(color = palette.content))
+                            Text(currentContext.getString(R.string.widget_configure_address), style = TextStyle(color = palette.content))
                             Spacer(GlanceModifier.height(8.dp))
                             androidx.glance.Button(
-                                text = "Налаштувати",
+                                text = currentContext.getString(R.string.widget_configure_btn),
                                 onClick = actionStartActivity(
                                     Intent(currentContext, MainActivity::class.java).apply {
                                         putExtra("configure_widget", true)
@@ -108,11 +108,31 @@ class LightWidget : GlanceAppWidget() {
                                 )
                             )
                         }
+                    } else if (status == "error") {
+                        // Error state
+                        Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
+                            StatusIcon("error", 32.dp, palette)
+                            Spacer(GlanceModifier.height(8.dp))
+                            Text(
+                                text = currentContext.getString(R.string.widget_error),
+                                style = TextStyle(color = palette.content, fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    } else if (status == "loading") {
+                        // Loading state
+                        Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
+                            StatusIcon("loading", 32.dp, palette)
+                            Spacer(GlanceModifier.height(8.dp))
+                            Text(
+                                text = currentContext.getString(R.string.widget_loading),
+                                style = TextStyle(color = palette.content)
+                            )
+                        }
                     } else {
                         when {
-                            size.height >= 180.dp -> FullLayout(status, nextEvent, address, palette)
-                            size.width >= 180.dp -> RowLayout(status, nextEvent, palette)
-                            else -> SmallLayout(status, nextEvent, palette)
+                            size.height >= 180.dp -> FullLayout(status, nextEvent, address, palette, currentContext)
+                            size.width >= 180.dp -> RowLayout(status, nextEvent, palette, currentContext)
+                            else -> SmallLayout(status, nextEvent, palette, currentContext)
                         }
                     }
                 }
@@ -121,15 +141,15 @@ class LightWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun SmallLayout(status: String, nextEvent: String, palette: WidgetPalette) {
+    private fun SmallLayout(status: String, nextEvent: String, palette: WidgetPalette, context: Context) {
         Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
             StatusIcon(status, 32.dp, palette)
             Spacer(GlanceModifier.height(8.dp))
             val text = when(status) {
-                "outage" -> "Немає"
-                "available" -> "Є світло"
-                "probable" -> "Можливо"
-                else -> "Оновлення"
+                "outage" -> context.getString(R.string.widget_status_outage)
+                "available" -> context.getString(R.string.widget_status_available)
+                "probable" -> context.getString(R.string.widget_status_probable)
+                else -> context.getString(R.string.widget_status_loading)
             }
             Text(
                 text = text,
@@ -142,32 +162,32 @@ class LightWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun RowLayout(status: String, nextEvent: String, palette: WidgetPalette) {
+    private fun RowLayout(status: String, nextEvent: String, palette: WidgetPalette, context: Context) {
         Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
             StatusIcon(status, 40.dp, palette)
             Spacer(GlanceModifier.width(12.dp))
             Column {
                 val text = when(status) {
-                    "outage" -> "Відключення"
-                    "available" -> "Світло є"
-                    "probable" -> "Можливе відкл."
-                    else -> "Синхронізація..."
+                    "outage" -> context.getString(R.string.widget_status_outage_full)
+                    "available" -> context.getString(R.string.widget_status_available_full)
+                    "probable" -> context.getString(R.string.widget_status_probable_full)
+                    else -> context.getString(R.string.widget_status_syncing)
                 }
                 Text(
                     text = text,
                     style = TextStyle(color = palette.content, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 )
                 if (status != "unknown") {
-                    Text(text = "До $nextEvent", style = TextStyle(color = palette.muted))
+                    Text(text = context.getString(R.string.widget_until, nextEvent), style = TextStyle(color = palette.muted))
                 }
             }
         }
     }
 
     @Composable
-    private fun FullLayout(status: String, nextEvent: String, address: String, palette: WidgetPalette) {
+    private fun FullLayout(status: String, nextEvent: String, address: String, palette: WidgetPalette, context: Context) {
         Column(modifier = GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
-            RowLayout(status, nextEvent, palette)
+            RowLayout(status, nextEvent, palette, context)
             Spacer(GlanceModifier.height(12.dp))
             Box(modifier = GlanceModifier.fillMaxWidth().height(1.dp).background(palette.muted)) {}
             Spacer(GlanceModifier.height(8.dp))
@@ -177,13 +197,18 @@ class LightWidget : GlanceAppWidget() {
 
     @Composable
     private fun StatusIcon(status: String, size: androidx.compose.ui.unit.Dp, palette: WidgetPalette) {
-        val iconRes = if (status == "available") R.drawable.ic_bolt else R.drawable.ic_home_filled
+        val iconRes = when(status) {
+            "available" -> R.drawable.ic_bolt
+            "error" -> R.drawable.ic_bolt // Will show with error color
+            "loading" -> R.drawable.ic_bolt
+            else -> R.drawable.ic_home_filled
+        }
         val tint = palette.content
         val contentDescription = when (status) {
-            "outage" -> "Відключення електроенергії"
-            "available" -> "Електроенергія є"
-            "probable" -> "Ймовірне відключення"
-            else -> "Статус невідомий"
+            "outage" -> LocalContext.current.getString(R.string.widget_content_desc_outage)
+            "available" -> LocalContext.current.getString(R.string.widget_content_desc_available)
+            "probable" -> LocalContext.current.getString(R.string.widget_content_desc_probable)
+            else -> LocalContext.current.getString(R.string.widget_content_desc_unknown)
         }
         
         Image(

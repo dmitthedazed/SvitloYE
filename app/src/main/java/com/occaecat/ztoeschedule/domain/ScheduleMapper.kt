@@ -135,7 +135,7 @@ object ScheduleMapper {
 
     fun formatDuration(hours: Int, minutes: Int): String {
         return when {
-            hours > 0 && minutes > 0 -> "$hours год $minutes хв"
+            hours > 0 && minutes > 0 -> "${hours}г ${minutes}хв"
             hours > 0 -> "$hours год"
             minutes > 0 -> "$minutes хв"
             else -> "0 хв"

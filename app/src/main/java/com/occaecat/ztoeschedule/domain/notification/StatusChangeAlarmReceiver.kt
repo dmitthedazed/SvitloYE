@@ -5,11 +5,13 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.occaecat.ztoeschedule.data.model.ScheduleStatus
+import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 /**
@@ -28,6 +30,9 @@ class StatusChangeAlarmReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var smartNotificationManager: SmartNotificationManager
+    
+    @Inject
+    lateinit var preferencesManager: EnergyPreferencesManager
 
     companion object {
         private const val TAG = "StatusChangeAlarmReceiver"
@@ -72,6 +77,10 @@ class StatusChangeAlarmReceiver : BroadcastReceiver() {
         scope.launch {
             try {
                 sendNotification(addressName, previousStatus, currentStatus)
+                val statusNotificationsEnabled = preferencesManager.statusNotificationEnabledFlow.first()
+                if (statusNotificationsEnabled) {
+                    PowerStatusService.requestImmediateRefresh(context)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending notification: ${e.message}", e)
             } finally {
@@ -87,7 +96,7 @@ class StatusChangeAlarmReceiver : BroadcastReceiver() {
         addressName: String,
         previousStatus: ScheduleStatus,
         currentStatus: ScheduleStatus
-    ) {
+    ): Boolean {
         // Generate notification title and message
         val title = when (currentStatus) {
             ScheduleStatus.Available -> "⚡ Світло є!"
@@ -100,9 +109,13 @@ class StatusChangeAlarmReceiver : BroadcastReceiver() {
         val isOutage = currentStatus == ScheduleStatus.Outage
 
         // Send alert
-        smartNotificationManager.sendAlert(title, message, isOutage)
-
-        Log.i(TAG, "✓ Notification sent: $title - $message")
+        val sent = smartNotificationManager.sendAlert(title, message, isOutage)
+        if (sent) {
+            Log.i(TAG, "Notification sent: $title - $message")
+        } else {
+            Log.i(TAG, "Notification suppressed: $title")
+        }
+        return sent
     }
 
     /**

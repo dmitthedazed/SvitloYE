@@ -4,21 +4,16 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,19 +48,16 @@ class AddressPickerActivity : ComponentActivity() {
                 themePreference = uiState.colorTheme,
                 cornerRadius = uiState.cornerRadius
             ) {
+                // Handle back press gracefully
+                BackHandler {
+                    setResult(Activity.RESULT_CANCELED)
+                    finish()
+                }
+                
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Scaffold(
-                        topBar = {
-                            TopAppBar(
-                                title = { Text("Вибір адреси") },
-                                navigationIcon = {
-                                    IconButton(onClick = { setResult(Activity.RESULT_CANCELED); finish() }) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                                    }
-                                }
-                            )
-                        }
-                    ) { innerPadding ->
+                        topBar = {}
+                    ) { _ ->
                     // Показуємо індикатор завантаження тільки якщо список РЕМ порожній І йде завантаження
                     if (uiState.remList.isEmpty() && uiState.isLoading) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -94,7 +86,8 @@ class AddressPickerActivity : ComponentActivity() {
                             initialStreet = null,
                             initialHouse = null,
                             initialName = "",
-                            initialIcon = "home"
+                            initialIcon = "home",
+                            showTopBar = false
                         )
                     }
                     }

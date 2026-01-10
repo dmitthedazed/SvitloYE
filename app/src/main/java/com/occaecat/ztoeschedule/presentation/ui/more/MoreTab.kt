@@ -1,19 +1,18 @@
+@file:OptIn(
+    ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
+
 package com.occaecat.ztoeschedule.presentation.ui.more
 
 import android.content.Intent
 import android.net.Uri
-import android.location.Geocoder
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.indication
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -24,35 +23,33 @@ import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.occaecat.ztoeschedule.R
+import androidx.compose.ui.util.lerp
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.Schedule
 import com.occaecat.ztoeschedule.domain.StatisticsCalculator
+import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
 import com.occaecat.ztoeschedule.presentation.ui.components.DailyStatisticsCard
-import com.occaecat.ztoeschedule.presentation.ui.components.ScaleIndication
-import com.google.android.gms.location.LocationServices
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.max
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoreTab(
     scheduleList: List<Schedule> = emptyList(),
@@ -62,25 +59,17 @@ fun MoreTab(
     currentAddressHouseName: String = "",
     onNavigateToSettings: () -> Unit,
     onNavigateToIntegrations: () -> Unit,
-    onNavigateToDonate: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToFaq: () -> Unit,
+    onNavigateToFeedback: () -> Unit,
     onAddDemoLocation: () -> Unit = {},
     displayMode: DisplayMode = DisplayMode.Comfortable,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
     val scrollState = rememberScrollState()
     val colorScheme = MaterialTheme.colorScheme
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    
-    var gpsAddress by remember { mutableStateOf<String?>(null) }
-    var isLoadingGps by remember { mutableStateOf(false) }
-    var gpsError by remember { mutableStateOf<String?>(null) }
     
     // Window width check for foldables and tablets
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -91,12 +80,8 @@ fun MoreTab(
     
     val promo = remember(colorScheme) { 
         listOf(
-            PromoItem("Підтримати", "Допоможіть нам", Icons.Default.Favorite, colorScheme.primaryContainer, colorScheme.onPrimaryContainer, onNavigateToDonate), 
             PromoItem("Про проект", "Хто ми", Icons.Default.Info, colorScheme.secondaryContainer, colorScheme.onSecondaryContainer, onNavigateToAbout), 
-            PromoItem("Зв'язок", "Напишіть нам", Icons.Default.Email, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer, {
-                val intent = Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:olegkhasanovv@gmail.com") }
-                context.startActivity(Intent.createChooser(intent, "Написати нам"))
-            }),
+            PromoItem("Зв'язок", "Напишіть нам", Icons.Default.Email, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer, onNavigateToFeedback),
             PromoItem("Питання", "FAQ", Icons.Default.Help, colorScheme.surfaceContainerHigh, colorScheme.onSurfaceVariant, onNavigateToFaq)
         ) 
     }
@@ -106,65 +91,91 @@ fun MoreTab(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(contentPadding)
-            .padding(bottom = 16.dp),
+            .padding(bottom = 80.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         HorizontalMultiBrowseCarousel(
             state = carouselState,
-            preferredItemWidth = if (isWideScreen) 240.dp else 160.dp,
-            itemSpacing = 16.dp,
+            preferredItemWidth = 186.dp,
+            itemSpacing = 8.dp,
             contentPadding = PaddingValues(horizontal = 16.dp),
-            modifier = Modifier.fillMaxWidth().height(if (isWideScreen) 240.dp else 210.dp)
+            modifier = Modifier.fillMaxWidth().height(221.dp)
         ) { index ->
             val item = promo[index]
-            val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
             
-            Card(
-                onClick = item.onClick, 
+            // Mask using a generic path shape
+            val pathShape = remember {
+                object : Shape {
+                    override fun createOutline(
+                        size: Size,
+                        layoutDirection: LayoutDirection,
+                        density: Density,
+                    ): Outline {
+                        val radiusPx = density.run { 24.dp.toPx() }
+                        val roundRect =
+                            RoundRect(0f, 0f, size.width, size.height, CornerRadius(radiusPx))
+                        val shapePath = Path().apply { addRoundRect(roundRect) }
+                        return Outline.Generic(shapePath)
+                    }
+                }
+            }
+
+            Box(
                 modifier = Modifier
-                    .height(if (isWideScreen) 230.dp else 200.dp)
-                    .fillMaxWidth()
-                    .maskClip(MaterialTheme.shapes.extraLarge)
-                    .semantics { isTraversalGroup = true }, 
-                shape = MaterialTheme.shapes.extraLarge, 
-                colors = CardDefaults.cardColors(
-                    containerColor = item.containerColor,
-                    contentColor = item.contentColor
+                    .height(205.dp)
+                    .maskClip(pathShape)
+                    .maskBorder(BorderStroke(1.dp, item.contentColor.copy(alpha = 0.5f)), pathShape)
+                    .background(item.containerColor)
+                    .clickable(onClick = item.onClick)
+            ) {
+                // Background Icon
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp)
+                        .graphicsLayer { alpha = 0.1f },
+                    tint = item.contentColor
                 )
-            ) { 
-                Box(Modifier.fillMaxSize()) { 
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 16.dp, y = (-8).dp)
-                            .size(if (isWideScreen) 144.dp else 112.dp)
-                            .graphicsLayer { alpha = 0.12f },
-                        tint = item.contentColor
+                
+                // Fading Chip
+                ElevatedAssistChip(
+                    onClick = item.onClick,
+                    label = { Text(item.title) },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(bottom = 16.dp)
+                        .graphicsLayer {
+                            // Fade the chip in once the carousel item's size is large enough to
+                            // display the entire chip
+                            alpha = lerp(
+                                0f,
+                                1f,
+                                max(
+                                    size.width - (carouselItemDrawInfo.maxSize) +
+                                        carouselItemDrawInfo.size,
+                                    0f,
+                                ) / size.width,
+                            )
+                            // Translate the chip to be pinned to the left side of the item's mask
+                            translationX = carouselItemDrawInfo.maskRect.left + 16.dp.toPx()
+                        },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = null,
+                            Modifier.size(AssistChipDefaults.IconSize),
+                            tint = item.contentColor
+                        )
+                    },
+                    colors = AssistChipDefaults.elevatedAssistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        labelColor = item.contentColor,
+                        leadingIconContentColor = item.contentColor
                     )
-                    
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(24.dp)
-                    ) { 
-                        Surface(
-                            color = item.contentColor.copy(alpha = 0.12f),
-                            shape = CircleShape,
-                            modifier = Modifier.size(if (isWideScreen) 48.dp else 32.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(item.icon, null, Modifier.size(if (isWideScreen) 24.dp else 16.dp), tint = item.contentColor)
-                            }
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        Text(item.title, style = if (isWideScreen) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = item.contentColor)
-                        Text(item.subtitle, style = MaterialTheme.typography.labelSmall, color = item.contentColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    } 
-                } 
+                )
             }
         }
 
@@ -217,13 +228,14 @@ fun MoreTab(
                     }
                 }
 
-                // Column 2: Services
+                // ... (previous code)
                 val services = listOf(
                     ServiceItem("Сайт ZTOE", Icons.Default.Language, "https://www.ztoe.com.ua"), 
                     ServiceItem("Графік онлайн", Icons.Default.OpenInBrowser, "https://www.ztoe.com.ua/unhooking-search.php")
                 )
                 
                 Column(
+// ... (rest of code)
                     modifier = Modifier.weight(1f).fillMaxHeight()
                 ) {
                     Text(
@@ -235,22 +247,22 @@ fun MoreTab(
                     
                     Column(
                         modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        services.forEach { item ->
-                            Card(
-                                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url))) },
-                                modifier = Modifier.fillMaxWidth().weight(1f),
-                                shape = MaterialTheme.shapes.large,
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                )
-                            ) {
-                                Row(
-                                    Modifier.fillMaxSize().padding(horizontal = 16.dp), 
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                        services.forEachIndexed { index, item ->
+                            SettingsGroupItem(
+                                index = index,
+                                totalCount = services.size,
+                                modifier = Modifier.weight(1f),
+                                headlineContent = { 
+                                    Text(
+                                        text = item.title, 
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    ) 
+                                },
+                                leadingContent = {
                                     Surface(
                                         modifier = Modifier.size(32.dp),
                                         shape = CircleShape,
@@ -260,147 +272,13 @@ fun MoreTab(
                                             Icon(item.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                                         }
                                     }
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        text = item.title, 
-                                        style = MaterialTheme.typography.titleSmall, 
-                                        maxLines = 2, 
-                                        lineHeight = 16.sp,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- GET ADDRESS BUTTON ---
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ),
-                onClick = {
-                    isLoadingGps = true
-                    gpsError = null
-                    scope.launch {
-                        try {
-                            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-                            @Suppress("MissingPermission")
-                            val locationTask = fusedLocationClient.lastLocation
-                            locationTask.addOnSuccessListener { location ->
-                                if (location != null) {
-                                    // Move geocoding to IO dispatcher to avoid blocking main thread
-                                    scope.launch(Dispatchers.IO) {
-                                        try {
-                                            val geocoder = Geocoder(context, Locale("uk", "UA"))
-                                            // Check if Geocoder is available (requires Google Services on some devices)
-                                            if (!Geocoder.isPresent()) {
-                                                withContext(Dispatchers.Main) {
-                                                    gpsError = "Геокодування недоступне на цьому пристрої"
-                                                    isLoadingGps = false
-                                                }
-                                                return@launch
-                                            }
-                                            
-                                            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                                            withContext(Dispatchers.Main) {
-                                                if (!addresses.isNullOrEmpty()) {
-                                                    val address = addresses[0]
-                                                    val parts = mutableListOf<String>()
-                                                    if (!address.adminArea.isNullOrEmpty()) parts.add(address.adminArea)
-                                                    if (!address.thoroughfare.isNullOrEmpty()) parts.add(address.thoroughfare)
-                                                    if (!address.featureName.isNullOrEmpty()) parts.add(address.featureName)
-                                                    gpsAddress = if (parts.isNotEmpty()) parts.joinToString(", ") else "Невідома адреса"
-                                                } else {
-                                                    gpsError = "Адреса не знайдена"
-                                                }
-                                                isLoadingGps = false
-                                            }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) {
-                                                gpsError = "Помилка геокодування: ${e.message}"
-                                                isLoadingGps = false
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    gpsError = "Локація недоступна"
-                                    isLoadingGps = false
-                                }
-                            }.addOnFailureListener { e ->
-                                gpsError = "Помилка GPS: ${e.message}"
-                                isLoadingGps = false
-                            }
-                        } catch (e: Exception) {
-                            gpsError = "Помилка: ${e.message}"
-                            isLoadingGps = false
-                        }
-                    }
-                }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isLoadingGps) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MyLocation,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Отримати адресу по GPS",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (gpsError != null) {
-                            Text(
-                                text = gpsError!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        } else if (gpsAddress != null) {
-                            Text(
-                                text = gpsAddress!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        } else {
-                            Text(
-                                text = "Натисніть для отримання адреси",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                },
+                                trailingContent = {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                },
+                                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url))) }
                             )
                         }
-                    }
-                    if (gpsAddress != null && gpsError == null) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clickable {
-                                    clipboardManager.setText(AnnotatedString(gpsAddress!!))
-                                }
-                        )
                     }
                 }
             }
@@ -410,102 +288,29 @@ fun MoreTab(
                 color = MaterialTheme.colorScheme.outlineVariant
             )
 
-            // --- DEBUG: Demo Location ---
-            if (com.occaecat.ztoeschedule.BuildConfig.DEBUG) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth(), 
-                    shape = MaterialTheme.shapes.large, 
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
-                ) {
-                    ListItem(
-                        headlineContent = { Text("🔧 Додати демо-локацію", fontWeight = FontWeight.Bold) },
-                        supportingContent = { Text("Для тестування алертів (статус міняється кожну хвилину)", fontSize = 12.sp) },
-                        leadingContent = { 
-                            Surface(
-                                modifier = Modifier.size(40.dp), 
-                                shape = CircleShape, 
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                            ) { 
-                                Box(contentAlignment = Alignment.Center) { 
-                                    Icon(Icons.Default.BugReport, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error) 
-                                } 
-                            } 
-                        },
-                        trailingContent = {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(18.dp))
-                        },
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple()
-                        ) { 
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            onAddDemoLocation()
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                }
-            }
-
             // --- SECTION 3: SYSTEM ---
-            Card(
-                modifier = Modifier.fillMaxWidth(), 
-                shape = MaterialTheme.shapes.extraLarge, 
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column {
-                    ListItem(
-                        headlineContent = { Text("Налаштування", style = MaterialTheme.typography.titleMedium) },
-                        supportingContent = { Text("Сповіщення та тема", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                        leadingContent = { 
-                            Surface(
-                                modifier = Modifier.size(40.dp), 
-                                shape = CircleShape, 
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                            ) { 
-                                Box(contentAlignment = Alignment.Center) { 
-                                    Icon(Icons.Default.Settings, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) 
-                                } 
-                            } 
-                        },
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple()
-                        ) { onNavigateToSettings() },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    
-                    ListItem(
-                        headlineContent = { Text("Функції та інтеграції", style = MaterialTheme.typography.titleMedium) },
-                        supportingContent = { Text("Android Auto, віджети та інше", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                        leadingContent = { 
-                            Surface(
-                                modifier = Modifier.size(40.dp), 
-                                shape = CircleShape, 
-                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)
-                            ) { 
-                                Box(contentAlignment = Alignment.Center) { 
-                                    Icon(Icons.Default.Extension, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.secondary) 
-                                } 
-                            } 
-                        },
-                        trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp)) },
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple()
-                        ) { onNavigateToIntegrations() },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                }
+                SettingsGroupItem(
+                    index = 0,
+                    totalCount = 1,
+                    leadingContent = {
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Settings, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    },
+                    headlineContent = { Text("Налаштування", style = MaterialTheme.typography.titleMedium) },
+                    supportingContent = { Text("Сповіщення, тема та інше", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    onClick = { onNavigateToSettings() }
+                )
             }
         }
     }

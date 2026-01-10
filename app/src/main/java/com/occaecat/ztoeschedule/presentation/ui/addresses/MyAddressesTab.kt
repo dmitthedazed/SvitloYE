@@ -8,11 +8,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -80,7 +82,27 @@ fun MyAddressesTab(
             Box(Modifier.weight(1.5f)) {
                 if (selectedAddr != null) {
                     if (isInspectingLoading && inspectedGroupedSchedule.isEmpty()) Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-                    else HomeTab(selectedAddr.remName, selectedAddr.cityName, selectedAddr.streetName, selectedAddr.addressName, selectedAddr.cherga, selectedAddr.pidcherga, null, inspectedScheduleList, inspectedGroupedSchedule, { onInspectAddress(selectedAddr) }, Modifier.fillMaxSize(), contentPadding, "", false, isInspectingLoading)
+                    else HomeTab(
+                        remId = selectedAddr.remId,
+                        cityId = selectedAddr.cityId,
+                        remName = selectedAddr.remName,
+                        cityName = selectedAddr.cityName,
+                        streetName = selectedAddr.streetName,
+                        addressName = selectedAddr.addressName,
+                        cherga = selectedAddr.cherga,
+                        pidcherga = selectedAddr.pidcherga,
+                        currentStatus = null,
+                        schedules = inspectedScheduleList,
+                        groupedSchedule = inspectedGroupedSchedule,
+                        onRefresh = { onInspectAddress(selectedAddr) },
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = contentPadding,
+                        lastUpdateTime = "",
+                        isOffline = false,
+                        isLoading = isInspectingLoading,
+                        streetId = selectedAddr.streetId,
+                        addressId = selectedAddr.addressId
+                    )
                 } else Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Оберіть адресу зліва", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
@@ -108,9 +130,11 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
     var dragIdx by rememberSaveable { mutableIntStateOf(-1) }
     var dragOff by rememberSaveable { mutableFloatStateOf(0f) }
     val haptic = LocalHapticFeedback.current
+    val nowMs = rememberAdaptiveNowMs(statuses)
 
     LazyColumn(
         state = listState, 
+        userScrollEnabled = listState.canScrollForward || listState.canScrollBackward,
         modifier = modifier.fillMaxSize().testTag("address_list"), 
         contentPadding = PaddingValues(
             start = cp.calculateStartPadding(LayoutDirection.Ltr) + 16.dp, 
@@ -118,7 +142,7 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
             end = cp.calculateEndPadding(LayoutDirection.Ltr) + 16.dp, 
             bottom = cp.calculateBottomPadding() + 80.dp
         ), 
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp) // Grouped style
     ) {
         itemsIndexed(list, key = { _, item -> item.id }) { idx, addr ->
             val isD = idx == dragIdx; val isS = addr.id == selectedId
@@ -130,18 +154,21 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
                 SwipeToDismissBox(state = dState, enableDismissFromStartToEnd = false, backgroundContent = {
                     val p = dState.progress
                     val c = androidx.compose.ui.graphics.lerp(Color.LightGray.copy(alpha = 0.12f), MaterialTheme.colorScheme.errorContainer, if (dState.dismissDirection == SwipeToDismissBoxValue.EndToStart) p else 0f)
-                    Box(Modifier.fillMaxSize().clip(MaterialTheme.shapes.extraLarge).background(c).padding(horizontal = 20.dp), contentAlignment = Alignment.CenterEnd) {
+                    Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.CenterEnd) {
                         Icon(Icons.Default.Delete, null, tint = if (p > 0.5f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }) {
                     AddressItem(
                         a = addr, 
                         s = statuses[addr.id], 
+                        nowMs = nowMs,
                         isP = (idx == 0), 
                         isSel = isS, 
+                        index = idx,
+                        totalCount = list.size,
                         onDelete = { dId = addr.id }, 
                         onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(addr) },
-                        modifier = Modifier.graphicsLayer { translationY = if (isD) dragOff else 0f; scaleX = scale; scaleY = scale; this.alpha = alpha }.shadow(if (isD) 16.dp else 0.dp, MaterialTheme.shapes.extraLarge)
+                        modifier = Modifier.graphicsLayer { translationY = if (isD) dragOff else 0f; scaleX = scale; scaleY = scale; this.alpha = alpha }
                             .pointerInput(addr.id) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); dragIdx = idx; dragOff = 0f },
@@ -166,76 +193,77 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
                 }
             }
         }
-        item { Spacer(Modifier.height(80.dp)) }
     }
     if (pDialog != null) AlertDialog(onDismissRequest = { pId = null; list = addrs }, icon = { Icon(Icons.Default.Star, null, tint = MaterialTheme.colorScheme.primary) }, title = { Text("Змінити головну адресу?") }, text = { Text("Ви вибрали ${pDialog.name} як основну.") }, confirmButton = { Button(onClick = { onUpdate(list); pId = null }) { Text("Так") } }, dismissButton = { TextButton(onClick = { pId = null; list = addrs }) { Text("Скасувати") } })
     if (dAddr != null) AlertDialog(onDismissRequest = { dId = null }, icon = { Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error) }, title = { Text("Видалити адресу?") }, text = { Text("Ви впевнені, що хочете видалити ${dAddr.name}?") }, confirmButton = { TextButton(onClick = { onDelete(dAddr.id); dId = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Видалити") } }, dismissButton = { TextButton(onClick = { dId = null }) { Text("Залишити") } })
 }
 
 @Composable
-private fun AddressItem(a: SavedAddress, s: GroupedSchedule?, isP: Boolean, isSel: Boolean, onDelete: () -> Unit, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    var isF by remember { mutableStateOf(false) }
+private fun AddressItem(
+    a: SavedAddress, 
+    s: GroupedSchedule?, 
+    nowMs: Long, 
+    isP: Boolean, 
+    isSel: Boolean, 
+    index: Int,
+    totalCount: Int,
+    onDelete: () -> Unit, 
+    onClick: () -> Unit, 
+    modifier: Modifier = Modifier
+) {
     val colorScheme = MaterialTheme.colorScheme
-    val t = updateTransition(targetState = isSel to isP, label = "t")
-    
-    val containerColor by t.animateColor(label = "c") { state ->
-        when {
-            state.first -> colorScheme.secondaryContainer
-            state.second -> colorScheme.primaryContainer
-            else -> colorScheme.surfaceContainerLow
-        }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val topRadius by animateDpAsState(
+        targetValue = if (isPressed) 40.dp else if (index == 0) 24.dp else 4.dp,
+        label = "tr"
+    )
+    val bottomRadius by animateDpAsState(
+        targetValue = if (isPressed) 40.dp else if (index == totalCount - 1) 24.dp else 4.dp,
+        label = "br"
+    )
+
+    val shape = RoundedCornerShape(
+        topStart = topRadius, topEnd = topRadius,
+        bottomStart = bottomRadius, bottomEnd = bottomRadius
+    )
+
+    val containerColor = when {
+        isSel -> colorScheme.secondaryContainer
+        isP -> colorScheme.primaryContainer.copy(alpha = 0.7f)
+        else -> colorScheme.surfaceContainerHigh
     }
     
-    val onContainerColor by t.animateColor(label = "oc") { state ->
-        when {
-            state.first -> colorScheme.onSecondaryContainer
-            state.second -> colorScheme.onPrimaryContainer
-            else -> colorScheme.onSurface
-        }
+    val onContainerColor = when {
+        isSel -> colorScheme.onSecondaryContainer
+        isP -> colorScheme.onPrimaryContainer
+        else -> colorScheme.onSurface
     }
 
-    val elevation by t.animateDp(label = "e") { state -> if (state.first) 3.dp else 1.dp }
-    val interactionSource = remember { MutableInteractionSource() }
-    val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
-    val adaptivePadding = remember(radius) {
-        val base = 16f
-        val extra = if (radius > 24) (radius - 24).toFloat() / 2f else 0f
-        (base + extra).dp
-    }
-    
-    ElevatedCard(
+    Surface(
         onClick = onClick,
+        interactionSource = interactionSource,
         modifier = modifier
             .fillMaxWidth()
-            .indication(interactionSource, ScaleIndication)
-            .onFocusChanged { isF = it.isFocused }
-            .border(2.dp, if (isF) colorScheme.primary else Color.Transparent, MaterialTheme.shapes.extraLarge)
             .semantics { onClick(label = "проглянути", action = { onClick(); true }) },
-        shape = MaterialTheme.shapes.extraLarge, 
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = containerColor,
-            contentColor = onContainerColor
-        ), 
-        elevation = CardDefaults.elevatedCardElevation(
-            defaultElevation = elevation,
-            pressedElevation = 3.dp,
-            focusedElevation = 3.dp
-        ),
-        interactionSource = interactionSource
+        shape = shape,
+        color = containerColor,
+        border = if (isSel) BorderStroke(1.dp, colorScheme.primary.copy(alpha = 0.5f)) else null
     ) {
-        Column(Modifier.padding(adaptivePadding)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(44.dp), 
-                    shape = MaterialTheme.shapes.medium, 
-                    color = if(isP) colorScheme.primary else colorScheme.surfaceVariant
+                    shape = CircleShape, 
+                    color = if(isP) colorScheme.primary else colorScheme.primaryContainer.copy(alpha = 0.4f)
                 ) { 
                     Box(contentAlignment = Alignment.Center) { 
                         Icon(
                             imageVector = getIconForName(a.iconName), 
                             contentDescription = null, 
-                            modifier = Modifier.padding(10.dp), 
-                            tint = if(isP) colorScheme.onPrimary else colorScheme.onSurfaceVariant
+                            modifier = Modifier.size(24.dp), 
+                            tint = if(isP) colorScheme.onPrimary else colorScheme.onPrimaryContainer
                         ) 
                     } 
                 }
@@ -244,62 +272,67 @@ private fun AddressItem(a: SavedAddress, s: GroupedSchedule?, isP: Boolean, isSe
                     Text(
                         text = a.name, 
                         style = MaterialTheme.typography.titleMedium, 
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         color = onContainerColor
                     ) 
                     Text(
                         text = "${a.cityName}, ${a.streetName}", 
                         style = MaterialTheme.typography.bodySmall, 
-                        color = onContainerColor
+                        color = onContainerColor.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     ) 
                 }
                 IconButton(
                     onClick = onDelete, 
-                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp), 
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = if(isP || isSel) onContainerColor else colorScheme.error
-                    )
+                    modifier = Modifier.size(40.dp)
                 ) { 
-                    Icon(Icons.Default.DeleteOutline, "Видалити ${a.name}") 
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline, 
+                        contentDescription = "Видалити ${a.name}",
+                        tint = if (isSel || isP) onContainerColor else colorScheme.error.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    ) 
                 }
             }
             if (s != null) { 
                 Spacer(Modifier.height(12.dp))
-                StatusInfoSection(s, onContainerColor) 
+                StatusInfoSection(s, onContainerColor, nowMs) 
             }
+            
             Spacer(Modifier.height(12.dp))
-            FlowRow(
+            
+            Row(
                 modifier = Modifier.fillMaxWidth(), 
-                horizontalArrangement = Arrangement.spacedBy(8.dp), 
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) { 
-                SuggestionChip(
-                    onClick = {}, 
-                    label = { Text("${a.cherga}.${a.pidcherga}") }, 
-                    shape = CircleShape, 
-                    border = null, 
-                    colors = SuggestionChipDefaults.suggestionChipColors(
-                        containerColor = colorScheme.surfaceVariant,
-                        labelColor = colorScheme.onSurfaceVariant
+                Surface(
+                    color = onContainerColor.copy(alpha = 0.1f),
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = "${a.cherga}.${a.pidcherga}",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = onContainerColor
                     )
-                )
+                }
+                
                 if (isP) { 
-                    AssistChip(
-                        onClick = {},
-                        label = { 
-                            Text(
-                                text = "Головна", 
-                                style = MaterialTheme.typography.labelSmall, 
-                                fontWeight = FontWeight.Bold
-                            ) 
-                        },
-                        shape = CircleShape,
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = colorScheme.primary,
-                            labelColor = colorScheme.onPrimary
-                        ),
-                        border = null
-                    )
+                    Surface(
+                        color = colorScheme.primary,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = "Головна", 
+                            style = MaterialTheme.typography.labelSmall, 
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            color = colorScheme.onPrimary
+                        ) 
+                    }
                 } 
             }
         }
@@ -307,7 +340,7 @@ private fun AddressItem(a: SavedAddress, s: GroupedSchedule?, isP: Boolean, isSe
 }
 
 @Composable
-private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, modifier: Modifier = Modifier) {
+private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, nowMs: Long, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
     
@@ -319,9 +352,6 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, modifier:
     }
     
     val animatedStatusColor by animateColorAsState(statusColor, label = "sc")
-    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { nowMs = System.currentTimeMillis(); delay(10000) } }
-    
     val progress = remember(s, nowMs) { 
         val d = s.endMs - s.startMs
         if (d <= 0) 0f else ((nowMs - s.startMs).toFloat() / d.toFloat()).coerceIn(0f, 1f) 
@@ -367,6 +397,39 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, modifier:
             strokeCap = StrokeCap.Round
         )
     }
+}
+
+@Composable
+private fun rememberNowMs(tickMs: Long): Long {
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(tickMs) {
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            delay(tickMs)
+        }
+    }
+    return nowMs
+}
+
+@Composable
+private fun rememberAdaptiveNowMs(
+    statuses: Map<String, GroupedSchedule?>,
+    fastThresholdMs: Long = 60_000L,
+    fastTickMs: Long = 1_000L,
+    slowTickMs: Long = 60_000L
+): Long {
+    val tickMs by remember(statuses) {
+        derivedStateOf {
+            val now = System.currentTimeMillis()
+            val minRemaining = statuses.values
+                .filterNotNull()
+                .map { it.endMs - now }
+                .filter { it > 0 }
+                .minOrNull()
+            if (minRemaining != null && minRemaining <= fastThresholdMs) fastTickMs else slowTickMs
+        }
+    }
+    return rememberNowMs(tickMs)
 }
 
 @Composable

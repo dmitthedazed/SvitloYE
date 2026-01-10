@@ -34,6 +34,9 @@ class BootReceiver : BroadcastReceiver() {
 
         Log.d(TAG, "Device boot detected")
 
+        // Use goAsync() to prevent process kill before work completes
+        val pendingResult = goAsync()
+
         // Run on background thread to avoid ANR
         CoroutineScope(Dispatchers.Default).launch {
             try {
@@ -56,6 +59,9 @@ class BootReceiver : BroadcastReceiver() {
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error during boot initialization", e)
+            } finally {
+                // Signal that async work is complete
+                pendingResult.finish()
             }
         }
     }

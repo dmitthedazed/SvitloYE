@@ -2,6 +2,8 @@ package com.occaecat.ztoeschedule.domain.notification
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.service.quicksettings.TileService
 import android.util.Log
 import androidx.hilt.work.HiltWorker
@@ -47,7 +49,8 @@ class PowerMonitorWorker @AssistedInject constructor(
     private val preferencesManager: EnergyPreferencesManager,
     private val repository: EnergyRepository,
     private val notificationCoordinator: NotificationCoordinator,
-    private val timeProvider: TimeProvider
+    private val timeProvider: TimeProvider,
+    private val scheduledAlarmManager: ScheduledAlarmManager
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -56,6 +59,10 @@ class PowerMonitorWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         Log.d(TAG, "Worker execution started (attempt $runAttemptCount)")
+        val useCacheOnly = !hasInternet()
+        if (useCacheOnly) {
+            Log.i(TAG, "No validated internet, using cached schedule for alarms")
+        }
 
         return try {
             val addresses = repository.getSavedAddresses()
@@ -76,7 +83,11 @@ class PowerMonitorWorker @AssistedInject constructor(
 
             // Check only primary address
             try {
-                val result = repository.getScheduleWithMessages(primaryAddress.cherga, primaryAddress.pidcherga)
+                val result = if (useCacheOnly) {
+                    repository.getCachedScheduleWithMessages(primaryAddress.cherga, primaryAddress.pidcherga)
+                } else {
+                    repository.getScheduleWithMessages(primaryAddress.cherga, primaryAddress.pidcherga)
+                }
 
                 if (result.isSuccess) {
                     val data = result.getOrThrow()
@@ -84,7 +95,23 @@ class PowerMonitorWorker @AssistedInject constructor(
 
                     Log.d(TAG, "Schedule for ${primaryAddress.name}: ${groupedSchedules.size} groups")
 
-                    // 1. Check for schedule hash change
+                    // 1. RESCHEDULE ALARMS for next 24 hours
+                    // This is the main purpose of periodic worker - ensure alarms are always fresh
+                    if (notificationsEnabled && groupedSchedules.isNotEmpty()) {
+                        scheduledAlarmManager.scheduleAlarmsForAddress(
+                            address = com.occaecat.ztoeschedule.data.model.Address(
+                                id = primaryAddress.addressId,
+                                name = primaryAddress.addressName,
+                                cherga = primaryAddress.cherga,
+                                pidcherga = primaryAddress.pidcherga
+                            ),
+                            schedules = groupedSchedules,
+                            maxHoursAhead = if (useCacheOnly) 2 else 24
+                        )
+                        Log.i(TAG, "✓ Rescheduled alarms for ${primaryAddress.name}")
+                    }
+
+                    // 2. Check for schedule hash change
                     if (data.schedules.isNotEmpty()) {
                         val currentHash = data.schedules.hashCode().toString()
                         val lastHash = preferencesManager.lastScheduleHashFlow.first()
@@ -98,32 +125,13 @@ class PowerMonitorWorker @AssistedInject constructor(
                         }
                     }
 
-                    // 2. Check for status changes RIGHT NOW (no advance warning)
-                    if (notificationsEnabled && groupedSchedules.isNotEmpty()) {
+                    // 3. Update status notification if enabled
+                    val statusNotificationEnabled = preferencesManager.statusNotificationEnabledFlow.first()
+                    if (statusNotificationEnabled && groupedSchedules.isNotEmpty()) {
                         val now = timeProvider.now()
                         val currentStatus = ScheduleMapper.getCurrentGroupedStatus(groupedSchedules, now)
 
                         if (currentStatus != null) {
-                            // Check if current status just started (within last 16 min, worker runs every 15 min)
-                            val statusJustChanged = (now - currentStatus.startMs) < (16 * 60 * 1000)
-                            
-                            if (statusJustChanged) {
-                                Log.i(TAG, "✓ Status just changed for ${primaryAddress.name}: now ${currentStatus.status}")
-                                
-                                // Find previous schedule entry
-                                val previousSchedule = groupedSchedules.firstOrNull { 
-                                    it.endMs == currentStatus.startMs 
-                                }
-                                
-                                if (previousSchedule != null && previousSchedule.status != currentStatus.status) {
-                                    notificationCoordinator.notifyStatusChange(
-                                        primaryAddress,
-                                        previousSchedule,
-                                        currentStatus
-                                    )
-                                }
-                            }
-
                             // Update status notification and UI
                             notificationCoordinator.updateAllUI(
                                 primaryAddress,
@@ -156,5 +164,13 @@ class PowerMonitorWorker @AssistedInject constructor(
                 Result.failure()
             }
         }
+    }
+
+    private fun hasInternet(): Boolean {
+        val cm = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 }

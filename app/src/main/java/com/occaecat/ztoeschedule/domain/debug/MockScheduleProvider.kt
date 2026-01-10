@@ -21,6 +21,10 @@ object MockScheduleProvider {
     private const val TAG = "MockScheduleProvider"
     private const val DEMO_CHERGA = 9999
     private const val DEMO_PIDCHERGA = 9999
+    @Volatile
+    private var cachedDate: String? = null
+    @Volatile
+    private var cachedSchedules: List<Schedule> = emptyList()
     
     /**
      * Check if the given cherga/pidcherga combination is for demo location
@@ -45,11 +49,11 @@ object MockScheduleProvider {
         val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
         
         val today = dateFormat.format(calendar.time)
+        val cached = cachedSchedules
+        if (cachedDate == today && cached.isNotEmpty()) {
+            return cached
+        }
         val schedules = mutableListOf<Schedule>()
-        
-        // Get current minute to determine which cycle we're in
-        val currentMinute = calendar.get(Calendar.MINUTE)
-        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
         
         // Create 3-minute rotating cycle starting from current hour
         val statuses = listOf(
@@ -99,13 +103,16 @@ object MockScheduleProvider {
             }
         }
         
+        cachedDate = today
+        cachedSchedules = schedules.toList()
+
         android.util.Log.d(TAG, "Generated ${schedules.size} mock schedule entries")
         android.util.Log.d(TAG, "Current time: ${timeFormat.format(Calendar.getInstance().time)}")
-        
+
         // Log next 5 status changes for debugging
         val now = Calendar.getInstance()
         val currentMinuteOfDay = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        
+
         android.util.Log.d(TAG, "Next 5 status changes:")
         for (i in 0..4) {
             val targetMinute = (currentMinuteOfDay + i) % (24 * 60)
@@ -114,8 +121,8 @@ object MockScheduleProvider {
                 android.util.Log.d(TAG, "  ${schedule.span}: ${schedule.status}")
             }
         }
-        
-        return schedules
+
+        return cachedSchedules
     }
     
     /**
