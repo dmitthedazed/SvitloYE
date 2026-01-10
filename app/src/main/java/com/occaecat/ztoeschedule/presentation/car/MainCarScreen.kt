@@ -57,7 +57,7 @@ class MainCarScreen(
 
                         if (currentStatus != null) {
                             val statusText = currentStatus.displayText
-                            val timeText = "До ${TimeUtils.formatToSystemTime(carContext, currentStatus.endTime)}"
+                            val timeText = carContext.getString(R.string.car_until, TimeUtils.formatToSystemTime(carContext, currentStatus.endTime))
                             newStatusMap[address.id] = "$statusText • $timeText"
                             
                             val color = when (currentStatus.status) {
@@ -99,7 +99,7 @@ class MainCarScreen(
                 .setLoading(true)
                 .setSingleList(
                     ItemList.Builder()
-                        .setNoItemsMessage("Завантаження...") // Required to avoid IllegalStateException
+                        .setNoItemsMessage(carContext.getString(R.string.car_loading))
                         .build()
                 )
                 .build()
@@ -131,7 +131,7 @@ class MainCarScreen(
                     .setStartHeaderAction(Action.APP_ICON)
                     .addEndHeaderAction(
                         Action.Builder()
-                            .setTitle("Оновити")
+                            .setTitle(carContext.getString(R.string.car_action_refresh))
                             .setOnClickListener {
                                 isLoading = true
                                 invalidate()

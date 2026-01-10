@@ -1,20 +1,17 @@
-package com.occaecat.ztoeschedule.presentation.ui.more
+package com.occaecat.ztoeschedule.presentation.ui.info
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,19 +21,30 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.shape.CircleShape
+import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DonateScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
+fun GeminiChatScreen(onBack: () -> Unit) {
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text("Підтримати проект") },
+            LargeFlexibleTopAppBar(
+                title = { Text("Gemini Assistant") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                scrollBehavior = scrollBehavior
             )
         }
     ) { padding ->
@@ -44,7 +52,6 @@ fun DonateScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -52,78 +59,56 @@ fun DonateScreen(onBack: () -> Unit) {
             Surface(
                 modifier = Modifier.size(120.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
+                color = MaterialTheme.colorScheme.tertiaryContainer
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        Icons.Default.Favorite,
+                        Icons.Default.AutoAwesome,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
             }
             Spacer(Modifier.height(32.dp))
             Text(
-                "Зробіть внесок у розвиток",
+                "ШІ-підтримка в розробці",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Цей додаток створений на волонтерських засадах. Ваша підтримка допомагає нам оплачувати інфраструктуру та додавати нові функції.",
+                "Ми працюємо над інтеграцією розумного помічника, який зможе відповідати на питання про графіки та стан енергосистеми.",
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(40.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = { 
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://send.monobank.ua/2AMdpReyqQ"))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Icon(Icons.Default.Coffee, null)
-                    Spacer(Modifier.width(12.dp))
-                    Text("Підтримати через Monobank")
-                }
-
-                OutlinedButton(
-                    onClick = { 
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.privat24.ua/send/i3nk5"))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.AccountBalanceWallet, null)
-                    Spacer(Modifier.width(12.dp))
-                    Text("Підтримати через Приват24")
-                }
-            }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FaqScreen(onBack: () -> Unit) {
     val scrollState = rememberScrollState()
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeFlexibleTopAppBar(
                 title = { Text("Питання та відповіді") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                scrollBehavior = scrollBehavior
             )
         }
     ) { padding ->
@@ -142,32 +127,32 @@ fun FaqScreen(onBack: () -> Unit) {
                 modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
             )
 
-            FaqExpandableItem(
+            FaqItem(
                 question = "Звідки додаток бере дані?", 
                 answer = "Ми отримуємо інформацію безпосередньо з офіційного сайту АТ «Житомиробленерго». Дані синхронізуються автоматично кожні кілька хвилин."
             )
             
-            FaqExpandableItem(
+            FaqItem(
                 question = "Чому графік не співпадает з реальністю?", 
                 answer = "Графіки ГПВ — це лише план. Оператор системи розподілу (диспетчер) може вносити зміни в реальному часі залежно от стану енергосистеми. Наш додаток показує найсвіжішу доступну версію графіку."
             )
             
-            FaqExpandableItem(
+            FaqItem(
                 question = "Як знайти свою чергу?", 
                 answer = "При першому запуску ви обираєте свій РЕМ, місто та адресу. Додаток автоматично визначить вашу чергу та підчергу на основі цих даних."
             )
 
-            FaqExpandableItem(
+            FaqItem(
                 question = "Чи працює додаток без інтернету?", 
-                answer = "Так, додаток зберігає останній завантажений графік. Ви зможете переглянути його навіть офлайн, але пам'ятайте, що дані можуть бути застарілими."
+                answer = "Так, додаток зберігає останній завантажений графік. Ви зможете переглянути його навіть офлайн, але пам'ятайте, что дані можуть бути застарілими."
             )
 
-            FaqExpandableItem(
+            FaqItem(
                 question = "Як працюють сповіщення?", 
                 answer = "Додаток надсилає пуш-повідомлення за 15-30 хвилин (можна налаштувати) до початку відключення або ввімкнення світла за вашою адресою."
             )
 
-            FaqExpandableItem(
+            FaqItem(
                 question = "Що таке «Можливе відключение» (жовта зона)?", 
                 answer = "Це періоди, коли світло може бути вимкнено лише у разі критичного дефіциту потужності. Зазвичай у ці години світло є, но варто бути готовим."
             )
@@ -200,59 +185,40 @@ fun FaqScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun FaqExpandableItem(question: String, answer: String) {
-    var expanded by remember { mutableStateOf(false) }
+fun FaqItem(question: String, answer: String) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple()
-            ) { expanded = !expanded },
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = if (expanded) MaterialTheme.colorScheme.secondaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = question, 
-                    style = MaterialTheme.typography.bodyLarge, 
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                    color = if (expanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        SettingsGroupItem(
+            index = 0,
+            totalCount = if (expanded) 2 else 1,
+            headlineContent = { Text(question, fontWeight = FontWeight.Bold) },
+            trailingContent = {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null
                 )
-            }
-            
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Column {
-                    Spacer(Modifier.height(12.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Spacer(Modifier.height(12.dp))
+            },
+            onClick = { expanded = !expanded }
+        )
+        
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            SettingsGroupItem(
+                index = 1,
+                totalCount = 2,
+                headlineContent = { 
                     Text(
-                        text = answer, 
+                        answer, 
                         style = MaterialTheme.typography.bodyMedium,
-                        lineHeight = 20.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+                    ) 
+                },
+                onClick = { expanded = false }
+            )
         }
     }
 }

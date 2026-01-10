@@ -34,7 +34,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.2"
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -56,12 +56,12 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     kotlin {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
     buildFeatures {
@@ -75,6 +75,7 @@ android {
 }
 
 dependencies {
+    implementation(platform(libs.firebase.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.car.app)
     implementation(libs.androidx.core.splashscreen)
@@ -88,6 +89,13 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.material3.windowsizeclass)
+    
+    // Material 3 Adaptive (для адаптивних лейаутів на різних екранах)
+    implementation(libs.androidx.compose.material3.adaptive)
+    implementation(libs.androidx.compose.material3.adaptive.layout)
+    implementation(libs.androidx.compose.material3.adaptive.navigation)
+    implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
+    
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.compose.material.icons.extended)
 
@@ -125,7 +133,7 @@ dependencies {
     implementation(libs.firebase.crashlytics)
 
     // Google Play Services - Location
-    implementation("com.google.android.gms:play-services-location:21.1.0")
+    implementation(libs.play.services.location)
 
     // Room
     implementation(libs.androidx.room.runtime)
@@ -138,6 +146,18 @@ dependencies {
 
     // Time (NTP)
     implementation(libs.kronos.android)
+    
+    // ML Kit Barcode Scanning
+    implementation(libs.mlkit.barcode.scanning)
+    
+    // CameraX
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    
+    // Accompanist Permissions
+    implementation(libs.accompanist.permissions)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

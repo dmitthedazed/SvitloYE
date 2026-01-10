@@ -26,45 +26,61 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.handwriting.handwritingDetector
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 /**
- * Row of filter chips for categories
+ * Row of filter buttons for categories using M3 Expressive Connected Button Group style
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CategoryFilterRow(
     selectedCategory: ConsumerCategory?,
     onCategorySelected: (ConsumerCategory?) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Exclude ConsumerCategory.OTHER from the selection row
+    val categories = remember { listOf(null) + ConsumerCategory.entries.filter { it != ConsumerCategory.OTHER } }
+    
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
-        // "All" Chip
-        FilterChip(
-            selected = selectedCategory == null,
-            onClick = { onCategorySelected(null) },
-            label = { Text("Всі") },
-            leadingIcon = if (selectedCategory == null) {
-                { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
-            } else null
-        )
-
-        // Category Chips
-        ConsumerCategory.entries.forEach { category ->
-            FilterChip(
-                selected = selectedCategory == category,
-                onClick = { 
-                    // Toggle behavior: if already selected, clear it (null), else select it
-                    if (selectedCategory == category) onCategorySelected(null) else onCategorySelected(category)
+        categories.forEachIndexed { index, category ->
+            val isSelected = selectedCategory == category
+            
+            ToggleButton(
+                checked = isSelected,
+                onCheckedChange = { 
+                    if (it) onCategorySelected(category) 
+                    else if (isSelected) onCategorySelected(null) // Allow deselecting to "All"
                 },
-                label = { Text(category.label) },
-                leadingIcon = if (selectedCategory == category) {
-                    { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
-                } else null
-            )
+                modifier = Modifier.weight(1f),
+                shapes = when (index) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    categories.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                }
+            ) {
+                Icon(
+                    imageVector = when (category) {
+                        ConsumerCategory.HOUSEHOLD -> Icons.Default.Home
+                        ConsumerCategory.LEGAL -> Icons.Default.Business
+                        ConsumerCategory.OTHER -> Icons.Default.Category
+                        null -> Icons.Default.Checklist
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
+                Text(
+                    text = category?.label ?: "Всі",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -339,7 +355,7 @@ fun SearchField(
             }
         },
         singleLine = true,
-        shape = MaterialTheme.shapes.large,
+        shape = RoundedCornerShape(24.dp),
         colors = OutlinedTextFieldDefaults.colors()
     )
 }

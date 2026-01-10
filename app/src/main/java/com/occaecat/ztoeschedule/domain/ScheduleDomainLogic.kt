@@ -73,14 +73,30 @@ object ScheduleDomainLogic {
             }
         }
         
-        // If no current or last for today, try to find the first one for tomorrow
-        // (Assuming schedules list might contain multiple days)
-        // Simplified: return the first one that starts after current time if no current is active
-        return todaySchedules.firstOrNull { schedule ->
+        // Try to find a later slot today
+        val laterToday = todaySchedules.firstOrNull { schedule ->
             val timeRange = parseTimeSpan(schedule.span)
             timeRange?.let { (startMinutes, _) ->
                 startMinutes > currentTimeInMinutes
             } ?: false
+        }
+        
+        if (laterToday != null) {
+            return laterToday
+        }
+        
+        // No more slots today - look for tomorrow
+        val tomorrow = Calendar.getInstance(kyivZone).apply {
+            add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val tomorrowDateStr = dateFormat.format(tomorrow.time)
+        
+        val tomorrowSchedules = schedules.filter { it.date == tomorrowDateStr }
+        
+        // Return the first slot of tomorrow
+        return tomorrowSchedules.minByOrNull { schedule ->
+            val timeRange = parseTimeSpan(schedule.span)
+            timeRange?.first ?: Int.MAX_VALUE
         }
     }
 

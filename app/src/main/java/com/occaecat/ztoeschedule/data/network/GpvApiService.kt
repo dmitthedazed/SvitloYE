@@ -6,6 +6,7 @@ import com.occaecat.ztoeschedule.data.model.Rem
 import com.occaecat.ztoeschedule.data.model.Schedule
 import com.occaecat.ztoeschedule.data.model.ScheduleMessagePart
 import com.occaecat.ztoeschedule.data.model.Street
+import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
 
@@ -57,13 +58,13 @@ interface GpvApiService {
     suspend fun getSchedule(
         @Query("cherga_id") cherga: Int,
         @Query("pidcherga_id") pidcherga: Int
-    ): List<Schedule>
+    ): Response<List<Schedule>>
 
     /**
      * Fetch informational messages related to schedules
      */
     @GET("api-message.php")
-    suspend fun getMessages(): List<ScheduleMessagePart>
+    suspend fun getMessages(): Response<List<ScheduleMessagePart>>
 
     /**
      * Fetch headers only to get server time from 'Date' header

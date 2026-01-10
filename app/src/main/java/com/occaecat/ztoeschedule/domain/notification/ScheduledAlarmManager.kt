@@ -10,7 +10,9 @@ import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.Address
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,9 +46,21 @@ class ScheduledAlarmManager @Inject constructor(
         
         // Request code base - will be combined with transition timestamp for uniqueness
         private const val REQUEST_CODE_BASE = 10000
+        private const val MAX_GROUPED_SCHEDULES_FOR_FULL_DAY = 300
+        private const val MAX_ALARMS_TO_SCHEDULE = 10 // Limit pending alarms to prevent system overload
+        private const val HIGH_FREQUENCY_WINDOW_MS = 2 * 60 * 60 * 1000L
+        
+        // SharedPreferences for storing alarm request codes
+        private const val PREFS_NAME = "scheduled_alarms"
+        private const val KEY_PREFIX_CODES = "alarm_codes_"
     }
 
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    private val alarmPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val alarmLock = Any()
+    
+    // In-memory cache of scheduled alarm codes per address
+    private val scheduledAlarmCodes = mutableMapOf<String, MutableSet<Int>>()
 
     /**
      * Check if the app has permission to schedule exact alarms (Android 12+)
@@ -72,59 +86,79 @@ class ScheduledAlarmManager @Inject constructor(
         schedules: List<GroupedSchedule>,
         maxHoursAhead: Int = 24
     ) {
-        // Check if notifications are enabled
-        val notificationsEnabled = preferencesManager.notificationsEnabledFlow.first()
-        if (!notificationsEnabled) {
-            Log.d(TAG, "Notifications disabled - skipping alarm scheduling for ${address.name}")
-            return
-        }
-
-        // Check permission - log warning but proceed to fallback logic
-        if (!canScheduleExactAlarms()) {
-            Log.w(TAG, "Cannot schedule exact alarms - missing permission. Will attempt inexact fallback.")
-        }
-
-        // Cancel existing alarms for this address
-        cancelAlarmsForAddress(address)
-
-        // Find status transitions
-        val now = System.currentTimeMillis()
-        val maxTime = now + (maxHoursAhead * 60 * 60 * 1000L)
-        
-        var scheduledCount = 0
-        for (i in 0 until schedules.size - 1) {
-            val currentSchedule = schedules[i]
-            val nextSchedule = schedules[i + 1]
-            
-            // Skip if status doesn't change
-            if (currentSchedule.status == nextSchedule.status) {
-                continue
+        withContext(Dispatchers.IO) {
+            // Check if notifications are enabled
+            val notificationsEnabled = preferencesManager.notificationsEnabledFlow.first()
+            if (!notificationsEnabled) {
+                Log.d(TAG, "Notifications disabled - skipping alarm scheduling for ${address.name}")
+                return@withContext
             }
-            
-            val transitionTime = nextSchedule.startMs
-            
-            // Skip past transitions
-            if (transitionTime <= now) {
-                continue
-            }
-            
-            // Stop if beyond max time
-            if (transitionTime > maxTime) {
-                break
-            }
-            
-            // Schedule alarm for this transition
-            scheduleAlarm(
-                address = address,
-                previousSchedule = currentSchedule,
-                currentSchedule = nextSchedule,
-                transitionTime = transitionTime
-            )
-            
-            scheduledCount++
-        }
 
-        Log.i(TAG, "✓ Scheduled $scheduledCount alarms for ${address.name} (next $maxHoursAhead hours)")
+            synchronized(alarmLock) {
+            // Check permission - log warning but proceed to fallback logic
+            if (!canScheduleExactAlarms()) {
+                Log.w(TAG, "Cannot schedule exact alarms - missing permission. Will attempt inexact fallback.")
+            }
+
+            // Cancel existing alarms for this address
+            cancelAlarmsForAddress(address)
+
+            // Find status transitions
+            val now = System.currentTimeMillis()
+            val maxTime = now + (maxHoursAhead * 60 * 60 * 1000L)
+            val effectiveMaxTime = if (schedules.size > MAX_GROUPED_SCHEDULES_FOR_FULL_DAY) {
+                Log.w(
+                    TAG,
+                    "Large schedule (${schedules.size} groups) for ${address.name}; limiting alarms to next 2 hours."
+                )
+                minOf(maxTime, now + HIGH_FREQUENCY_WINDOW_MS)
+            } else {
+                maxTime
+            }
+
+            var scheduledCount = 0
+            for (i in 0 until schedules.size - 1) {
+                val currentSchedule = schedules[i]
+                val nextSchedule = schedules[i + 1]
+
+                // Skip if status doesn't change
+                if (currentSchedule.status == nextSchedule.status) {
+                    continue
+                }
+
+                val transitionTime = nextSchedule.startMs
+
+                // Skip past transitions
+                if (transitionTime <= now) {
+                    continue
+                }
+
+                // Stop if beyond max time
+                if (transitionTime > effectiveMaxTime) {
+                    break
+                }
+
+                // Stop if we have scheduled enough alarms
+                if (scheduledCount >= MAX_ALARMS_TO_SCHEDULE) {
+                    Log.i(TAG, "Reached max alarm limit ($MAX_ALARMS_TO_SCHEDULE) for ${address.name}")
+                    break
+                }
+
+                // Schedule alarm for this transition
+                scheduleAlarm(
+                    address = address,
+                    previousSchedule = currentSchedule,
+                    currentSchedule = nextSchedule,
+                    transitionTime = transitionTime
+                )
+
+                scheduledCount++
+            }
+
+            val windowHours = ((effectiveMaxTime - now) / (60 * 60 * 1000L)).coerceAtLeast(0)
+            Log.i(TAG, "Scheduled $scheduledCount alarms for ${address.name} (next $windowHours hours)")
+            }
+        }
     }
 
     /**
@@ -160,14 +194,20 @@ class ScheduledAlarmManager @Inject constructor(
                     transitionTime,
                     pendingIntent
                 )
+                // Save request code for later cancellation
+                saveAlarmCode(address.id, requestCode)
+                
                 val timeUntil = (transitionTime - System.currentTimeMillis()) / 1000 / 60
-                Log.d(TAG, "Scheduled exact alarm for ${address.name}: ${previousSchedule.status} → ${currentSchedule.status} in $timeUntil min")
+                Log.d(TAG, "Scheduled exact alarm for ${address.name}: ${previousSchedule.status} -> ${currentSchedule.status} in $timeUntil min")
             } else {
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     transitionTime,
                     pendingIntent
                 )
+                // Save request code for later cancellation
+                saveAlarmCode(address.id, requestCode)
+                
                 Log.w(TAG, "Scheduled inexact alarm (no permission) for ${address.name}")
             }
         } catch (e: SecurityException) {
@@ -179,6 +219,8 @@ class ScheduledAlarmManager @Inject constructor(
                     transitionTime,
                     pendingIntent
                 )
+                // Save request code for later cancellation
+                saveAlarmCode(address.id, requestCode)
             } catch (ex: Exception) {
                 Log.e(TAG, "Failed to schedule fallback alarm", ex)
             }
@@ -187,21 +229,104 @@ class ScheduledAlarmManager @Inject constructor(
 
     /**
      * Cancel all alarms for a specific address.
-     * Note: We can't efficiently enumerate all request codes, so we rely on 
-     * rescheduling to replace old alarms with new ones.
+     * Uses stored request codes to properly cancel pending intents.
      */
     fun cancelAlarmsForAddress(address: Address) {
-        // We'll cancel alarms as we reschedule them with FLAG_UPDATE_CURRENT
+        synchronized(alarmLock) {
         Log.d(TAG, "Cancelling alarms for ${address.name}")
+        
+        // Get stored codes from SharedPreferences
+        val storedCodesStr = alarmPrefs.getString(KEY_PREFIX_CODES + address.id, "") ?: ""
+        val storedCodes = if (storedCodesStr.isNotEmpty()) {
+            storedCodesStr.split(",").mapNotNull { it.toIntOrNull() }.toMutableSet()
+        } else {
+            mutableSetOf()
+        }
+        
+        // Merge with in-memory cache
+        val allCodes = (scheduledAlarmCodes[address.id] ?: mutableSetOf()) + storedCodes
+        
+        var cancelledCount = 0
+        for (requestCode in allCodes) {
+            val intent = Intent(context, StatusChangeAlarmReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+            if (pendingIntent != null) {
+                alarmManager.cancel(pendingIntent)
+                pendingIntent.cancel()
+                cancelledCount++
+            }
+        }
+        
+        // Clear stored codes
+        scheduledAlarmCodes.remove(address.id)
+        alarmPrefs.edit().remove(KEY_PREFIX_CODES + address.id).apply()
+        
+        Log.i(TAG, "Cancelled $cancelledCount alarms for ${address.name}")
+        }
     }
 
     /**
      * Cancel all alarms (when notifications are disabled globally).
      */
     fun cancelAllAlarms() {
-        // Unfortunately, there's no way to enumerate all pending intents
-        // But when notifications are disabled, alarms won't send notifications anyway
-        Log.d(TAG, "Alarms will be inactive while notifications are disabled")
+        synchronized(alarmLock) {
+        Log.d(TAG, "Cancelling ALL scheduled alarms")
+        
+        // Get all address IDs from preferences
+        val allKeys = alarmPrefs.all.keys.filter { it.startsWith(KEY_PREFIX_CODES) }
+        var totalCancelled = 0
+        
+        for (key in allKeys) {
+            val addressId = key.removePrefix(KEY_PREFIX_CODES)
+            val codesStr = alarmPrefs.getString(key, "") ?: ""
+            val codes = if (codesStr.isNotEmpty()) {
+                codesStr.split(",").mapNotNull { it.toIntOrNull() }
+            } else {
+                emptyList()
+            }
+            
+            for (requestCode in codes) {
+                val intent = Intent(context, StatusChangeAlarmReceiver::class.java)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    requestCode,
+                    intent,
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                )
+                if (pendingIntent != null) {
+                    alarmManager.cancel(pendingIntent)
+                    pendingIntent.cancel()
+                    totalCancelled++
+                }
+            }
+        }
+        
+        // Clear all stored codes
+        scheduledAlarmCodes.clear()
+        alarmPrefs.edit().clear().apply()
+        
+        Log.i(TAG, "Cancelled $totalCancelled alarms total")
+        }
+    }
+    
+    /**
+     * Save alarm request code for later cancellation.
+     */
+    private fun saveAlarmCode(addressId: String, requestCode: Int) {
+        synchronized(alarmLock) {
+        // Update in-memory cache
+        val codes = scheduledAlarmCodes.getOrPut(addressId) { mutableSetOf() }
+        codes.add(requestCode)
+        
+        // Persist to SharedPreferences
+        val codesStr = codes.toList().joinToString(",")
+        alarmPrefs.edit().putString(KEY_PREFIX_CODES + addressId, codesStr).apply()
+        }
     }
 
     /**

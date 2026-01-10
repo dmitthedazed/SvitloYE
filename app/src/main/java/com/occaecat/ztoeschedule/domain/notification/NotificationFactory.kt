@@ -23,12 +23,12 @@ import javax.inject.Singleton
  * Different styles for different Android versions with progressively richer features:
  * - SIMPLE: Standard notification (all versions)
  * - LIVE_ACTIVITY: Rich live notification with progress (Android 12/API 31+)
- * - PROMOTED: Live Update notification with status chip (Android 15/API 35+)
+ * - PROMOTED: Live Update notification with status chip (Android 16/API 36+)
  */
 enum class StatusNotificationStyle {
     SIMPLE,           // Standard Android notification (all versions)
     LIVE_ACTIVITY,    // Rich/live notification with chronometer (API 31+)
-    PROMOTED          // Live Update (Promoted Ongoing) notification (API 35+)
+    PROMOTED          // Live Update (Promoted Ongoing) notification (API 36+)
 }
 
 /**
@@ -51,6 +51,7 @@ class NotificationFactory @Inject constructor(
 ) {
     companion object {
         private const val TAG = "NotificationFactory"
+        private const val PROMOTED_MIN_SDK = 36
     }
 
     /**
@@ -117,11 +118,11 @@ class NotificationFactory @Inject constructor(
         address: String,
         style: StatusNotificationStyle = StatusNotificationStyle.SIMPLE
     ): Notification {
-        Log.d(TAG, "createStatus for $address (style=$style, status=${current.status})")
+        Log.i(TAG, ">>> createStatus for $address (requested style=$style, status=${current.status})")
 
         // Automatically downgrade style if not supported
         val actualStyle = when {
-            style == StatusNotificationStyle.PROMOTED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM -> {
+            style == StatusNotificationStyle.PROMOTED && Build.VERSION.SDK_INT >= PROMOTED_MIN_SDK -> {
                 StatusNotificationStyle.PROMOTED
             }
             style == StatusNotificationStyle.LIVE_ACTIVITY && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
@@ -129,11 +130,13 @@ class NotificationFactory @Inject constructor(
             }
             else -> {
                 if (style != StatusNotificationStyle.SIMPLE) {
-                    Log.d(TAG, "Downgrading from $style to SIMPLE (API level ${Build.VERSION.SDK_INT})")
+                    Log.w(TAG, "⚠ Downgrading from $style to SIMPLE (API level ${Build.VERSION.SDK_INT})")
                 }
                 StatusNotificationStyle.SIMPLE
             }
         }
+        
+        Log.i(TAG, "Using actualStyle=$actualStyle for API ${Build.VERSION.SDK_INT}")
 
         return when (actualStyle) {
             StatusNotificationStyle.PROMOTED -> createPromotedNotification(current, address)
@@ -155,14 +158,14 @@ class NotificationFactory @Inject constructor(
         current: GroupedSchedule,
         address: String
     ): Notification {
-        Log.d(TAG, "createSimpleStatusNotification")
+        Log.i(TAG, ">>> createSimpleStatusNotification for $address")
 
         val pendingIntent = getPendingIntentToApp()
         val refreshPendingIntent = getRefreshPendingIntent()
 
         val (title, message, progress) = buildStatusContent(current, address)
 
-        return NotificationCompat.Builder(context, NotificationHelper.CHANNEL_STATUS_ID)
+        val notification = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_STATUS_ID)
             .setSmallIcon(R.drawable.ic_bolt)
             .setContentTitle(title)
             .setContentText(message)
@@ -172,9 +175,12 @@ class NotificationFactory @Inject constructor(
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, false)
             .setContentIntent(pendingIntent)
-            .addAction(R.drawable.ic_bolt, "Оновити", refreshPendingIntent)
+            .addAction(R.drawable.ic_bolt, context.getString(R.string.notif_action_refresh), refreshPendingIntent)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+        
+        Log.i(TAG, "<<< SIMPLE notification created: progress=$progress")
+        return notification
     }
 
     /**
@@ -191,7 +197,7 @@ class NotificationFactory @Inject constructor(
         current: GroupedSchedule,
         address: String
     ): Notification {
-        Log.d(TAG, "createLiveActivityNotification")
+        Log.i(TAG, ">>> createLiveActivityNotification for $address")
 
         val pendingIntent = getPendingIntentToApp()
         val refreshPendingIntent = getRefreshPendingIntent()
@@ -200,38 +206,44 @@ class NotificationFactory @Inject constructor(
         val isPowerOn = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
         val isWarning = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Probable
 
-        val builder = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_STATUS_ID)
-            .setSmallIcon(if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .setContentIntent(pendingIntent)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(R.drawable.ic_bolt, "Оновити", refreshPendingIntent)
-            .setColorized(true)
-
         // Set appropriate color based on status
         val colorRes = when {
             isPowerOn -> R.color.widget_power_on
             isWarning -> android.R.color.holo_orange_light
             else -> R.color.widget_power_off
         }
-        builder.setColor(context.getColor(colorRes))
+        val color = context.getColor(colorRes)
 
-        // Chronometer countdown to next change
-        builder.setWhen(current.endMs)
-        builder.setUsesChronometer(true)
-        builder.setChronometerCountDown(true)
-
-        return builder.build()
+        val notification = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_STATUS_ID)
+            .setSmallIcon(if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(pendingIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(R.drawable.ic_bolt, context.getString(R.string.notif_action_refresh), refreshPendingIntent)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            // Color for icon/actions (NOT colorized background - forbidden for Live Updates)
+            .setColor(color)
+            // Chronometer countdown to next change
+            .setWhen(current.endMs)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            .build()
+        
+        Log.i(TAG, "<<< LIVE_ACTIVITY notification created: colorized=true, when=${current.endMs}, color=$color")
+        return notification
     }
 
     /**
-     * Create promoted Live Update notification (Android 15+/API 35+).
+     * Create promoted Live Update notification (Android 16+/API 36+).
      *
      * Features:
-     * - Uses Promoted Ongoing Notification API
+     * - Uses Promoted Ongoing Notification API with ProgressStyle
      * - Persistent display at top of notification shade
      * - Status chip with critical information
      * - Expanded by default, uncollapsible
@@ -244,11 +256,12 @@ class NotificationFactory @Inject constructor(
      * - Must request promotion via setRequestPromotedOngoing
      * - Channel must NOT be IMPORTANCE_MIN
      */
+    @Suppress("NewApi")
     private fun createPromotedNotification(
         current: GroupedSchedule,
         address: String
     ): Notification {
-        Log.d(TAG, "createPromotedNotification (Live Update)")
+        Log.i(TAG, ">>> createPromotedNotification (Live Update) for $address")
 
         val pendingIntent = getPendingIntentToApp()
         val refreshPendingIntent = getRefreshPendingIntent()
@@ -257,40 +270,61 @@ class NotificationFactory @Inject constructor(
         val isPowerOn = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
         val isWarning = current.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Probable
 
-        val builder = NotificationCompat.Builder(context, NotificationHelper.CHANNEL_STATUS_ID)
-            .setSmallIcon(if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true) // Required for Live Update
-            .setContentIntent(pendingIntent)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(R.drawable.ic_bolt, "Оновити", refreshPendingIntent)
-            .setOnlyAlertOnce(true)
+        // Use LIVE_UPDATE channel for API 36+ (requires IMPORTANCE_DEFAULT or higher)
+        val channelId = NotificationHelper.CHANNEL_LIVE_UPDATE_ID
+        Log.i(TAG, "Using channel: $channelId")
 
-        // Request promotion (Live Update) - API 35+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            builder.setRequestPromotedOngoing(true)
-            Log.d(TAG, "Requested Live Update promotion")
+        // Calculate remaining time for progress
+        val remainingMs = current.endMs - timeProvider.now()
+        val totalDurationMs = current.endMs - current.startMs
+        val progressPercent = if (totalDurationMs > 0) {
+            ((totalDurationMs - remainingMs) * 100 / totalDurationMs).coerceIn(0, 100).toInt()
+        } else 0
+        val totalMinutes = (totalDurationMs / 60_000L).coerceAtLeast(1L)
+        val elapsedMinutes = ((totalDurationMs - remainingMs) / 60_000L).coerceIn(0L, totalMinutes)
+
+        // Status text for chip - max 6 chars per Android requirement
+        val statusChipText = when {
+            isPowerOn -> "ON" // Power is on
+            isWarning -> "WARN" // Probable outage
+            else -> "OFF" // Power is off
         }
 
-        // Set status chip text (critical info display) - shows in collapsed chip
-        val remainingMs = current.endMs - timeProvider.now()
-        val remainingMinutes = if (remainingMs > 0) remainingMs / 60000 else 0
-        val hours = remainingMinutes / 60
-        val minutes = remainingMinutes % 60
-        val timeRemaining = if (hours > 0) "${hours}г ${minutes}хв" else "${minutes}хв"
-        builder.setShortCriticalText(timeRemaining)
-        
-        // Set when time for automatic countdown in status chip
-        builder.setWhen(current.endMs)
-        builder.setShowWhen(true)
-        builder.setUsesChronometer(true)
-        builder.setChronometerCountDown(true)
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(if (isPowerOn) R.drawable.ic_bolt else R.drawable.ic_home_filled)
+            .setContentTitle(title) // Required for Live Update
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setOngoing(true) // Required for Live Update
+            .setRequestPromotedOngoing(true) // Request promotion to Live Update
+            .setContentIntent(pendingIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(R.drawable.ic_bolt, context.getString(R.string.notif_action_refresh), refreshPendingIntent)
+            .setOnlyAlertOnce(true)
+            .setColorized(false) // Must NOT be colorized for Live Update
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setDeleteIntent(getDeleteIntent()) // Required for Promoted cleanup
+            .setShortCriticalText(statusChipText) // Status chip - max 6 chars
+            .setWhen(current.endMs)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            // Minute-resolution progress so long periods still advance steadily.
+            .setProgress(totalMinutes.toInt(), elapsedMinutes.toInt(), false)
 
-        // Don't colorize (requirement: must NOT setColorized to TRUE)
-        // But we can set the accent color for icon/actions
+        // Try to use ProgressStyle if available (Android 15+)
+        try {
+            val progressStyle = NotificationCompat.ProgressStyle()
+                .setProgress(progressPercent)
+            builder.setStyle(progressStyle)
+            Log.i(TAG, "✓ Using ProgressStyle with progress=$progressPercent%")
+        } catch (e: Exception) {
+            // Fallback to BigTextStyle if ProgressStyle not available
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            Log.w(TAG, "ProgressStyle not available, using BigTextStyle: ${e.message}")
+        }
+
+        // Set accent color for icon/actions (not colorized background)
         val colorRes = when {
             isPowerOn -> R.color.widget_power_on
             isWarning -> android.R.color.holo_orange_light
@@ -298,7 +332,20 @@ class NotificationFactory @Inject constructor(
         }
         builder.setColor(context.getColor(colorRes))
 
-        return builder.build()
+        val notification = builder.build()
+        
+        // Diagnostic logging - check if notification can be promoted
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val canPost = notificationManager.canPostPromotedNotifications()
+            val hasPromotable = notification.hasPromotableCharacteristics()
+            Log.i(TAG, "🔍 canPostPromotedNotifications=$canPost, hasPromotableCharacteristics=$hasPromotable")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not check promotion status: ${e.message}")
+        }
+        
+        Log.i(TAG, "<<< PROMOTED notification created: channel=$channelId, progress=$progressPercent%, chipText='$statusChipText'")
+        return notification
     }
 
     /**
@@ -306,8 +353,8 @@ class NotificationFactory @Inject constructor(
      *
      * Uses NotificationTextHelper for consistent message formatting.
      *
-     * Title format: "🟢 Світло є • До HH:MM"
-     * Message format: "Залишилось: XXг XXхв\n📍 Address Name"
+     * Title format: "🟢 Power ON • Until HH:MM"
+     * Message format: "Remaining: XXh XXm\n📍 Address Name"
      * Progress: 0-100 percentage of current period duration
      */
     private fun buildStatusContent(
@@ -327,11 +374,11 @@ class NotificationFactory @Inject constructor(
             else -> "🔴"
         }
         val statusTitle = when {
-            isPowerOn -> "Світло є"
-            isWarning -> "Можливо"
-            else -> "Відключення"
+            isPowerOn -> context.getString(R.string.notif_status_power_on)
+            isWarning -> context.getString(R.string.notif_status_probable)
+            else -> context.getString(R.string.notif_status_outage)
         }
-        val title = "$titleIcon $statusTitle • До $endTime"
+        val title = context.getString(R.string.notif_title_format, titleIcon, statusTitle, endTime)
 
         // Calculate remaining time
         val nowMs = timeProvider.now()
@@ -339,7 +386,11 @@ class NotificationFactory @Inject constructor(
         val remainingMinutes = if (remainingMs > 0) remainingMs / 60000 else 0
         val hours = remainingMinutes / 60
         val minutes = remainingMinutes % 60
-        val remainingText = if (hours > 0) "${hours}год ${minutes}хв" else "${minutes}хв"
+        val remainingText = if (hours > 0) {
+            context.getString(R.string.notif_remaining_hm, hours.toInt(), minutes.toInt())
+        } else {
+            context.getString(R.string.notif_remaining_m, minutes.toInt())
+        }
 
         // Calculate progress percentage
         val durationMs = current.endMs - current.startMs
@@ -350,7 +401,7 @@ class NotificationFactory @Inject constructor(
         } else 0
 
         // Build final message
-        val message = "Залишилось: $remainingText\n📍 $address"
+        val message = context.getString(R.string.notif_message_format, remainingText, address)
 
         return Triple(title, message, progress)
     }
@@ -382,17 +433,31 @@ class NotificationFactory @Inject constructor(
     }
 
     /**
+     * Get PendingIntent for notification deletion (swipe dismiss).
+     * Required for Promoted/Live Update notifications cleanup.
+     */
+    private fun getDeleteIntent(): PendingIntent {
+        val deleteIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_DISMISSED
+        }
+        return PendingIntent.getBroadcast(
+            context, 2, deleteIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    /**
      * Check if the app can post Live Update (Promoted) notifications.
      *
      * This checks:
-     * 1. Android version (API 35+)
+     * 1. Android version (API 36+)
      * 2. User permission settings (canPostPromotedNotifications)
      *
      * @return true if Live Updates can be posted
      */
     fun canPostLiveUpdates(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            Log.d(TAG, "Live Updates not supported: API ${Build.VERSION.SDK_INT} < 35")
+        if (Build.VERSION.SDK_INT < PROMOTED_MIN_SDK) {
+            Log.d(TAG, "Live Updates not supported: API ${Build.VERSION.SDK_INT} < $PROMOTED_MIN_SDK")
             return false
         }
 
@@ -412,24 +477,52 @@ class NotificationFactory @Inject constructor(
      * Get the best supported notification style for current device/settings.
      *
      * Priority:
-     * 1. PROMOTED (if API 35+ and user enabled Live Updates)
+     * 1. PROMOTED (if API 36+ and user enabled Live Updates)
      * 2. LIVE_ACTIVITY (if API 31+)
      * 3. SIMPLE (fallback for all versions)
      */
     fun getBestSupportedStyle(): StatusNotificationStyle {
-        return when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM && canPostLiveUpdates() -> {
-                Log.d(TAG, "Using PROMOTED style (Live Update)")
+        Log.i(TAG, ">>> getBestSupportedStyle: API level = ${Build.VERSION.SDK_INT}")
+        
+        val style = when {
+            Build.VERSION.SDK_INT >= PROMOTED_MIN_SDK && canPostPromotedNotifications() -> {
+                // Android 16+ supports Live Update (Promoted) notifications
+                // Only use if user has granted permission
                 StatusNotificationStyle.PROMOTED
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                Log.d(TAG, "Using LIVE_ACTIVITY style")
+                // Android 12-14 use rich chronometer style
+                // Also fallback for API 36+ if promoted permission denied
                 StatusNotificationStyle.LIVE_ACTIVITY
             }
             else -> {
-                Log.d(TAG, "Using SIMPLE style")
+                // Android < 12 use simple style
                 StatusNotificationStyle.SIMPLE
             }
+        }
+        
+        Log.i(TAG, "<<< getBestSupportedStyle: returning $style")
+        return style
+    }
+    
+    /**
+     * Check if app can post promoted (Live Update) notifications.
+     * Returns true if user has enabled the permission in Settings.
+     */
+    @Suppress("NewApi")
+    private fun canPostPromotedNotifications(): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= PROMOTED_MIN_SDK) {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                val canPost = notificationManager.canPostPromotedNotifications()
+                Log.d(TAG, "canPostPromotedNotifications = $canPost")
+                canPost
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error checking promoted notification permission: ${e.message}")
+            false
         }
     }
 }

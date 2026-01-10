@@ -23,11 +23,16 @@ class NetworkObserver @Inject constructor(@ApplicationContext context: Context) 
     val isConnected: Flow<Boolean> = callbackFlow {
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                trySend(true)
+                val capabilities = connectivityManager.getNetworkCapabilities(network)
+                trySend(hasInternet(capabilities))
             }
 
             override fun onLost(network: Network) {
                 trySend(false)
+            }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                trySend(hasInternet(networkCapabilities))
             }
         }
 
@@ -39,8 +44,7 @@ class NetworkObserver @Inject constructor(@ApplicationContext context: Context) 
 
         // Initial state
         val initial = connectivityManager.activeNetwork?.let {
-            connectivityManager.getNetworkCapabilities(it)
-                ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            hasInternet(connectivityManager.getNetworkCapabilities(it))
         } ?: false
         trySend(initial)
 
@@ -48,4 +52,9 @@ class NetworkObserver @Inject constructor(@ApplicationContext context: Context) 
             connectivityManager.unregisterNetworkCallback(callback)
         }
     }.distinctUntilChanged()
+
+    private fun hasInternet(capabilities: NetworkCapabilities?): Boolean {
+        return capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
 }

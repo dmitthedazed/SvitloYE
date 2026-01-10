@@ -1,8 +1,33 @@
 package com.occaecat.ztoeschedule.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.ListItemColors
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme.colorScheme
+import androidx.compose.runtime.Composable
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Tomato Expressive Palette — for Accent UI
+// ═══════════════════════════════════════════════════════════════════════════
+val TomatoRed = Color(0xFFE53935)       // Vibrant red - primary
+val TomatoOrange = Color(0xFFFF7043)    // Warm orange - secondary
+val TomatoYellow = Color(0xFFFFCA28)    // Sunny yellow - tertiary
+val TomatoGreen = Color(0xFF66BB6A)     // Fresh green - success
+val TomatoPink = Color(0xFFEC407A)      // Accent pink - notifications
+
+// Gradient pairs for accent screens
+val GradientWelcomeStart = Color(0xFFFF9800)   // Orange
+val GradientWelcomeEnd = Color(0xFFFFEB3B)     // Yellow
+val GradientAddressStart = Color(0xFFE53935)   // Red
+val GradientAddressEnd = Color(0xFFFF7043)     // Orange
+val GradientScheduleStart = Color(0xFFFFCA28)  // Yellow
+val GradientScheduleEnd = Color(0xFF66BB6A)    // Green
+val GradientNotificationsStart = Color(0xFFEC407A) // Pink
+val GradientNotificationsEnd = Color(0xFFE53935)   // Red
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Energy Theme - Light
+// ═══════════════════════════════════════════════════════════════════════════
 val PrimaryLight = Color(0xFF6750A4)
 val OnPrimaryLight = Color(0xFFFFFFFF)
 val PrimaryContainerLight = Color(0xFFEADDFF)
@@ -33,3 +58,17 @@ val TertiaryDark = Color(0xFFEFB8C8)
 val OnTertiaryDark = Color(0xFF492532)
 val TertiaryContainerDark = Color(0xFF633B48)
 val OnTertiaryContainerDark = Color(0xFFFFD8E4)
+
+object CustomColors {
+    var black = false
+
+    val listItemColors: ListItemColors
+        @Composable get() =
+            ListItemDefaults.colors(
+                containerColor = if (!black) {
+                    colorScheme.surfaceBright
+                } else {
+                    colorScheme.surfaceContainerHigh
+                }
+            )
+}

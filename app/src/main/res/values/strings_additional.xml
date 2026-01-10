@@ -1,0 +1,4 @@
+<resources>
+    <string name="home_no_address_title">Нету адреса</string>
+    <string name="home_no_address_desc">Добавьте хотя бы один адрес, чтобы получить актуальную информацию по графику</string>
+</resources>

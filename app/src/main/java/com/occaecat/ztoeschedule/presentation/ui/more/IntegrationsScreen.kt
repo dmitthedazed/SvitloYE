@@ -11,21 +11,33 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
 
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun IntegrationsScreen(onBack: () -> Unit) {
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeFlexibleTopAppBar(
                 title = { Text("Функції та інтеграції") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                scrollBehavior = scrollBehavior
             )
         }
     ) { padding ->
@@ -37,28 +49,49 @@ fun IntegrationsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            IntegrationCard(
-                title = "Android Auto",
-                description = "Переглядайте графіки відключень прямо на медіасистемі вашого автомобіля. Додаток автоматично з'явиться в меню Android Auto.",
-                icon = Icons.Default.DirectionsCar,
-                color = MaterialTheme.colorScheme.primary
+            val items = listOf(
+                IntegrationItem(
+                    title = "Android Auto",
+                    description = "Переглядайте графіки відключень прямо на медіасистемі вашого автомобіля. Додаток автоматично з'явиться в меню Android Auto.",
+                    icon = Icons.Default.DirectionsCar,
+                    color = MaterialTheme.colorScheme.primary
+                ),
+                IntegrationItem(
+                    title = "Віджети",
+                    description = "Додайте компактний або детальний віджет на робочий стіл, щоб завжди знати статус світла, не відкриваючи додаток.",
+                    icon = Icons.Default.Widgets,
+                    color = MaterialTheme.colorScheme.secondary
+                ),
+                IntegrationItem(
+                    title = "Deep Links",
+                    description = "Діліться посиланнями на конкретні адреси. При натисканні на посилання у друзів одразу відкриється потрібний графік.",
+                    icon = Icons.Default.Link,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
             )
 
-            IntegrationCard(
-                title = "Віджети",
-                description = "Додайте компактний або детальний віджет на робочий стіл, щоб завжди знати статус світла, не відкриваючи додаток.",
-                icon = Icons.Default.Widgets,
-                color = MaterialTheme.colorScheme.secondary
-            )
-
-            IntegrationCard(
-                title = "Deep Links",
-                description = "Діліться посиланнями на конкретні адреси. При натисканні на посилання у друзів одразу відкриється потрібний графік.",
-                icon = Icons.Default.Link,
-                color = MaterialTheme.colorScheme.tertiary
-            )
-            
-            Spacer(Modifier.height(24.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                items.forEachIndexed { index, item ->
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = items.size,
+                        headlineContent = { Text(item.title, fontWeight = FontWeight.Bold) },
+                        supportingContent = { Text(item.description) },
+                        leadingContent = {
+                            Surface(
+                                modifier = Modifier.size(48.dp),
+                                shape = CircleShape,
+                                color = item.color.copy(alpha = 0.12f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(item.icon, null, tint = item.color, modifier = Modifier.size(24.dp))
+                                }
+                            }
+                        },
+                        onClick = { /* No action for now */ }
+                    )
+                }
+            }
             
             Text(
                 "Ми постійно працюємо над новими можливостями. Слідкуйте за оновленнями!",
@@ -70,38 +103,9 @@ fun IntegrationsScreen(onBack: () -> Unit) {
     }
 }
 
-@Composable
-private fun IntegrationCard(
-    title: String,
-    description: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: androidx.compose.ui.graphics.Color
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    color = color.copy(alpha = 0.12f)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(icon, null, tint = color, modifier = Modifier.size(24.dp))
-                    }
-                }
-                Spacer(Modifier.width(16.dp))
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
+private data class IntegrationItem(
+    val title: String,
+    val description: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val color: androidx.compose.ui.graphics.Color
+)

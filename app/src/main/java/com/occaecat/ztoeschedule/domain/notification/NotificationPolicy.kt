@@ -1,7 +1,7 @@
 package com.occaecat.ztoeschedule.domain.notification
 
 import android.content.Context
-import android.media.AudioManager
+import android.app.NotificationManager
 import android.os.Build
 import android.util.Log
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
@@ -151,18 +151,18 @@ class NotificationPolicy @Inject constructor(
                 return false
             }
 
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            if (audioManager == null) {
-                Log.w(TAG, "AudioManager not available for DND check")
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            if (notificationManager == null) {
+                Log.w(TAG, "NotificationManager not available for DND check")
                 return false
             }
 
-            val isDND = audioManager.ringerMode == AudioManager.RINGER_MODE_SILENT ||
-                       (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-                        audioManager.ringerMode == AudioManager.RINGER_MODE_VIBRATE)
+            val filter = notificationManager.currentInterruptionFilter
+            val isDND = filter == NotificationManager.INTERRUPTION_FILTER_NONE ||
+                filter == NotificationManager.INTERRUPTION_FILTER_ALARMS
 
             if (isDND) {
-                Log.d(TAG, "System DND detected: ringerMode=${audioManager.ringerMode}")
+                Log.d(TAG, "System DND detected: interruptionFilter=$filter")
             }
 
             isDND

@@ -3,8 +3,10 @@ package com.occaecat.ztoeschedule.data.local
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -43,8 +45,6 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KeyAddressId = stringPreferencesKey("address_id")
         private val KeyAddressName = stringPreferencesKey("address_name")
 
-        // Onboarding flag
-        private val KeyOnboardingCompleted = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding_completed")
 
         // Notification settings
         private val KeyNotificationsEnabled = androidx.datastore.preferences.core.booleanPreferencesKey("notifications_enabled")
@@ -62,9 +62,15 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KeyDisplayMode = intPreferencesKey("display_mode")
         private val KeyColorTheme = intPreferencesKey("color_theme")
         private val KeyCornerRadius = intPreferencesKey("corner_radius")
+        private val KeyDynamicColors = booleanPreferencesKey("dynamic_colors")
+        private val KeyIsAmoled = booleanPreferencesKey("is_amoled")
         
         // Cache
         private val KeyLastScheduleHash = stringPreferencesKey("last_schedule_hash")
+        private val KeyLastScheduleServerUpdatedMs = longPreferencesKey("last_schedule_server_updated_ms")
+
+        // Onboarding
+        private val KeyOnboardingCompleted = booleanPreferencesKey("onboarding_completed")
 
         // Default values
         private const val DefaultCherga = 0
@@ -81,11 +87,37 @@ class EnergyPreferencesManager(private val context: Context) {
     }.distinctUntilChanged()
 
     /**
+     * Flow that emits dynamic colors preference
+     */
+    val dynamicColorsFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KeyDynamicColors] ?: true
+    }.distinctUntilChanged()
+
+    /**
+     * Flow that emits AMOLED mode preference
+     */
+    val isAmoledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KeyIsAmoled] ?: false
+    }.distinctUntilChanged()
+
+    /**
      * Save corner radius
      */
     suspend fun setCornerRadius(radius: Int) {
         context.dataStore.edit { preferences ->
             preferences[KeyCornerRadius] = radius
+        }
+    }
+
+    suspend fun setDynamicColors(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KeyDynamicColors] = enabled
+        }
+    }
+
+    suspend fun setIsAmoled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KeyIsAmoled] = enabled
         }
     }
 
@@ -127,11 +159,27 @@ class EnergyPreferencesManager(private val context: Context) {
     }.distinctUntilChanged()
 
     /**
+     * Flow that emits the last server-provided schedule update time.
+     */
+    val lastScheduleServerUpdatedFlow: Flow<Long?> = context.dataStore.data.map { preferences ->
+        preferences[KeyLastScheduleServerUpdatedMs]
+    }.distinctUntilChanged()
+
+    /**
      * Save last schedule hash
      */
     suspend fun saveLastScheduleHash(hash: String) {
         context.dataStore.edit { preferences ->
             preferences[KeyLastScheduleHash] = hash
+        }
+    }
+
+    /**
+     * Save last server schedule update time (milliseconds).
+     */
+    suspend fun saveLastScheduleServerUpdatedMs(value: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[KeyLastScheduleServerUpdatedMs] = value
         }
     }
 
@@ -222,12 +270,7 @@ class EnergyPreferencesManager(private val context: Context) {
         }
     }.distinctUntilChanged()
 
-    /**
-     * Flow that emits onboarding completion status
-     */
-    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[KeyOnboardingCompleted] ?: false
-    }.distinctUntilChanged()
+
 
     /**
      * Flow that emits notification enabled status
@@ -283,35 +326,6 @@ class EnergyPreferencesManager(private val context: Context) {
         }
     }
 
-    /**
-     * Mark onboarding as completed
-     */
-    suspend fun setOnboardingCompleted() {
-        context.dataStore.edit { preferences ->
-            preferences[KeyOnboardingCompleted] = true
-        }
-    }
-
-    /**
-     * Reset onboarding status and clear all saved selections
-     * This brings the app back to first-launch state
-     */
-    suspend fun resetOnboarding() {
-        context.dataStore.edit { preferences ->
-            preferences[KeyOnboardingCompleted] = false
-            // Clear saved selection to force user through address selection
-            preferences.remove(KeyRemId)
-            preferences.remove(KeyRemName)
-            preferences.remove(KeyCityId)
-            preferences.remove(KeyCityName)
-            preferences.remove(KeyStreetId)
-            preferences.remove(KeyStreetName)
-            preferences.remove(KeyAddressId)
-            preferences.remove(KeyAddressName)
-            preferences.remove(KeyCherga)
-            preferences.remove(KeyPidcherga)
-        }
-    }
 
     /**
      * Save cherga value to DataStore
@@ -384,6 +398,31 @@ class EnergyPreferencesManager(private val context: Context) {
     suspend fun clearPreferences() {
         context.dataStore.edit { preferences ->
             preferences.clear()
+        }
+    }
+
+    /**
+     * Flow that emits whether onboarding is completed
+     */
+    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KeyOnboardingCompleted] ?: false
+    }.distinctUntilChanged()
+
+    /**
+     * Mark onboarding as completed
+     */
+    suspend fun setOnboardingCompleted() {
+        context.dataStore.edit { preferences ->
+            preferences[KeyOnboardingCompleted] = true
+        }
+    }
+
+    /**
+     * Reset onboarding to show it again on next app start
+     */
+    suspend fun resetOnboarding() {
+        context.dataStore.edit { preferences ->
+            preferences[KeyOnboardingCompleted] = false
         }
     }
 }
