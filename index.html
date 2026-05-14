@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>СвітлоЄ? - Графік відключень</title>
+    <script>
+        window.onload = function() {
+            const params = new URLSearchParams(window.location.search);
+            const s = params.get('s');
+            const a = params.get('a');
+            
+            if (s && a) {
+                let deepLink = "zt-energy://schedule/add?";
+                for (const [key, value] of params) {
+                    deepLink += key + "=" + encodeURIComponent(value) + "&";
+                }
+                
+                // Remove last '&' and open link
+                window.location.href = deepLink.slice(0, -1);
+            }
+
+            // Redirect to Play Store after a short delay if app not installed
+            setTimeout(function() {
+                window.location.href = "https://play.google.com/store/apps/details?id=com.occaecat.svitloye";
+            }, 1000);
+        };
+    </script>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            text-align: center; 
+            padding: 50px 20px; 
+            background-color: #f0f2f5; 
+            color: #333;
+        }
+        h1 {
+            color: #111;
+        }
+        p {
+            color: #555;
+            font-size: 16px;
+        }
+        .btn { 
+            background: #007bff; 
+            color: white; 
+            padding: 15px 30px; 
+            text-decoration: none; 
+            border-radius: 8px; 
+            font-size: 18px; 
+            font-weight: 500;
+            display: inline-block;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>СвітлоЄ!</h1>
+    <p>Намагаємось відкрити адресу в додатку...</p>
+    <p>Якщо нічого не відбувається, переконайтеся, що додаток встановлено.</p>
+    <br>
+    <a href="https://play.google.com/store/apps/details?id=com.occaecat.svitloye" class="btn">Завантажити з Google Play</a>
+</body>
+</html>
