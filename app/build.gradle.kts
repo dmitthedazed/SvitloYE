@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
@@ -34,7 +33,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.1"
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -62,6 +61,7 @@ android {
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+            freeCompilerArgs.add("-Xannotation-default-target=param-property")
         }
     }
     buildFeatures {
@@ -86,7 +86,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material3.android)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.material3.windowsizeclass)
     
@@ -158,6 +158,15 @@ dependencies {
     
     // Accompanist Permissions
     implementation(libs.accompanist.permissions)
+
+    // ZXing for QR code generation
+    implementation(libs.zxing.core)
+
+    // FreeDroidWarn - developer verification warning dialog
+    implementation(libs.free.droid.warn)
+
+    // Liquid Glass backdrop effect
+    implementation(libs.backdrop)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

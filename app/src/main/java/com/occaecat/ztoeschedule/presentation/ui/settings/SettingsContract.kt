@@ -9,6 +9,7 @@ data class SettingsState(
     val cornerRadius: Int = -1,
     val dynamicColors: Boolean = true,
     val isAmoled: Boolean = false,
+    val liquidGlass: Boolean = false,
     val notificationsEnabled: Boolean = false,
     val statusNotificationEnabled: Boolean = false
 )
@@ -24,6 +25,7 @@ sealed interface SettingsAction {
     data class SetCornerRadius(val radius: Int) : SettingsAction
     data class SetDynamicColors(val enabled: Boolean) : SettingsAction
     data class SetAmoled(val enabled: Boolean) : SettingsAction
+    data class SetLiquidGlass(val enabled: Boolean) : SettingsAction
 
     // Notifications
     data class SetNotificationsEnabled(val enabled: Boolean) : SettingsAction

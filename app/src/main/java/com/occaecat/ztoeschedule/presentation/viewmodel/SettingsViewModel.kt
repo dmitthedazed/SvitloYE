@@ -35,6 +35,7 @@ class SettingsViewModel @Inject constructor(
         preferencesManager.cornerRadiusFlow,
         preferencesManager.dynamicColorsFlow,
         preferencesManager.isAmoledFlow,
+        preferencesManager.liquidGlassFlow,
         preferencesManager.notificationsEnabledFlow,
         preferencesManager.statusNotificationEnabledFlow
     )
@@ -46,8 +47,9 @@ class SettingsViewModel @Inject constructor(
             cornerRadius = args[2] as Int,
             dynamicColors = args[3] as Boolean,
             isAmoled = args[4] as Boolean,
-            notificationsEnabled = args[5] as Boolean,
-            statusNotificationEnabled = args[6] as Boolean
+            liquidGlass = args[5] as Boolean,
+            notificationsEnabled = args[6] as Boolean,
+            statusNotificationEnabled = args[7] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.Lazily, SettingsState())
 
@@ -58,7 +60,7 @@ class SettingsViewModel @Inject constructor(
             }
             is SettingsAction.GoBack -> {
                 if (_backStack.size > 1) {
-                    _backStack.removeLast()
+                    _backStack.removeAt(_backStack.lastIndex)
                 }
             }
             is SettingsAction.SetTheme -> {
@@ -75,6 +77,9 @@ class SettingsViewModel @Inject constructor(
             }
             is SettingsAction.SetAmoled -> {
                 viewModelScope.launch { preferencesManager.setIsAmoled(action.enabled) }
+            }
+            is SettingsAction.SetLiquidGlass -> {
+                viewModelScope.launch { preferencesManager.setLiquidGlass(action.enabled) }
             }
             is SettingsAction.SetNotificationsEnabled -> {
                 viewModelScope.launch { preferencesManager.setNotificationsEnabled(action.enabled) }

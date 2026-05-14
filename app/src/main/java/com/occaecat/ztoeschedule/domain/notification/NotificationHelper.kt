@@ -3,7 +3,6 @@ package com.occaecat.ztoeschedule.domain.notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import com.occaecat.ztoeschedule.R
 
@@ -21,8 +20,6 @@ object NotificationHelper {
     const val CHANNEL_INFO_ID = "power_info_channel"
 
     fun createAllChannels(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-
         val nm = NotificationManagerCompat.from(context)
 
         // 1. Alerts Channel

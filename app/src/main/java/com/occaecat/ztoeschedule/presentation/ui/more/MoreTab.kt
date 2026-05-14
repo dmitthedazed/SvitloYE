@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.carousel.rememberCarouselState
@@ -33,6 +34,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +44,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
+import androidx.core.net.toUri
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.Schedule
 import com.occaecat.ztoeschedule.domain.StatisticsCalculator
@@ -62,18 +66,19 @@ fun MoreTab(
     onNavigateToAbout: () -> Unit,
     onNavigateToFaq: () -> Unit,
     onNavigateToFeedback: () -> Unit,
+    modifier: Modifier = Modifier,
     onAddDemoLocation: () -> Unit = {},
     displayMode: DisplayMode = DisplayMode.Comfortable,
-    modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val colorScheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val windowWidthDp = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
     
     // Window width check for foldables and tablets
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val isWideScreen = configuration.screenWidthDp > 600
+    val isWideScreen = windowWidthDp > 600.dp
     
     var sDateMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val sDateStr = remember(sDateMillis) { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sDateMillis)) }
@@ -82,7 +87,7 @@ fun MoreTab(
         listOf(
             PromoItem("Про проект", "Хто ми", Icons.Default.Info, colorScheme.secondaryContainer, colorScheme.onSecondaryContainer, onNavigateToAbout), 
             PromoItem("Зв'язок", "Напишіть нам", Icons.Default.Email, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer, onNavigateToFeedback),
-            PromoItem("Питання", "FAQ", Icons.Default.Help, colorScheme.surfaceContainerHigh, colorScheme.onSurfaceVariant, onNavigateToFaq)
+            PromoItem("Питання", "FAQ", Icons.AutoMirrored.Filled.Help, colorScheme.surfaceContainerHigh, colorScheme.onSurfaceVariant, onNavigateToFaq)
         ) 
     }
 
@@ -276,7 +281,7 @@ fun MoreTab(
                                 trailingContent = {
                                     Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 },
-                                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url))) }
+                                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, item.url.toUri())) }
                             )
                         }
                     }

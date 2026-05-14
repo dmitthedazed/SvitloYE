@@ -1,6 +1,7 @@
 package com.occaecat.ztoeschedule
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.ViewTreeObserver
@@ -12,7 +13,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -76,6 +77,9 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { keepSplash }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
 
         lifecycleScope.launch {
             // Check if onboarding is completed
@@ -103,7 +107,7 @@ class MainActivity : ComponentActivity() {
 
             setContent {
                 val viewModel = activityViewModel
-                val uiState by viewModel.uiState.collectAsState()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
             // Update Dynamic Shortcuts whenever addresses change
             LaunchedEffect(uiState.savedAddresses) {
@@ -134,14 +138,18 @@ class MainActivity : ComponentActivity() {
                 handleIntent(intent, viewModel)
             }
 
-            val colorTheme by preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.System)
-            val cornerRadius by preferencesManager.cornerRadiusFlow.collectAsState(initial = 24)
-            val dynamicColors by preferencesManager.dynamicColorsFlow.collectAsState(initial = true)
-            val isAmoled by preferencesManager.isAmoledFlow.collectAsState(initial = false)
+            val colorTheme by preferencesManager.colorThemeFlow.collectAsStateWithLifecycle(initialValue = ColorTheme.System)
+            val cornerRadius by preferencesManager.cornerRadiusFlow.collectAsStateWithLifecycle(initialValue = 24)
+            val dynamicColors by preferencesManager.dynamicColorsFlow.collectAsStateWithLifecycle(initialValue = true)
+            val isAmoled by preferencesManager.isAmoledFlow.collectAsStateWithLifecycle(initialValue = false)
+            val displayMode by preferencesManager.displayModeFlow.collectAsStateWithLifecycle(initialValue = com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable)
+            val liquidGlass by preferencesManager.liquidGlassFlow.collectAsStateWithLifecycle(initialValue = false)
 
             SvitloYeZhytomyrTheme(
                 themePreference = colorTheme,
                 cornerRadius = cornerRadius,
+                displayMode = displayMode,
+                liquidGlass = liquidGlass,
                 dynamicColor = dynamicColors,
                 isAmoled = isAmoled
             ) {

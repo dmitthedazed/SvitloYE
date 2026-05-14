@@ -1,7 +1,6 @@
 package com.occaecat.ztoeschedule.presentation.ui.info
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +19,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
 import com.occaecat.ztoeschedule.ui.theme.robotoFlexTopBar
 
@@ -59,10 +59,13 @@ fun FeedbackScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .consumeWindowInsets(padding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
+            contentPadding = PaddingValues(
+                top = padding.calculateTopPadding() + 16.dp,
+                bottom = padding.calculateBottomPadding() + 16.dp
+            )
         ) {
             item {
                 Text(
@@ -83,13 +86,13 @@ fun FeedbackScreen(
                     leadingContent = {
                         Icon(Icons.Default.Email, null, tint = colorScheme.primary)
                     },
-                    trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, null, modifier = Modifier.size(16.dp)) },
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:olegkhasanovv@gmail.com")
-                            putExtra(Intent.EXTRA_SUBJECT, "СвітлоЄ: Зворотній зв'язок")
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Написати нам"))
+                        trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, null, modifier = Modifier.size(16.dp)) },
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = "mailto:olegkhasanovv@gmail.com".toUri()
+                                putExtra(Intent.EXTRA_SUBJECT, "СвітлоЄ: Зворотній зв'язок")
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Написати нам"))
                     }
                 )
             }

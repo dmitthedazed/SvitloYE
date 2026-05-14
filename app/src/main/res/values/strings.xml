@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">СвітлоЄ!</string>
-    <string name="package_name">com.occaecat.svitloye</string>
 
     <!-- Navigation -->
     <string name="nav_home">Головна</string>
@@ -8,12 +7,6 @@
     <string name="nav_addresses">Мої адреси</string>
     <string name="nav_more">Додатково</string>
     <string name="more_settings">Налаштування</string>
-    <string name="more_donate">Підтримати проект</string>
-    <string name="more_about">Про додаток</string>
-    <string name="more_faq">FAQ</string>
-    <string name="more_contact">Написати нам</string>
-    <string name="dev_signature">Розроблено dmitthedazed</string>
-    <string name="github_url">https://github.com/dmitthedazed</string>
 
     <!-- Auto Location Screen -->
     <string name="loc_permission_title">Дозвіл на геолокацію</string>
@@ -77,25 +70,12 @@
     <string name="widget_select_pane_title">Оберіть адресу віджета</string>
 
     <!-- Status descriptions for accessibility -->
-    <string name="status_available">Світло є</string>
-    <string name="status_probable">Можливе відключення</string>
-    <string name="status_outage">Відключення</string>
     <string name="status_unknown">Невідомо</string>
     <string name="status_display_outage">Відключення</string>
     <string name="status_display_available">Світло є</string>
     <string name="status_display_probable">Можливе відключення</string>
 
 
-    <string name="address_picker_title">Оберіть адресу</string>
-    <string name="address_picker_back">Назад</string>
-    
-    <string name="step_welcome">Ласкаво просимо</string>
-    <string name="step_notifications">Сповіщення</string>
-    <string name="step_rem">Вибір РЕМ</string>
-    <string name="step_city">Вибір міста</string>
-    <string name="step_street">Вибір вулиці</string>
-    <string name="step_house">Вибір будинку</string>
-    <string name="step_customize">Налаштування</string>
     
 
     <string name="settings_title">Налаштування</string>
@@ -115,39 +95,15 @@
     <string name="action_back">Назад</string>
 
     <!-- Settings -->
-    <string name="settings_notifications_title">Сповіщення</string>
-    <string name="settings_status_notif">Постійне сповіщення статусу</string>
-    <string name="settings_status_notif_desc">Показувати поточний статус світла</string>
-    <string name="settings_live_updates_manage_title">Manage Live Updates</string>
-    <string name="settings_live_updates_manage_desc">Open system settings to allow promoted notifications.</string>
-    <string name="settings_live_activity">Live Activity (Rich Style)</string>
-    <string name="settings_live_activity_desc">Розширений стиль сповіщення (Android 12+)</string>
-    <string name="settings_change_notif">Сповіщення про зміни</string>
-    <string name="settings_change_notif_desc">Попереджати про вимкнення/увімкнення</string>
-    <string name="settings_warn_before">Попереджати за</string>
-    <string name="settings_change_btn">Змінити</string>
-    <string name="settings_test_notif">Тестове сповіщення</string>
-    
-    <string name="settings_app_section">Додаток</string>
-    <string name="settings_re_setup">Пройти налаштування знову</string>
-    <string name="settings_re_setup_desc">Перезапустити процес вибору адреси</string>
-    <string name="settings_clear_data">Очистити всі дані</string>
-    <string name="settings_clear_data_desc">Видалити збережені адреси та налаштування</string>
 
     <!-- Errors & Connection -->
     <string name="error_no_connection">Немає зв\'язку з сервером</string>
-    <string name="error_update_data">Оновлення даних…</string>
-    <string name="error_wait_msg">Будь ласка, зачекайте, ми намагаємось отримати графік.</string>
-    <string name="error_check_conn_msg">Будь ласка, перевірте підключення, щоб завантажити актуальний графік.</string>
-    <string name="error_retry_countdown">Повторна спроба через %1$d сек…</string>
     <string name="error_retry_now">Спробувати зараз</string>
-    <string name="error_wait_btn">Зачекайте…</string>
     <string name="error_offline_banner">Офлайн режим. Дані можуть бути застарілими</string>
 
     <!-- Widget strings -->
     <string name="widget_power_status_description">Компактний віджет статусу світла</string>
     <string name="widget_detailed_schedule_description">Детальний віджет з графіком відключень</string>
-    <string name="widget_not_configured">Налаштуйте адресу в додатку</string>
     <string name="widget_loading">Завантаження…</string>
     <string name="widget_error">Помилка завантаження</string>
     <string name="widget_configure_btn">Налаштувати</string>
@@ -156,7 +112,6 @@
     <string name="widget_status_available">Світло є</string>
     <string name="widget_status_probable">Можливо</string>
     <string name="widget_status_loading">Завантаження</string>
-    <string name="widget_status_error">Помилка</string>
     <string name="widget_status_outage_full">Відключення</string>
     <string name="widget_status_available_full">Світло є</string>
     <string name="widget_status_probable_full">Можливе відключення</string>
@@ -179,8 +134,6 @@
     
     <!-- Notification Actions -->
     <string name="notif_action_refresh">Оновити</string>
-    <string name="notif_action_dismiss">Закрити</string>
-    <string name="notif_action_open">Відкрити</string>
     
     <!-- Notification Content -->
     <string name="notif_network_unavailable">Мережа недоступна…</string>
@@ -208,14 +161,12 @@
     <string name="shortcut_check_status">Перевірити статус</string>
 
     <!-- Android Auto -->
-    <string name="car_no_addresses_title">Немає адрес</string>
     <string name="car_no_addresses_desc">Додайте адреси в мобільному додатку</string>
     <string name="car_status_unknown">Статус невідомий</string>
     <string name="car_error_loading">Помилка завантаження</string>
     <string name="car_loading">Завантаження…</string>
     <string name="car_action_refresh">Оновити</string>
     <string name="car_until">До %1$s</string>
-    <string name="car_offline_banner">Офлайн — кешовані дані</string>
 
     <plurals name="hour">
         <item quantity="one">%1$d година</item>
@@ -238,14 +189,6 @@
         <item quantity="other">%1$d секунд</item>
     </plurals>
 
-    <string name="icon_home">Дім</string>
-    <string name="icon_work">Робота</string>
-    <string name="icon_person">Рідні</string>
-    <string name="icon_favorite">Улюблене</string>
-    <string name="icon_star">Важливо</string>
-    <string name="icon_place">Місце</string>
-    <string name="icon_store">Магазин</string>
-    <string name="icon_school">Школа</string>
 
     <!-- Onboarding -->
     <string name="onboarding_welcome_title">Вітаємо у СвітлоЄ!</string>
@@ -256,13 +199,6 @@
     <string name="onboarding_skip_dialog_message">Ви можете додати адресу пізніше у розділі \"Мої адреси\"</string>
     <string name="onboarding_skip_dialog_confirm">Пропустити</string>
     <string name="onboarding_skip_dialog_cancel">Залишитись</string>
-    <string name="onboarding_add_address_title">Додамо адресу?</string>
-    <string name="onboarding_add_address_subtitle">Оберіть вашу адресу для відслідковування графіку</string>
-    <string name="onboarding_confirm_title">Перевірте адресу</string>
-    <string name="onboarding_confirm_edit">Змінити</string>
-    <string name="onboarding_customize_title">Налаштуйте адресу</string>
-    <string name="onboarding_customize_name_label">Назва адреси</string>
-    <string name="onboarding_customize_icon_label">Оберіть іконку</string>
     <string name="onboarding_permissions_title">Сповіщення</string>
     <string name="onboarding_permissions_subtitle">Дозвольте сповіщення та будильники для своєчасних нагадувань</string>
     <string name="onboarding_permissions_notifications">Сповіщення про зміни статусу</string>

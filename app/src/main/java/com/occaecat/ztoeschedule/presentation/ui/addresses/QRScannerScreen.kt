@@ -27,12 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -60,6 +60,8 @@ fun QRScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val qrPermissionError = stringResource(R.string.qr_error_permission)
+    val qrUnknownError = stringResource(R.string.qr_error_unknown)
     
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     
@@ -130,7 +132,7 @@ fun QRScannerScreen(
                         shouldShowRationale = cameraPermissionState.status.shouldShowRationale,
                         onRequestPermission = { cameraPermissionState.launchPermissionRequest() },
                         onDismiss = {
-                            onResult(QRScanResult.Error(context.getString(R.string.qr_error_permission)))
+                            onResult(QRScanResult.Error(qrPermissionError))
                             onDismiss()
                         }
                     )
@@ -145,7 +147,7 @@ fun QRScannerScreen(
                                 val result = QRAddressData.parse(barcode)
                                 scanningState = result.fold(
                                     onSuccess = { ScanningState.Success(it) },
-                                    onFailure = { ScanningState.Error(it.message ?: context.getString(R.string.qr_error_unknown)) }
+                                    onFailure = { ScanningState.Error(it.message ?: qrUnknownError) }
                                 )
                             }
                         }

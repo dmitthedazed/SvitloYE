@@ -7,10 +7,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.occaecat.ztoeschedule.presentation.ui.settings.SettingsScreenRoot
 import com.occaecat.ztoeschedule.presentation.viewmodel.SettingsViewModel
 import com.occaecat.ztoeschedule.ui.theme.SvitloYeZhytomyrTheme
@@ -23,7 +23,7 @@ class SettingsActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val viewModel: SettingsViewModel = hiltViewModel()
-            val state by viewModel.state.collectAsState()
+            val state by viewModel.state.collectAsStateWithLifecycle()
 
             SvitloYeZhytomyrTheme(
                 themePreference = state.colorTheme,

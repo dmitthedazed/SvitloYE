@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +63,10 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur as glassBlur
+import com.kyant.backdrop.effects.lens as glassLens
+import com.kyant.backdrop.effects.vibrancy as glassVibrancy
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -369,11 +374,40 @@ private fun CurrentStatusCard(
     val containerColor by animateColorAsState(containerColorByState, label = "c")
     val contentColor by animateColorAsState(contentColorByState, label = "ct")
     val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
-    
-    val adaptivePadding = remember(radius) {
-        val base = 16f
+    val displayMode = com.occaecat.ztoeschedule.ui.theme.LocalDisplayMode.current
+    val glassBackdrop = com.occaecat.ztoeschedule.ui.theme.LocalGlassBackdrop.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val glassBlurPx = with(density) { 20.dp.toPx() }
+    val glassLensHeightPx = with(density) { 10.dp.toPx() }
+    val glassLensAmountPx = with(density) { 20.dp.toPx() }
+    val cardShape = MaterialTheme.shapes.extraLarge
+    val glassModifier = if (glassBackdrop != null) {
+        Modifier.drawBackdrop(
+            backdrop = glassBackdrop,
+            shape = { cardShape },
+            effects = {
+                glassVibrancy()
+                glassBlur(glassBlurPx)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    glassLens(glassLensHeightPx, glassLensAmountPx, true)
+                }
+            }
+        )
+    } else Modifier
+
+    val adaptivePadding = remember(radius, displayMode) {
+        val base = when (displayMode) {
+            com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 12f
+            com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> 16f
+            com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 24f
+        }
         val extra = if (radius > 16) (radius - 16).toFloat() / 2f else 0f
         (base + extra).dp
+    }
+    val statusIconSize = when (displayMode) {
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 48.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> 64.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 80.dp
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "p")
@@ -389,11 +423,15 @@ private fun CurrentStatusCard(
         modifier = modifier
             .fillMaxWidth()
             .animateContentSize()
+            .then(glassModifier)
             .semantics {
                 liveRegion = LiveRegionMode.Assertive
             },
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.elevatedCardColors(containerColor = containerColor, contentColor = contentColor)
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = if (glassBackdrop != null) containerColor.copy(alpha = 0.25f) else containerColor,
+            contentColor = contentColor
+        )
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(adaptivePadding),
@@ -412,12 +450,12 @@ private fun CurrentStatusCard(
             Icon(
                 imageVector = statusIcon,
                 contentDescription = statusDescription,
-                modifier = Modifier.size(64.dp).graphicsLayer {
+                modifier = Modifier.size(statusIconSize).graphicsLayer {
                     scaleX = pulseScale
                     scaleY = pulseScale
                 }
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(if (displayMode == com.occaecat.ztoeschedule.data.model.DisplayMode.Compact) 8.dp else 16.dp))
             Text(
                 text = activeGroup?.displayText ?: currentStatus?.displayText ?: stringResource(R.string.home_no_data),
                 style = MaterialTheme.typography.headlineSmall,
@@ -468,7 +506,6 @@ private fun CurrentStatusCard(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LiveProgressBar(activeGroup: GroupedSchedule, contentColor: Color, hasElectricity: Boolean) {
-    val context = LocalContext.current
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(activeGroup) {
         while (true) {
@@ -480,27 +517,20 @@ private fun LiveProgressBar(activeGroup: GroupedSchedule, contentColor: Color, h
         val dur = activeGroup.endMs - activeGroup.startMs
         if (dur <= 0) 0f else ((nowMs - activeGroup.startMs).toFloat() / dur.toFloat()).coerceIn(0f, 1f)
     }
-    val timeRemainingText by remember(activeGroup, nowMs) {
-        derivedStateOf {
-            val ms = activeGroup.endMs - nowMs
-            if (ms <= 0) {
-                // Status ended - show 0 seconds
-                context.resources.getQuantityString(R.plurals.second, 0, 0)
-            } else if (ms < 60000) {
-                // Less than 1 minute - show seconds
-                val seconds = (ms / 1000).toInt().coerceAtLeast(1)
-                context.resources.getQuantityString(R.plurals.second, seconds, seconds)
-            } else {
-                // 1 minute or more - show hours and minutes
-                val rem = ms / 60000
-                val h = (rem / 60).toInt()
-                val m = (rem % 60).toInt()
-                
-                val res = context.resources
-                val hStr = if (h > 0) res.getQuantityString(R.plurals.hour, h, h) + " " else ""
-                val mStr = res.getQuantityString(R.plurals.minute, m, m)
-                hStr + mStr
-            }
+    val msRemaining = activeGroup.endMs - nowMs
+    val timeRemainingText = when {
+        msRemaining <= 0 -> pluralStringResource(R.plurals.second, 0, 0)
+        msRemaining < 60000 -> {
+            val seconds = (msRemaining / 1000).toInt().coerceAtLeast(1)
+            pluralStringResource(R.plurals.second, seconds, seconds)
+        }
+        else -> {
+            val rem = msRemaining / 60000
+            val h = (rem / 60).toInt()
+            val m = (rem % 60).toInt()
+            val hStr = if (h > 0) pluralStringResource(R.plurals.hour, h, h) + " " else ""
+            val mStr = pluralStringResource(R.plurals.minute, m, m)
+            hStr + mStr
         }
     }
     val animatedProgress by animateFloatAsState(progress, ProgressIndicatorDefaults.ProgressAnimationSpec, label = "pr")
@@ -552,6 +582,7 @@ private fun AddressInfoCard(
     }
     var showShareMenu by remember { mutableStateOf(false) }
     var showQrDialog by remember { mutableStateOf(false) }
+    val qrMissingDataText = stringResource(R.string.qr_share_missing_data)
     val qrContent = remember(
         remId,
         cityId,
@@ -717,7 +748,7 @@ private fun AddressInfoCard(
                             if (qrContent.isBlank()) {
                                 android.widget.Toast.makeText(
                                     context,
-                                    context.getString(R.string.qr_share_missing_data),
+                                    qrMissingDataText,
                                     android.widget.Toast.LENGTH_SHORT
                                 ).show()
                             } else {
@@ -831,6 +862,27 @@ private fun ScheduleListItemSimple(
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val displayMode = com.occaecat.ztoeschedule.ui.theme.LocalDisplayMode.current
+    val itemVerticalPadding = when (displayMode) {
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 8.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> 16.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 24.dp
+    }
+    val circleIconSize = when (displayMode) {
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 36.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> 48.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 56.dp
+    }
+    val innerIconSize = when (displayMode) {
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 18.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> 24.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 28.dp
+    }
+    val timeTextStyle = when (displayMode) {
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> MaterialTheme.typography.bodyMedium
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> MaterialTheme.typography.titleMedium
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> MaterialTheme.typography.titleLarge
+    }
     
     val highlightAlpha = remember { Animatable(0f) }
     LaunchedEffect(highlightTrigger) {
@@ -892,12 +944,12 @@ private fun ScheduleListItemSimple(
         border = if (isActive) BorderStroke(1.dp, statusColor.copy(alpha = 0.38f)) else null
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = itemVerticalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Status Icon with background
             Surface(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(circleIconSize),
                 shape = CircleShape,
                 color = statusColor.copy(alpha = 0.12f)
             ) {
@@ -913,19 +965,19 @@ private fun ScheduleListItemSimple(
                             ScheduleStatus.Probable -> "Можливе відключення"
                             else -> "Електроенергія відсутня"
                         },
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(innerIconSize),
                         tint = statusColor
                     )
                 }
             }
-            
+
             Spacer(Modifier.width(16.dp))
-            
+
             // Time and Status Text
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = TimeUtils.formatSpanToSystem(context, group.span), 
-                    style = MaterialTheme.typography.titleMedium,
+                    text = TimeUtils.formatSpanToSystem(context, group.span),
+                    style = timeTextStyle,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )

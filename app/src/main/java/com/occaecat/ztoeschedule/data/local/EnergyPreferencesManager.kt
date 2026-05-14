@@ -64,7 +64,8 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KeyCornerRadius = intPreferencesKey("corner_radius")
         private val KeyDynamicColors = booleanPreferencesKey("dynamic_colors")
         private val KeyIsAmoled = booleanPreferencesKey("is_amoled")
-        
+        private val KeyLiquidGlass = booleanPreferencesKey("liquid_glass")
+
         // Cache
         private val KeyLastScheduleHash = stringPreferencesKey("last_schedule_hash")
         private val KeyLastScheduleServerUpdatedMs = longPreferencesKey("last_schedule_server_updated_ms")
@@ -118,6 +119,16 @@ class EnergyPreferencesManager(private val context: Context) {
     suspend fun setIsAmoled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KeyIsAmoled] = enabled
+        }
+    }
+
+    val liquidGlassFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KeyLiquidGlass] ?: false
+    }.distinctUntilChanged()
+
+    suspend fun setLiquidGlass(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KeyLiquidGlass] = enabled
         }
     }
 

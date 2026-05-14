@@ -334,6 +334,7 @@ private fun UnifiedAddressPicker(
     Scaffold(
         modifier = modifier
             .fillMaxSize(),
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             if (showTopBar) {
                 LargeFlexibleTopAppBar(
@@ -367,6 +368,7 @@ private fun UnifiedAddressPicker(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
         ) {
             Box(
                 modifier = Modifier

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -21,7 +22,6 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.runtime.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -56,6 +56,8 @@ import android.content.Intent
 import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressPickerScreen
 import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressPickerDialog
 import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressPickerResult
+import com.occaecat.ztoeschedule.presentation.ui.adaptive.MainNavigationChrome
+import com.occaecat.ztoeschedule.presentation.ui.adaptive.mainScaffoldLayoutFor
 
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
 import com.occaecat.ztoeschedule.presentation.ui.addresses.MyAddressesTab
@@ -66,6 +68,13 @@ import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import kotlinx.coroutines.launch
 
 import com.occaecat.ztoeschedule.ui.theme.robotoFlexTopBar
+import com.occaecat.ztoeschedule.ui.theme.LocalGlassBackdrop
+import com.occaecat.ztoeschedule.presentation.ui.glass.GlassNavItem
+import com.occaecat.ztoeschedule.presentation.ui.glass.LiquidGlassBackground
+import com.occaecat.ztoeschedule.presentation.ui.glass.LiquidGlassNavBar
+import com.kyant.backdrop.backdrops.layerBackdrop
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -73,10 +82,13 @@ fun MainScreen(
     viewModel: EnergyScheduleViewModel = hiltViewModel(),
     windowSizeClass: WindowSizeClass
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val reduceMotion = false
-    val showNavRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
-    val useWideLayout = showNavRail
+    val mainScaffoldLayout = remember(windowSizeClass.widthSizeClass) {
+        mainScaffoldLayoutFor(windowSizeClass.widthSizeClass)
+    }
+    val showNavRail = mainScaffoldLayout.navigationChrome == MainNavigationChrome.NavigationRail
+    val useWideLayout = mainScaffoldLayout.useWideLayout
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -85,7 +97,6 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { uiState.addressDataList.size })
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val snackbarHostState = remember { SnackbarHostState() }
     var showMenu by remember { mutableStateOf(false) }
     var activityLaunched by rememberSaveable { mutableStateOf(false) }
@@ -99,6 +110,12 @@ fun MainScreen(
         uiState.addressDataList.firstOrNull { it.lastUpdateTime.isNotEmpty() }?.lastUpdateTime
     }
     val offlineMessage = stringResource(R.string.error_no_connection)
+    val navHomeLabel = stringResource(R.string.nav_home)
+    val navNotificationsLabel = stringResource(R.string.nav_notifications)
+    val navAddressesLabel = stringResource(R.string.nav_addresses)
+    val navMoreLabel = stringResource(R.string.nav_more)
+    val settingsLabel = stringResource(R.string.more_settings)
+    val appNameLabel = stringResource(R.string.app_name)
 
     fun showOfflineSnackbar() {
         scope.launch { snackbarHostState.showSnackbar(offlineMessage) }
@@ -154,13 +171,13 @@ fun MainScreen(
     val currentTitle by remember(uiState.addressDataList, currentRoute, pagerState.currentPage) {
         derivedStateOf {
             when {
-                currentRoute == "home" -> if (uiState.addressDataList.isNotEmpty() && pagerState.currentPage in uiState.addressDataList.indices) uiState.addressDataList[pagerState.currentPage].address.name else context.getString(R.string.nav_home)
-                currentRoute == "notifications" -> context.getString(R.string.nav_notifications)
-                currentRoute == "addresses" -> context.getString(R.string.nav_addresses)
-                currentRoute == "more" -> context.getString(R.string.nav_more)
-                currentRoute == "settings" -> context.getString(R.string.more_settings)
+                currentRoute == "home" -> if (uiState.addressDataList.isNotEmpty() && pagerState.currentPage in uiState.addressDataList.indices) uiState.addressDataList[pagerState.currentPage].address.name else navHomeLabel
+                currentRoute == "notifications" -> navNotificationsLabel
+                currentRoute == "addresses" -> navAddressesLabel
+                currentRoute == "more" -> navMoreLabel
+                currentRoute == "settings" -> settingsLabel
                 currentRoute == "inspect" -> uiState.inspectedAddress?.name ?: "Inspect"
-                else -> context.getString(R.string.app_name)
+                else -> appNameLabel
             }
         }
     }
@@ -190,7 +207,19 @@ fun MainScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         val context = LocalContext.current
-        Row(Modifier.fillMaxSize()) {
+        val liquidGlass = com.occaecat.ztoeschedule.ui.theme.LocalLiquidGlass.current && !useWideLayout
+        val bgBackdrop = if (liquidGlass) rememberLayerBackdrop() else null
+
+        // Animated gradient background — the backdrop source for all glass elements
+        if (bgBackdrop != null) {
+            LiquidGlassBackground(modifier = Modifier.layerBackdrop(bgBackdrop))
+        }
+
+        androidx.compose.runtime.CompositionLocalProvider(LocalGlassBackdrop provides bgBackdrop) {
+        Box(modifier = Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxSize()
+        ) {
             if (useWideLayout) {
                 NavigationRail(
                     modifier = Modifier.statusBarsPadding(),
@@ -346,7 +375,7 @@ fun MainScreen(
                 },
                 bottomBar = {
                     AnimatedVisibility(
-                        visible = !useWideLayout && shouldShowBars,
+                        visible = !useWideLayout && shouldShowBars && bgBackdrop == null,
                         enter = if (reduceMotion) EnterTransition.None else slideInVertically(initialOffsetY = { it }) + fadeIn(),
                         exit = if (reduceMotion) ExitTransition.None else slideOutVertically(targetOffsetY = { it }) + fadeOut()
                     ) {
@@ -354,6 +383,7 @@ fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .navigationBarsPadding()
                                 .padding(bottom = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -414,6 +444,7 @@ fun MainScreen(
                         exit = if (reduceMotion) ExitTransition.None else scaleOut() + fadeOut()
                     ) { 
                         ExtendedFloatingActionButton(
+                            modifier = Modifier.navigationBarsPadding(),
                             onClick = { 
                                 if (!uiState.isConnected) {
                                     showOfflineSnackbar()
@@ -610,6 +641,32 @@ fun MainScreen(
         }
             }
         }
+
+        // Liquid Glass bottom nav overlay — sibling to Row inside inner Box, blurs through gradient background
+        if (bgBackdrop != null && shouldShowBars && !useWideLayout) {
+            AnimatedVisibility(
+                visible = true,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = if (reduceMotion) EnterTransition.None else slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = if (reduceMotion) ExitTransition.None else slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                LiquidGlassNavBar(
+                    items = navItems.map { GlassNavItem(it.route, it.label, it.selectedIcon, it.unselectedIcon) },
+                    currentRoute = currentRoute,
+                    backdrop = bgBackdrop,
+                    onNavigate = { route ->
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+        }
+        } // close inner Box
+        } // close CompositionLocalProvider
 
         val widgetPaneTitle = stringResource(R.string.widget_select_pane_title)
         if (uiState.showWidgetConfig) {

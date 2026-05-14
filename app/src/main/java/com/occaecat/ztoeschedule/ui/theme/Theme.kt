@@ -14,14 +14,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Typography
-import androidx.compose.material3.Shapes
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 
 val LocalCornerRadius = staticCompositionLocalOf { 24 }
+val LocalDisplayMode = staticCompositionLocalOf { DisplayMode.Comfortable }
+val LocalLiquidGlass = staticCompositionLocalOf { false }
+val LocalGlassBackdrop = staticCompositionLocalOf<com.kyant.backdrop.Backdrop?> { null }
 
 val DarkColorScheme = darkColorScheme(
     primary = PrimaryDark,
@@ -121,6 +123,8 @@ val ContrastColorScheme = lightColorScheme(
 fun SvitloYeZhytomyrTheme(
     themePreference: ColorTheme = ColorTheme.System,
     cornerRadius: Int = -1,
+    displayMode: DisplayMode = DisplayMode.Comfortable,
+    liquidGlass: Boolean = false,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     isAmoled: Boolean = false,
@@ -190,15 +194,9 @@ fun SvitloYeZhytomyrTheme(
         ColorTheme.Contrast -> ContrastColorScheme
     }
 
-    val customShapes = Shapes(
-        extraSmall = RoundedCornerShape(finalCornerRadius.dp),
-        small = RoundedCornerShape(finalCornerRadius.dp),
-        medium = RoundedCornerShape(finalCornerRadius.dp),
-        large = RoundedCornerShape(finalCornerRadius.dp),
-        extraLarge = RoundedCornerShape(finalCornerRadius.dp)
-    )
+    val customShapes = materialShapesForCornerRadius(finalCornerRadius)
 
-    CompositionLocalProvider(LocalCornerRadius provides finalCornerRadius) {
+    CompositionLocalProvider(LocalCornerRadius provides finalCornerRadius, LocalDisplayMode provides displayMode, LocalLiquidGlass provides liquidGlass) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography, // Use standard typography

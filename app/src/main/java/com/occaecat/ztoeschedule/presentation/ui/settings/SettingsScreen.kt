@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -174,7 +175,7 @@ private fun MainSettingsList(
                 title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = { onAction(SettingsAction.GoBack) }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 }
             )
@@ -184,8 +185,12 @@ private fun MainSettingsList(
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp)
+                .consumeWindowInsets(padding)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(
+                top = padding.calculateTopPadding() + 16.dp,
+                bottom = padding.calculateBottomPadding() + 16.dp
+            )
         ) {
             itemsIndexed(appearanceItems) { index, item ->
                 SettingsGroupItem(
@@ -197,7 +202,7 @@ private fun MainSettingsList(
                         Text(item.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
                     trailingContent = {
-                        Icon(Icons.Default.ArrowForwardIos, null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
                     },
                     onClick = item.onClick
                 )
@@ -215,7 +220,7 @@ private fun MainSettingsList(
                         Text(item.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
                     trailingContent = {
-                        Icon(Icons.Default.ArrowForwardIos, null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
                     },
                     onClick = item.onClick
                 )
@@ -354,7 +359,7 @@ fun DeveloperSettingsScreen(
                 title = { Text("Розробник") },
                 navigationIcon = {
                     IconButton(onClick = { onAction(SettingsAction.GoBack) }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -369,6 +374,7 @@ fun DeveloperSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
                 .verticalScroll(scrollState)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -452,7 +458,7 @@ fun DeveloperSettingsScreen(
                     leadingContent = { Icon(Icons.Default.Extension, null) },
                     headlineContent = { Text("Функції та інтеграції") },
                     supportingContent = { Text("Android Auto, віджети та інше") },
-                    trailingContent = { Icon(Icons.Default.ArrowForwardIos, null, modifier = Modifier.size(16.dp)) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp)) },
                     onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Integrations)) }
                 )
                 
@@ -500,7 +506,13 @@ fun PlaceholderSettingsScreen(title: String, text: String, onBackClick: () -> Un
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .consumeWindowInsets(padding),
+            contentAlignment = Alignment.Center
+        ) {
             Text(text)
         }
     }

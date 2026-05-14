@@ -2,6 +2,8 @@ package com.occaecat.ztoeschedule.presentation.util
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.set
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -18,10 +20,10 @@ object QrCodeGenerator {
                 sizePx,
                 hints
             )
-            val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
             for (x in 0 until sizePx) {
                 for (y in 0 until sizePx) {
-                    bitmap.setPixel(x, y, if (matrix[x, y]) Color.BLACK else Color.WHITE)
+                    bitmap[x, y] = if (matrix[x, y]) Color.BLACK else Color.WHITE
                 }
             }
             bitmap
