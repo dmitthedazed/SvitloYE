@@ -21,7 +21,7 @@
 * **Min SDK:** 26 (Android 8.0)
 
 ## 📥 Завантаження
-Застосунок доступний для завантаження в **[Google Play](https://play.google.com/store/apps/details?id=com.occaecat.svitloye)**.
+Актуальну версію (APK-файл) можна завантажити у розділі **[Releases](https://github.com/dmitthedazed/SvitloYE/releases)**.
 
 ---
 *Розроблено з турботою про енергонезалежність.* 🇺🇦
