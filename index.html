@@ -1,63 +1,145 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>СвітлоЄ? - Графік відключень</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>СвітлоЄ? - Графік відключень Житомир</title>
     <script>
         window.onload = function() {
             const params = new URLSearchParams(window.location.search);
             const s = params.get('s');
             const a = params.get('a');
             
+            // Якщо є параметри для імпорту графіка
             if (s && a) {
+                document.getElementById('content-landing').style.display = 'none';
+                document.getElementById('content-redirect').style.display = 'block';
+
                 let deepLink = "zt-energy://schedule/add?";
                 for (const [key, value] of params) {
                     deepLink += key + "=" + encodeURIComponent(value) + "&";
                 }
                 
-                // Remove last '&' and open link
+                // Спроба відкрити додаток
                 window.location.href = deepLink.slice(0, -1);
-            }
 
-            // Redirect to Play Store after a short delay if app not installed
-            setTimeout(function() {
-                window.location.href = "https://play.google.com/store/apps/details?id=com.occaecat.svitloye";
-            }, 1000);
+                // Якщо додаток не встановлено, через секунду відкриваємо сторінку в Google Play
+                setTimeout(function() {
+                    window.location.href = "https://play.google.com/store/apps/details?id=com.occaecat.svitloye";
+                }, 1000);
+            }
         };
     </script>
     <style>
+        :root {
+            --primary-color: #007bff;
+            --bg-color: #f0f2f5;
+            --text-color: #333;
+            --card-bg: #ffffff;
+        }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             text-align: center; 
-            padding: 50px 20px; 
-            background-color: #f0f2f5; 
-            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color); 
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 50px 20px;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 40px 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
         }
         h1 {
             color: #111;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        h1 span {
+            color: #ffb300; /* Жовтий колір лампочки */
         }
         p {
             color: #555;
-            font-size: 16px;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        .features {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            text-align: left;
+            max-width: 400px;
+            margin: 30px auto;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
         }
         .btn { 
-            background: #007bff; 
+            background: var(--primary-color); 
             color: white; 
             padding: 15px 30px; 
             text-decoration: none; 
-            border-radius: 8px; 
+            border-radius: 12px; 
             font-size: 18px; 
-            font-weight: 500;
+            font-weight: 600;
             display: inline-block;
             margin-top: 20px;
+            transition: background 0.3s;
+            box-shadow: 0 4px 6px rgba(0,123,255,0.2);
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        #content-redirect {
+            display: none;
+            padding-top: 100px;
+        }
+        .footer {
+            margin-top: 40px;
+            font-size: 14px;
+            color: #888;
         }
     </style>
 </head>
 <body>
-    <h1>СвітлоЄ!</h1>
-    <p>Намагаємось відкрити адресу в додатку...</p>
-    <p>Якщо нічого не відбувається, переконайтеся, що додаток встановлено.</p>
-    <br>
-    <a href="https://play.google.com/store/apps/details?id=com.occaecat.svitloye" class="btn">Завантажити з Google Play</a>
+    <!-- Сторінка редиректу (для Deep Links) -->
+    <div id="content-redirect">
+        <h1>СвітлоЄ! 💡</h1>
+        <p>Намагаємось відкрити розклад у додатку...</p>
+        <p>Якщо нічого не відбувається, переконайтеся, що додаток встановлено.</p>
+        <a href="https://play.google.com/store/apps/details?id=com.occaecat.svitloye" class="btn">Завантажити з Google Play</a>
+    </div>
+
+    <!-- Лендінг (для звичайних відвідувачів) -->
+    <div class="container" id="content-landing">
+        <div class="card">
+            <h1>Світло<span>Є</span>!</h1>
+            <p>Ваш надійний помічник для відстеження графіків відключень електроенергії у Житомирі та області.</p>
+            
+            <div class="features">
+                <div class="feature-item">⚡ <strong>Завжди під рукою:</strong> зручний перегляд черг та графіків.</div>
+                <div class="feature-item">🔔 <strong>Сповіщення:</strong> дізнавайтесь про зміни першими.</div>
+                <div class="feature-item">📱 <strong>Офлайн доступ:</strong> графік доступний навіть без інтернету.</div>
+                <div class="feature-item">🚀 <strong>Легко:</strong> швидко додавайте свої адреси.</div>
+            </div>
+
+            <a href="https://play.google.com/store/apps/details?id=com.occaecat.svitloye" class="btn">Завантажити додаток</a>
+        </div>
+        
+        <div class="footer">
+            <p>© 2024 СвітлоЄ. Житомир та область.</p>
+        </div>
+    </div>
 </body>
 </html>
