@@ -12,6 +12,7 @@ app/build/
 captures/
 .externalNativeBuild
 .cxx/
+gh-pages-content/
 
 # Gradle
 /build
