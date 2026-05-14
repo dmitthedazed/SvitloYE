@@ -69,3 +69,4 @@ gradle/gradle-daemon-jvm.properties
 *.md
 !README.md
 !GITHUB.md
+GITHUB.md
