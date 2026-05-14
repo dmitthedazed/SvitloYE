@@ -14,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.occaecat.ztoeschedule.domain.DailyStats
@@ -30,8 +32,9 @@ fun DailyStatisticsCard(
         (base + extra).dp
     }
     
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val isWide = configuration.screenWidthDp > 600
+    val density = LocalDensity.current
+    val windowWidthDp = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val isWide = windowWidthDp > 600.dp
 
     Card(
         colors = CardDefaults.cardColors(

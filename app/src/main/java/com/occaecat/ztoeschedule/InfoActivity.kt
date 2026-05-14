@@ -7,7 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.ColorTheme
@@ -33,9 +33,9 @@ class InfoActivity : ComponentActivity() {
         val type = intent.getStringExtra("type") ?: "about"
 
         setContent {
-            val colorThemeState = preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.System)
+            val colorThemeState = preferencesManager.colorThemeFlow.collectAsStateWithLifecycle(initialValue = ColorTheme.System)
             val colorTheme = colorThemeState.value
-            val cornerRadiusState = preferencesManager.cornerRadiusFlow.collectAsState(initial = 24)
+            val cornerRadiusState = preferencesManager.cornerRadiusFlow.collectAsStateWithLifecycle(initialValue = 24)
             val cornerRadius = cornerRadiusState.value
 
             SvitloYeZhytomyrTheme(

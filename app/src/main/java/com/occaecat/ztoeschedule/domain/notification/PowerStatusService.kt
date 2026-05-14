@@ -68,11 +68,7 @@ class PowerStatusService : Service() {
         fun start(context: Context) {
             Log.d(TAG, "Starting PowerStatusService")
             val intent = Intent(context, PowerStatusService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
@@ -86,11 +82,7 @@ class PowerStatusService : Service() {
             val intent = Intent(context, PowerStatusService::class.java).apply {
                 action = ACTION_IMMEDIATE_REFRESH
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
     }
 

@@ -2,7 +2,6 @@ package com.occaecat.ztoeschedule.domain.notification
 
 import android.content.Context
 import android.app.NotificationManager
-import android.os.Build
 import android.util.Log
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.PriorityMode
@@ -60,11 +59,9 @@ class NotificationPolicy @Inject constructor(
         }
 
         // 2. Check System DND Mode
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (isSystemDNDEnabled()) {
-                Log.d(TAG, "Alert blocked: system DND mode is active")
-                return false
-            }
+        if (isSystemDNDEnabled()) {
+            Log.d(TAG, "Alert blocked: system DND mode is active")
+            return false
         }
 
         // 3. Check Smart Settings
@@ -86,7 +83,6 @@ class NotificationPolicy @Inject constructor(
                 // Fall through to check quiet hours
                 Log.d(TAG, "Alert: priority mode is IMPORTANT, checking quiet hours")
             }
-            else -> {} // Default/null - check quiet hours
         }
 
         // 3b. Check Quiet Hours
@@ -137,20 +133,8 @@ class NotificationPolicy @Inject constructor(
         return isGloballyEnabled
     }
 
-    /**
-     * Check if system Do-Not-Disturb mode is currently active.
-     *
-     * Requires Android 6.0+ (API 23).
-     * On older devices, always returns false (doesn't enforce DND).
-     *
-     * @return true if system DND mode is on
-     */
     private fun isSystemDNDEnabled(): Boolean {
         return try {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-                return false
-            }
-
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             if (notificationManager == null) {
                 Log.w(TAG, "NotificationManager not available for DND check")
@@ -184,7 +168,7 @@ class NotificationPolicy @Inject constructor(
             return "Notifications are globally disabled"
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && isSystemDNDEnabled()) {
+        if (isSystemDNDEnabled()) {
             return "System Do-Not-Disturb mode is active"
         }
 

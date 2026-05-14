@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.core.content.edit
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.Address
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
@@ -264,7 +265,7 @@ class ScheduledAlarmManager @Inject constructor(
         
         // Clear stored codes
         scheduledAlarmCodes.remove(address.id)
-        alarmPrefs.edit().remove(KEY_PREFIX_CODES + address.id).apply()
+        alarmPrefs.edit { remove(KEY_PREFIX_CODES + address.id) }
         
         Log.i(TAG, "Cancelled $cancelledCount alarms for ${address.name}")
         }
@@ -308,7 +309,7 @@ class ScheduledAlarmManager @Inject constructor(
         
         // Clear all stored codes
         scheduledAlarmCodes.clear()
-        alarmPrefs.edit().clear().apply()
+        alarmPrefs.edit { clear() }
         
         Log.i(TAG, "Cancelled $totalCancelled alarms total")
         }
@@ -325,7 +326,7 @@ class ScheduledAlarmManager @Inject constructor(
         
         // Persist to SharedPreferences
         val codesStr = codes.toList().joinToString(",")
-        alarmPrefs.edit().putString(KEY_PREFIX_CODES + addressId, codesStr).apply()
+        alarmPrefs.edit { putString(KEY_PREFIX_CODES + addressId, codesStr) }
         }
     }
 

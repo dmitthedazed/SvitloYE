@@ -67,17 +67,16 @@ class PowerStatusTileService : TileService() {
         }
 
         try {
+            val pendingIntent = PendingIntent.getActivity(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
             if (Build.VERSION.SDK_INT >= 34) {
-                val pendingIntent = PendingIntent.getActivity(
-                    this,
-                    0,
-                    intent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
                 startActivityAndCollapse(pendingIntent)
             } else {
-                @Suppress("DEPRECATION")
-                startActivityAndCollapse(intent)
+                startActivity(intent)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error launching activity", e)

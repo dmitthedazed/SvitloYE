@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
+import androidx.core.graphics.createBitmap
 import androidx.core.content.FileProvider
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import java.io.File
@@ -45,7 +46,7 @@ object ScheduleImageGenerator {
         val footerHeight = 150
         val height = headerHeight + (itemCount * itemHeight) + footerHeight
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
         // Colors

@@ -61,10 +61,13 @@ fun AboutScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .consumeWindowInsets(padding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
+            contentPadding = PaddingValues(
+                top = padding.calculateTopPadding() + 16.dp,
+                bottom = padding.calculateBottomPadding() + 16.dp
+            )
         ) {
             // Block 1: App Info & Author
             item {

@@ -31,6 +31,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressPickerResult
 import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressPickerScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 
 /**
@@ -52,7 +53,7 @@ fun OnboardingScreen(
     onComplete: (AddressPickerResult?) -> Unit,
     onSkip: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var currentStep by remember { mutableStateOf(OnboardingStep.WELCOME) }
     var showSkipDialog by remember { mutableStateOf(false) }
     var addressResult by remember { mutableStateOf<AddressPickerResult?>(null) }
@@ -332,7 +333,7 @@ private fun PermissionsContent(
             }
         }
         
-        if (!notificationGranted && notificationPermissionState != null) {
+        if (!notificationGranted) {
             Spacer(Modifier.height(16.dp))
             
             OutlinedButton(

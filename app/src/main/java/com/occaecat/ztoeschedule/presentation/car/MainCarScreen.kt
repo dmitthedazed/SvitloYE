@@ -14,6 +14,7 @@ import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
 import androidx.car.app.model.Row
 import androidx.car.app.model.Template
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.lifecycleScope
 import com.occaecat.ztoeschedule.R
@@ -147,7 +148,7 @@ class MainCarScreen(
 
     private fun createStatusIcon(color: Int): CarIcon {
         val size = 48
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val paint = Paint()
         paint.color = color

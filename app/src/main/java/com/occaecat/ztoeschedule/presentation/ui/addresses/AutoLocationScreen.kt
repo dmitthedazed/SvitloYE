@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -75,10 +76,10 @@ fun AutoLocationScreen(
     onRemSelected: (Rem) -> Unit,
     onManualSelection: () -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
     onAddressDetected: ((AutoDetectedAddress) -> Unit)? = null,
     showRemSuggestions: Boolean = true,
     showTopBar: Boolean = false,
-    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var state by remember { mutableStateOf<AutoLocationState>(AutoLocationState.Idle) }
@@ -304,6 +305,7 @@ private fun SuccessContent(
     onAddressDetected: ((AutoDetectedAddress) -> Unit)?,
     showRemSuggestions: Boolean
 ) {
+    val currentLocale = LocalLocale.current.platformLocale
     Icon(
         imageVector = Icons.Default.CheckCircle,
         contentDescription = null,
@@ -400,7 +402,7 @@ private fun SuccessContent(
                     val distance = state.allRems.find { it.rem.id == state.suggestedRem.id }?.distanceKm
                     if (distance != null) {
                         Text(
-                            text = "≈ ${String.format("%.1f", distance)} км",
+                            text = "≈ ${String.format(currentLocale, "%.1f", distance)} км",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -447,7 +449,7 @@ private fun SuccessContent(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "≈ ${String.format("%.1f", remWithDistance.distanceKm)} км",
+                        text = "≈ ${String.format(currentLocale, "%.1f", remWithDistance.distanceKm)} км",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -594,7 +596,7 @@ private suspend fun geocodeLocation(context: Context, location: Location): AutoD
     withContext(Dispatchers.IO) {
         try {
             if (!Geocoder.isPresent()) {
-                val fallback = "${String.format("%.4f", location.latitude)}, ${String.format("%.4f", location.longitude)}"
+                val fallback = "${String.format(Locale.getDefault(), "%.4f", location.latitude)}, ${String.format(Locale.getDefault(), "%.4f", location.longitude)}"
                 return@withContext AutoDetectedAddress(null, null, null, fallback)
             }
             
@@ -617,15 +619,15 @@ private suspend fun geocodeLocation(context: Context, location: Location): AutoD
                 }
                 
                 val raw = parts.joinToString(", ").ifEmpty { 
-                    "${String.format("%.4f", location.latitude)}, ${String.format("%.4f", location.longitude)}"
+                    "${String.format(Locale.getDefault(), "%.4f", location.latitude)}, ${String.format(Locale.getDefault(), "%.4f", location.longitude)}"
                 }
                 AutoDetectedAddress(city, street, house, raw)
             } else {
-                val fallback = "${String.format("%.4f", location.latitude)}, ${String.format("%.4f", location.longitude)}"
+                val fallback = "${String.format(Locale.getDefault(), "%.4f", location.latitude)}, ${String.format(Locale.getDefault(), "%.4f", location.longitude)}"
                 AutoDetectedAddress(null, null, null, fallback)
             }
         } catch (e: Exception) {
-            val fallback = "${String.format("%.4f", location.latitude)}, ${String.format("%.4f", location.longitude)}"
+            val fallback = "${String.format(Locale.getDefault(), "%.4f", location.latitude)}, ${String.format(Locale.getDefault(), "%.4f", location.longitude)}"
             AutoDetectedAddress(null, null, null, fallback)
         }
     }

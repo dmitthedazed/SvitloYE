@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -48,7 +49,7 @@ fun StyleSettingsScreen(
                 title = { Text("Стиль та вигляд") },
                 navigationIcon = {
                     IconButton(onClick = { onAction(SettingsAction.GoBack) }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -62,8 +63,9 @@ fun StyleSettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
                 .padding(padding)
+                .consumeWindowInsets(padding)
+                .verticalScroll(scrollState)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -113,6 +115,27 @@ fun StyleSettingsScreen(
                 }
             }
 
+            // Liquid Glass
+            Text(
+                text = "Liquid Glass",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
+            )
+            SettingsGroupItem(
+                index = 0,
+                totalCount = 1,
+                headlineContent = { Text("Liquid Glass навігація") },
+                supportingContent = { Text("Прозорий ефект заломлення на нижній панелі (Android 12+)") },
+                trailingContent = {
+                    Switch(
+                        checked = state.liquidGlass,
+                        onCheckedChange = { onAction(SettingsAction.SetLiquidGlass(it)) }
+                    )
+                },
+                onClick = { onAction(SettingsAction.SetLiquidGlass(!state.liquidGlass)) }
+            )
+
             // Advanced Theme Options
             Text(
                 text = "Додатково",
@@ -120,7 +143,7 @@ fun StyleSettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
             )
-            
+
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 val showAmoled = state.colorTheme == ColorTheme.Dark || state.colorTheme == ColorTheme.System
                 val itemsCount = (if (isDynamicSupported) 1 else 0) + (if (showAmoled) 1 else 0)
@@ -141,7 +164,7 @@ fun StyleSettingsScreen(
                         onClick = { onAction(SettingsAction.SetDynamicColors(!state.dynamicColors)) }
                     )
                 }
-                
+
                 if (showAmoled) {
                     SettingsGroupItem(
                         index = currentIndex,

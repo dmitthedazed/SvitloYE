@@ -16,7 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
@@ -49,14 +50,14 @@ class InspectActivity : ComponentActivity() {
 
         setContent {
             val viewModel: EnergyScheduleViewModel = hiltViewModel()
-            val uiStateValue = viewModel.uiState.collectAsState()
+            val uiStateValue = viewModel.uiState.collectAsStateWithLifecycle()
             val uiState = uiStateValue.value
             
             var showSaveDialog by remember { mutableStateOf(false) }
             
-            val colorThemeState = preferencesManager.colorThemeFlow.collectAsState(initial = ColorTheme.System)
+            val colorThemeState = preferencesManager.colorThemeFlow.collectAsStateWithLifecycle(initialValue = ColorTheme.System)
             val colorTheme = colorThemeState.value
-            val cornerRadiusState = preferencesManager.cornerRadiusFlow.collectAsState(initial = 24)
+            val cornerRadiusState = preferencesManager.cornerRadiusFlow.collectAsStateWithLifecycle(initialValue = 24)
             val cornerRadius = cornerRadiusState.value
             val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
             val motionScheme = MaterialTheme.motionScheme
@@ -133,6 +134,7 @@ class InspectActivity : ComponentActivity() {
 
                         Scaffold(
                             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+                            contentWindowInsets = WindowInsets.safeDrawing,
                             topBar = {
                                 CenterAlignedTopAppBar(
                                     title = { 
@@ -180,7 +182,7 @@ class InspectActivity : ComponentActivity() {
                                             Icon(Icons.Default.Bookmark, stringResource(R.string.action_saved), modifier = Modifier.padding(end = 12.dp), tint = MaterialTheme.colorScheme.primary)
                                         }
                                     },
-                                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                                    colors = TopAppBarDefaults.topAppBarColors(
                                         containerColor = Color.Transparent,
                                         scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                                     ),
@@ -244,7 +246,10 @@ fun SaveAddressDialog(
         onDismissRequest = onDismiss,
         title = { Text("Зберегти адресу") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.imePadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { 
