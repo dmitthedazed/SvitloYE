@@ -10,7 +10,6 @@
             const s = params.get('s');
             const a = params.get('a');
             
-            // Якщо є параметри для імпорту графіка
             if (s && a) {
                 document.getElementById('content-landing').style.display = 'none';
                 document.getElementById('content-redirect').style.display = 'block';
@@ -19,14 +18,28 @@
                 for (const [key, value] of params) {
                     deepLink += key + "=" + encodeURIComponent(value) + "&";
                 }
+                deepLink = deepLink.slice(0, -1);
                 
-                // Спроба відкрити додаток
-                window.location.href = deepLink.slice(0, -1);
+                // Прив'язуємо посилання до кнопки на випадок, якщо авто-перехід заблокує браузер
+                document.getElementById('btn-open-app').href = deepLink;
 
-                // Якщо додаток не встановлено, через секунду відкриваємо сторінку в Google Play
-                setTimeout(function() {
+                // Таймер для переходу в Google Play (збільшено до 2.5 сек)
+                let redirectTimeout = setTimeout(function() {
                     window.location.href = "https://play.google.com/store/apps/details?id=com.occaecat.svitloye";
-                }, 1000);
+                }, 2500);
+
+                // Якщо додаток відкрився, браузер піде у фоновий режим. Тоді скасовуємо перехід в Google Play.
+                document.addEventListener('visibilitychange', function() {
+                    if (document.hidden || document.visibilityState === 'hidden') {
+                        clearTimeout(redirectTimeout);
+                    }
+                });
+                window.addEventListener('pagehide', function() {
+                    clearTimeout(redirectTimeout);
+                });
+
+                // Спроба автоматично відкрити додаток
+                window.location.href = deepLink;
             }
         };
     </script>
@@ -64,7 +77,7 @@
             margin-bottom: 10px;
         }
         h1 span {
-            color: #ffb300; /* Жовтий колір лампочки */
+            color: #ffb300;
         }
         p {
             color: #555;
@@ -94,16 +107,22 @@
             font-size: 18px; 
             font-weight: 600;
             display: inline-block;
-            margin-top: 20px;
+            margin-top: 10px;
             transition: background 0.3s;
-            box-shadow: 0 4px 6px rgba(0,123,255,0.2);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .btn:hover {
             background: #0056b3;
         }
+        .btn-green {
+            background: #28a745;
+        }
+        .btn-green:hover {
+            background: #218838;
+        }
         #content-redirect {
             display: none;
-            padding-top: 100px;
+            padding: 50px 20px;
         }
         .footer {
             margin-top: 40px;
@@ -116,9 +135,10 @@
     <!-- Сторінка редиректу (для Deep Links) -->
     <div id="content-redirect">
         <h1>СвітлоЄ! 💡</h1>
-        <p>Намагаємось відкрити розклад у додатку...</p>
-        <p>Якщо нічого не відбувається, переконайтеся, що додаток встановлено.</p>
-        <a href="https://play.google.com/store/apps/details?id=com.occaecat.svitloye" class="btn">Завантажити з Google Play</a>
+        <p>Завантажуємо розклад...</p>
+        <p style="font-size: 14px; color: #888;">Якщо нічого не відбувається, натисніть кнопку нижче:</p>
+        <a id="btn-open-app" href="#" class="btn" style="margin-bottom: 20px;">⚡ Відкрити в додатку</a><br>
+        <a href="https://play.google.com/store/apps/details?id=com.occaecat.svitloye" class="btn btn-green">Завантажити з Google Play</a>
     </div>
 
     <!-- Лендінг (для звичайних відвідувачів) -->
