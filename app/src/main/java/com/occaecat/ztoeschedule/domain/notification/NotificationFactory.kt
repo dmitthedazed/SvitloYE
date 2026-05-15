@@ -52,6 +52,7 @@ class NotificationFactory @Inject constructor(
     companion object {
         private const val TAG = "NotificationFactory"
         private const val PROMOTED_MIN_SDK = 36
+        private const val FULL_DAY_MS = 24 * 60 * 60 * 1000L
     }
 
     /**
@@ -120,6 +121,11 @@ class NotificationFactory @Inject constructor(
     ): Notification {
         Log.i(TAG, ">>> createStatus for $address (requested style=$style, status=${current.status})")
 
+        if (isAllDayAvailableStatus(current, schedules)) {
+            Log.i(TAG, "All-day available status detected, using static notification without live progress")
+            return createAllDayAvailableNotification(address)
+        }
+
         // Automatically downgrade style if not supported
         val actualStyle = when {
             style == StatusNotificationStyle.PROMOTED && Build.VERSION.SDK_INT >= PROMOTED_MIN_SDK -> {
@@ -181,6 +187,39 @@ class NotificationFactory @Inject constructor(
         
         Log.i(TAG, "<<< SIMPLE notification created: progress=$progress")
         return notification
+    }
+
+    /**
+     * Static foreground notification for days without planned outages.
+     *
+     * It intentionally does not use chronometer, progress, or promoted Live Update APIs.
+     */
+    private fun createAllDayAvailableNotification(
+        address: String
+    ): Notification {
+        Log.i(TAG, ">>> createAllDayAvailableNotification for $address")
+
+        val pendingIntent = getPendingIntentToApp()
+        val refreshPendingIntent = getRefreshPendingIntent()
+        val title = context.getString(R.string.notif_status_light_stays_on)
+        val message = context.getString(R.string.notif_message_address, address)
+
+        return NotificationCompat.Builder(context, NotificationHelper.CHANNEL_STATUS_ID)
+            .setSmallIcon(R.drawable.ic_bolt)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setUsesChronometer(false)
+            .setProgress(0, 0, false)
+            .setColor(context.getColor(R.color.widget_power_on))
+            .setContentIntent(pendingIntent)
+            .addAction(R.drawable.ic_bolt, context.getString(R.string.notif_action_refresh), refreshPendingIntent)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .build()
     }
 
     /**
@@ -404,6 +443,30 @@ class NotificationFactory @Inject constructor(
         val message = context.getString(R.string.notif_message_format, remainingText, address)
 
         return Triple(title, message, progress)
+    }
+
+    private fun isAllDayAvailableStatus(
+        current: GroupedSchedule,
+        schedules: List<GroupedSchedule>
+    ): Boolean {
+        if (current.status != com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available) {
+            return false
+        }
+
+        if (current.startTime == "00:00" && current.endMs - current.startMs >= FULL_DAY_MS) {
+            return true
+        }
+
+        val currentDaySchedules = schedules.filter { it.date == current.date }
+        if (currentDaySchedules.isEmpty() || currentDaySchedules.any {
+                it.status != com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
+            }) {
+            return false
+        }
+
+        return currentDaySchedules.any {
+            it.startTime == "00:00" && it.endMs - it.startMs >= FULL_DAY_MS
+        }
     }
 
     /**

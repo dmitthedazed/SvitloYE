@@ -33,9 +33,11 @@ import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.onFocusChanged
+import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.data.model.*
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
@@ -166,7 +168,6 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
                         isSel = isS, 
                         index = idx,
                         totalCount = list.size,
-                        onDelete = { dId = addr.id }, 
                         onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(addr) },
                         modifier = Modifier.graphicsLayer { translationY = if (isD) dragOff else 0f; scaleX = scale; scaleY = scale; this.alpha = alpha }
                             .pointerInput(addr.id) {
@@ -207,7 +208,6 @@ private fun AddressItem(
     isSel: Boolean, 
     index: Int,
     totalCount: Int,
-    onDelete: () -> Unit, 
     onClick: () -> Unit, 
     modifier: Modifier = Modifier
 ) {
@@ -249,12 +249,14 @@ private fun AddressItem(
             .semantics { onClick(label = "проглянути", action = { onClick(); true }) },
         shape = shape,
         color = containerColor,
+        tonalElevation = if (isSel || isP) 4.dp else 2.dp,
+        shadowElevation = if (isPressed) 8.dp else 3.dp,
         border = if (isSel) BorderStroke(1.dp, colorScheme.primary.copy(alpha = 0.5f)) else null
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    modifier = Modifier.size(44.dp), 
+                    modifier = Modifier.size(52.dp), 
                     shape = CircleShape, 
                     color = if(isP) colorScheme.primary else colorScheme.primaryContainer.copy(alpha = 0.4f)
                 ) { 
@@ -262,12 +264,12 @@ private fun AddressItem(
                         Icon(
                             imageVector = getIconForName(a.iconName), 
                             contentDescription = null, 
-                            modifier = Modifier.size(24.dp), 
+                            modifier = Modifier.size(28.dp), 
                             tint = if(isP) colorScheme.onPrimary else colorScheme.onPrimaryContainer
                         ) 
                     } 
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) { 
                     Text(
                         text = a.name, 
@@ -281,17 +283,6 @@ private fun AddressItem(
                         color = onContainerColor.copy(alpha = 0.8f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    ) 
-                }
-                IconButton(
-                    onClick = onDelete, 
-                    modifier = Modifier.size(40.dp)
-                ) { 
-                    Icon(
-                        imageVector = Icons.Default.DeleteOutline, 
-                        contentDescription = "Видалити ${a.name}",
-                        tint = if (isSel || isP) onContainerColor else colorScheme.error.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp)
                     ) 
                 }
             }
@@ -309,29 +300,53 @@ private fun AddressItem(
             ) { 
                 Surface(
                     color = onContainerColor.copy(alpha = 0.1f),
-                    shape = CircleShape
+                    shape = CircleShape,
+                    tonalElevation = 1.dp
                 ) {
-                    Text(
-                        text = "${a.cherga}.${a.pidcherga}",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = onContainerColor
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = onContainerColor
+                        )
+                        Text(
+                            text = "${a.cherga}.${a.pidcherga}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = onContainerColor
+                        )
+                    }
                 }
                 
                 if (isP) { 
                     Surface(
                         color = colorScheme.primary,
-                        shape = CircleShape
+                        shape = CircleShape,
+                        tonalElevation = 2.dp
                     ) {
-                        Text(
-                            text = "Головна", 
-                            style = MaterialTheme.typography.labelSmall, 
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            color = colorScheme.onPrimary
-                        ) 
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = colorScheme.onPrimary
+                            )
+                            Text(
+                                text = "Головна", 
+                                style = MaterialTheme.typography.labelSmall, 
+                                fontWeight = FontWeight.Bold,
+                                color = colorScheme.onPrimary
+                            )
+                        }
                     }
                 } 
             }
@@ -350,6 +365,11 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, nowMs: Lo
         ScheduleStatus.Probable -> colorScheme.tertiary
         else -> colorScheme.primary 
     }
+    val onStatusColor = when(s.status) {
+        ScheduleStatus.Outage -> colorScheme.onError
+        ScheduleStatus.Probable -> colorScheme.onTertiary
+        else -> colorScheme.onPrimary
+    }
     
     val animatedStatusColor by animateColorAsState(statusColor, label = "sc")
     val progress = remember(s, nowMs) { 
@@ -357,47 +377,94 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, nowMs: Lo
         if (d <= 0) 0f else ((nowMs - s.startMs).toFloat() / d.toFloat()).coerceIn(0f, 1f) 
     }
     val animatedProgress by animateFloatAsState(progress, label = "p")
+    val hideLiveTiming = s.status == ScheduleStatus.Available &&
+        s.startTime == "00:00" &&
+        s.endMs - s.startMs >= FULL_DAY_MS
+    val statusText = if (hideLiveTiming) stringResource(R.string.address_status_light_stays_on) else s.displayText
+    val statusIcon = when (s.status) {
+        ScheduleStatus.Available -> Icons.Default.CheckCircle
+        ScheduleStatus.Probable -> Icons.Default.WarningAmber
+        else -> Icons.Default.FlashOff
+    }
     
-    Column(modifier = modifier.fillMaxWidth().testTag("status_info_section")) {
-        Row(verticalAlignment = Alignment.CenterVertically) { 
-            Box(
-                Modifier
-                    .size(8.dp)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(animatedStatusColor)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = s.displayText, 
-                style = MaterialTheme.typography.labelLarge, 
-                color = contentColor,
-                fontWeight = FontWeight.Bold, 
-                maxLines = 1, 
-                overflow = TextOverflow.Ellipsis, 
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "До ${TimeUtils.formatToSystemTime(context, s.endTime)}", 
-                style = MaterialTheme.typography.bodySmall, 
-                color = contentColor,
-                maxLines = 1
-            ) 
+    Surface(
+        modifier = modifier.fillMaxWidth().testTag("status_info_section"),
+        shape = MaterialTheme.shapes.large,
+        color = animatedStatusColor.copy(alpha = if (hideLiveTiming) 0.16f else 0.1f),
+        tonalElevation = if (hideLiveTiming) 2.dp else 1.dp
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(32.dp),
+                    shape = CircleShape,
+                    color = animatedStatusColor,
+                    tonalElevation = 2.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = onStatusColor
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = contentColor,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!hideLiveTiming) {
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        color = contentColor.copy(alpha = 0.1f),
+                        shape = CircleShape
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = contentColor
+                            )
+                            Text(
+                                text = "До ${TimeUtils.formatToSystemTime(context, s.endTime)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = contentColor,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+            if (!hideLiveTiming) {
+                Spacer(Modifier.height(10.dp))
+                LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape),
+                    color = animatedStatusColor,
+                    trackColor = contentColor.copy(alpha = 0.12f),
+                    strokeCap = StrokeCap.Round
+                )
+            }
         }
-        Spacer(Modifier.height(8.dp))
-        // High contrast progress bar
-        LinearProgressIndicator(
-            progress = { animatedProgress }, 
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(CircleShape), 
-            color = animatedStatusColor, 
-            trackColor = contentColor.copy(alpha = 0.12f), // Standard MD3 alpha
-            strokeCap = StrokeCap.Round
-        )
     }
 }
+
+private const val FULL_DAY_MS = 24 * 60 * 60 * 1000L
 
 @Composable
 private fun rememberNowMs(tickMs: Long): Long {
