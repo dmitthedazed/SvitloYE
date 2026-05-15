@@ -125,6 +125,16 @@ fun HomeTab(
         }
     }
     val groupedByDate = remember(groupedSchedule) { groupedSchedule.groupBy { it.date } }
+    val allDayAvailableDates = remember(schedules, groupedSchedule) {
+        findAllDayAvailableDates(schedules, groupedSchedule)
+    }
+    val todayDate = remember(currentTimeMs) { formatScheduleDate(currentTimeMs) }
+    val isAllDayAvailableToday = remember(allDayAvailableDates, todayDate) {
+        todayDate in allDayAvailableDates
+    }
+    val visibleGroupedByDate = remember(groupedByDate, allDayAvailableDates) {
+        groupedByDate.filterKeys { it !in allDayAvailableDates }
+    }
     
     // Bottom Sheet State
     var selectedGroupForMenu by remember { mutableStateOf<GroupedSchedule?>(null) }
@@ -175,6 +185,7 @@ fun HomeTab(
                         activeGroup = activeGroup, 
                         currentStatus = currentStatus, 
                         groupedSchedule = groupedSchedule,
+                        isAllDayAvailableToday = isAllDayAvailableToday,
                         cherga = cherga,
                         pidcherga = pidcherga,
                         onClick = {
@@ -227,7 +238,7 @@ fun HomeTab(
                     }
                 }
 
-                groupedByDate.forEach { (date, items) ->
+                visibleGroupedByDate.forEach { (date, items) ->
                     stickyHeader(key = date, contentType = "header") {
                         Surface(
                             modifier = Modifier.fillMaxWidth().semantics { heading() }, 
@@ -351,6 +362,7 @@ private fun CurrentStatusCard(
     activeGroup: GroupedSchedule?,
     currentStatus: Schedule?,
     groupedSchedule: List<GroupedSchedule>,
+    isAllDayAvailableToday: Boolean,
     cherga: Int,
     pidcherga: Int,
     onClick: () -> Unit,
@@ -359,6 +371,7 @@ private fun CurrentStatusCard(
     val status = activeGroup?.status ?: currentStatus?.status
     val hasElectricity = status == ScheduleStatus.Available
     val isWarning = status == ScheduleStatus.Probable
+    val hideLiveTiming = hasElectricity && isAllDayAvailableToday
     
     val containerColorByState = when {
         isWarning -> MaterialTheme.colorScheme.tertiaryContainer
@@ -447,56 +460,90 @@ private fun CurrentStatusCard(
                 ScheduleStatus.Probable -> "Можливе відключення"
                 else -> "Електроенергія відсутня"
             }
-            Icon(
-                imageVector = statusIcon,
-                contentDescription = statusDescription,
-                modifier = Modifier.size(statusIconSize).graphicsLayer {
-                    scaleX = pulseScale
-                    scaleY = pulseScale
-                }
-            )
-            Spacer(Modifier.height(if (displayMode == com.occaecat.ztoeschedule.data.model.DisplayMode.Compact) 8.dp else 16.dp))
-            Text(
-                text = activeGroup?.displayText ?: currentStatus?.displayText ?: stringResource(R.string.home_no_data),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            if (activeGroup != null) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(Modifier.height(8.dp))
-                    val nextGroup = remember(activeGroup, groupedSchedule) {
-                        val idx = groupedSchedule.indexOf(activeGroup)
-                        if (idx != -1 && idx < groupedSchedule.size - 1) groupedSchedule[idx + 1] else null
-                    }
-                    
-                    val noOutagesExpected = remember(cherga, pidcherga, hasElectricity, activeGroup, groupedSchedule) {
-                        (cherga == 0 && pidcherga == 0) || (hasElectricity && groupedSchedule.none { 
-                            it.status != ScheduleStatus.Available && it.startMs > activeGroup.startMs 
-                        })
-                    }
+            val statusText = activeGroup?.displayText ?: currentStatus?.displayText ?: stringResource(R.string.home_no_data)
 
-                    if (noOutagesExpected) {
+            if (hideLiveTiming) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = statusDescription,
+                        modifier = Modifier.size(statusIconSize)
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Text(
-                            text = "За цією адресою відключення не передбачаються",
+                            text = statusText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = stringResource(R.string.home_all_day_available),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.alpha(0.8f)
-                        )
-                    } else {
-                        val nextChangeTime = if (nextGroup != null) TimeUtils.formatToSystemTime(LocalContext.current, nextGroup.startTime) else "—"
-                        Text(
-                            text = if (hasElectricity) stringResource(R.string.home_next_outage, nextChangeTime) else stringResource(R.string.home_next_restore, nextChangeTime),
-                            style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.alpha(0.8f)
                         )
                     }
-                    
-                    Spacer(Modifier.height(24.dp))
-                    LiveProgressBar(activeGroup, contentColor, hasElectricity)
+                }
+            } else {
+                Icon(
+                    imageVector = statusIcon,
+                    contentDescription = statusDescription,
+                    modifier = Modifier.size(statusIconSize).graphicsLayer {
+                        scaleX = pulseScale
+                        scaleY = pulseScale
+                    }
+                )
+                Spacer(Modifier.height(if (displayMode == com.occaecat.ztoeschedule.data.model.DisplayMode.Compact) 8.dp else 16.dp))
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                if (activeGroup != null) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Spacer(Modifier.height(8.dp))
+                        val nextGroup = remember(activeGroup, groupedSchedule) {
+                            val idx = groupedSchedule.indexOf(activeGroup)
+                            if (idx != -1 && idx < groupedSchedule.size - 1) groupedSchedule[idx + 1] else null
+                        }
+
+                        val noOutagesExpected = remember(cherga, pidcherga, hasElectricity, activeGroup, groupedSchedule) {
+                            (cherga == 0 && pidcherga == 0) || (hasElectricity && groupedSchedule.none {
+                                it.status != ScheduleStatus.Available && it.startMs > activeGroup.startMs
+                            })
+                        }
+
+                        if (noOutagesExpected) {
+                            Text(
+                                text = stringResource(R.string.home_no_outages_expected),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.alpha(0.8f)
+                            )
+                        } else {
+                            val nextChangeTime = if (nextGroup != null) TimeUtils.formatToSystemTime(LocalContext.current, nextGroup.startTime) else "—"
+                            Text(
+                                text = if (hasElectricity) stringResource(R.string.home_next_outage, nextChangeTime) else stringResource(R.string.home_next_restore, nextChangeTime),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.alpha(0.8f)
+                            )
+                        }
+
+                        Spacer(Modifier.height(24.dp))
+                        LiveProgressBar(activeGroup, contentColor, hasElectricity)
+                    }
                 }
             }
         }
@@ -1042,6 +1089,80 @@ private fun ScheduleListItemSimple(
         }
     }
 }
+
+private fun findAllDayAvailableDates(
+    schedules: List<Schedule>,
+    groupedSchedule: List<GroupedSchedule>
+): Set<String> {
+    val datesFromRawSchedule = schedules
+        .groupBy { it.date }
+        .filterValues { isAllDayAvailable(it) }
+        .keys
+
+    val datesFromGroupedSchedule = groupedSchedule
+        .filter { it.status == ScheduleStatus.Available && it.startTime == "00:00" && it.durationHours >= 24 }
+        .map { it.date }
+
+    return datesFromRawSchedule + datesFromGroupedSchedule
+}
+
+private fun isAllDayAvailable(daySchedules: List<Schedule>): Boolean {
+    if (daySchedules.isEmpty() || daySchedules.any { it.status != ScheduleStatus.Available }) {
+        return false
+    }
+
+    val intervals = daySchedules
+        .mapNotNull { parseScheduleSpanToMinutes(it.span) }
+        .sortedBy { it.first }
+
+    if (intervals.isEmpty()) return false
+
+    var coveredUntil = 0
+    intervals.forEach { (start, end) ->
+        if (start > coveredUntil) return false
+        if (end > coveredUntil) coveredUntil = end
+        if (coveredUntil >= MINUTES_PER_DAY) return true
+    }
+
+    return coveredUntil >= MINUTES_PER_DAY
+}
+
+private fun parseScheduleSpanToMinutes(span: String): Pair<Int, Int>? {
+    val parts = span.split("-")
+    if (parts.size != 2) return null
+
+    val start = parseClockToMinutes(parts[0].trim()) ?: return null
+    val endRaw = parts[1].trim()
+    val parsedEnd = parseClockToMinutes(endRaw) ?: return null
+    val end = when {
+        endRaw == "24:00" -> MINUTES_PER_DAY
+        parsedEnd == 0 && start == 0 -> MINUTES_PER_DAY
+        parsedEnd <= start -> parsedEnd + MINUTES_PER_DAY
+        else -> parsedEnd
+    }.coerceAtMost(MINUTES_PER_DAY)
+
+    return start to end
+}
+
+private fun parseClockToMinutes(time: String): Int? {
+    val parts = time.split(":")
+    if (parts.size != 2) return null
+
+    val hours = parts[0].toIntOrNull() ?: return null
+    val minutes = parts[1].toIntOrNull() ?: return null
+    if (hours !in 0..24 || minutes !in 0..59) return null
+    if (hours == 24 && minutes != 0) return null
+
+    return if (hours == 24) MINUTES_PER_DAY else hours * 60 + minutes
+}
+
+private fun formatScheduleDate(timeMs: Long): String {
+    return SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).apply {
+        timeZone = TimeZone.getTimeZone("Europe/Kyiv")
+    }.format(Date(timeMs))
+}
+
+private const val MINUTES_PER_DAY = 24 * 60
 
 private fun addToCalendar(context: android.content.Context, group: GroupedSchedule, address: String) {
     try {

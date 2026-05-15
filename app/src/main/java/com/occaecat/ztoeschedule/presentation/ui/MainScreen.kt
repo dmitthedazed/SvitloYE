@@ -202,6 +202,7 @@ fun MainScreen(
         BottomNavItem("addresses", stringResource(R.string.nav_addresses), Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
         BottomNavItem("more", stringResource(R.string.nav_more), Icons.Filled.Menu, Icons.Outlined.Menu)
     )
+    val bottomNavItemShape = RoundedCornerShape(percent = 50)
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -406,8 +407,10 @@ fun MainScreen(
                                                 }
                                             }
                                         },
-                                        shapes = ToggleButtonDefaults.shapes(CircleShape),
-                                        modifier = Modifier.height(48.dp) // Further reduced height
+                                        shapes = ToggleButtonDefaults.shapes(bottomNavItemShape),
+                                        modifier = Modifier
+                                            .height(48.dp)
+                                            .clip(bottomNavItemShape)
                                     ) {
                                         val icon = if (item.route == "notifications" && uiState.infoMessages.isNotEmpty()) {
                                             if (isSelected) item.selectedIcon else item.unselectedIcon

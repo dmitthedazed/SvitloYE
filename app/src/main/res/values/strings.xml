@@ -57,6 +57,9 @@
     <string name="home_next_restore">⏰ Увімкнення о %1$s</string>
     <string name="home_time_to_outage">До відключення: %1$s</string>
     <string name="home_time_to_restore">До увімкнення: %1$s</string>
+    <string name="home_all_day_available">Сьогодні світло є весь день</string>
+    <string name="home_no_outages_expected">За цією адресою відключення не передбачаються</string>
+    <string name="address_status_light_stays_on">Світло є і буде</string>
     <string name="home_status_now">Зараз</string>
     <string name="home_page_indicator">%1$d з %2$d</string>
     <string name="home_menu">Меню</string>
@@ -146,9 +149,11 @@
     <string name="notif_status_power_on">Світло є</string>
     <string name="notif_status_probable">Можливо</string>
     <string name="notif_status_outage">Відключення</string>
+    <string name="notif_status_light_stays_on">🟢 Світло є і буде</string>
     <string name="notif_title_format">%1$s %2$s • До %3$s</string>
     <string name="notif_remaining_hm">%1$d год %2$d хв</string>
     <string name="notif_remaining_m">%1$d хв</string>
+    <string name="notif_message_address">📍 %1$s</string>
     <string name="notif_message_format">Залишилось: %1$s
 📍 %2$s</string>
 

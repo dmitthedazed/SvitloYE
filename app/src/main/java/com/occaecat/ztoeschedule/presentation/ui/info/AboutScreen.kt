@@ -2,6 +2,7 @@ package com.occaecat.ztoeschedule.presentation.ui.info
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -39,7 +41,7 @@ fun AboutScreen(
         topBar = {
             LargeFlexibleTopAppBar(
                 title = { Text("Про додаток", fontFamily = robotoFlexTopBar) },
-                subtitle = { Text("СвітлоЄ? Житомир") },
+                subtitle = { Text("СвітлоЄ?") },
                 navigationIcon = {
                     FilledTonalIconButton(
                         onClick = onBack,
@@ -74,31 +76,27 @@ fun AboutScreen(
                 SettingsGroupItem(
                     index = 0,
                     totalCount = 2,
-                    headlineContent = { Text("СвітлоЄ? Житомир", fontWeight = FontWeight.Bold) },
+                    headlineContent = { Text("СвітлоЄ?", fontWeight = FontWeight.Bold) },
                     supportingContent = { Text("Версія 1.2.0") },
                     leadingContent = {
-                        Box(
+                        Image(
+                            painter = painterResource(R.drawable.about_app_icon),
+                            contentDescription = null,
                             modifier = Modifier
                                 .size(48.dp)
-                                .background(
-                                    colorScheme.primaryContainer,
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_launcher_foreground),
-                                contentDescription = null,
-                                tint = Color.Unspecified,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
+                                .clip(CircleShape)
+                        )
                     },
                     trailingContent = {
                         FilledTonalIconButton(
                             onClick = { uriHandler.openUri("https://github.com/occaecat/ZTOESchedule") }
                         ) {
-                            Icon(Icons.Default.Code, contentDescription = "Репозиторій", modifier = Modifier.size(20.dp))
+                            Icon(
+                                painter = painterResource(R.drawable.ic_brand_github),
+                                contentDescription = "Репозиторій",
+                                tint = Color.Unspecified,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     },
                     onClick = {}
@@ -109,7 +107,7 @@ fun AboutScreen(
                 SettingsGroupItem(
                     index = 1,
                     totalCount = 2,
-                    headlineContent = { Text("Дмитро Савін", fontWeight = FontWeight.Bold) },
+                    headlineContent = { Text("Дмитрий", fontWeight = FontWeight.Bold) },
                     supportingContent = { Text("Розробник") },
                     leadingContent = {
                         Box(
@@ -133,12 +131,22 @@ fun AboutScreen(
                             FilledTonalIconButton(
                                 onClick = { uriHandler.openUri("https://github.com/dmitthedazed") }
                             ) {
-                                Icon(Icons.Default.Code, contentDescription = "GitHub", modifier = Modifier.size(18.dp))
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_brand_github),
+                                    contentDescription = "GitHub",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                             FilledTonalIconButton(
                                 onClick = { uriHandler.openUri("https://www.linkedin.com/in/dmitthedazed") }
                             ) {
-                                Icon(Icons.Default.Work, contentDescription = "LinkedIn", modifier = Modifier.size(18.dp))
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_brand_linkedin),
+                                    contentDescription = "LinkedIn",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     },
@@ -155,7 +163,14 @@ fun AboutScreen(
                     totalCount = 2,
                     headlineContent = { Text("Monobank") },
                     supportingContent = { Text("Підтримати розробку") },
-                    leadingContent = { Icon(Icons.Default.Coffee, null, tint = colorScheme.tertiary) },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_brand_monobank),
+                            contentDescription = null,
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, null, modifier = Modifier.size(16.dp)) },
                     onClick = { uriHandler.openUri("https://send.monobank.ua/2AMdpReyqQ") }
                 )
@@ -166,7 +181,14 @@ fun AboutScreen(
                     totalCount = 2,
                     headlineContent = { Text("Privat24") },
                     supportingContent = { Text("Підтримати розробку") },
-                    leadingContent = { Icon(Icons.Default.AccountBalanceWallet, null, tint = colorScheme.tertiary) },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_brand_privat24),
+                            contentDescription = null,
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, null, modifier = Modifier.size(16.dp)) },
                     onClick = { uriHandler.openUri("https://www.privat24.ua/send/i3nk5") }
                 )
@@ -192,7 +214,14 @@ fun AboutScreen(
                     totalCount = 2,
                     headlineContent = { Text("ztoe.com.ua") },
                     supportingContent = { Text("Джерело даних") },
-                    leadingContent = { Icon(Icons.Default.Language, null, tint = colorScheme.primary) },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_brand_ztoe),
+                            contentDescription = null,
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
                     trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, null, modifier = Modifier.size(16.dp)) },
                     onClick = { uriHandler.openUri("https://www.ztoe.com.ua") }
                 )
