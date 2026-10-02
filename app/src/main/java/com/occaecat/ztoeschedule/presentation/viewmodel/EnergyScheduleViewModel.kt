@@ -9,15 +9,20 @@ import com.occaecat.ztoeschedule.data.model.*
 import com.occaecat.ztoeschedule.data.repository.EnergyRepository
 import com.occaecat.ztoeschedule.data.repository.ParsedHouseNumber
 import com.occaecat.ztoeschedule.data.repository.ConsumerCategory
+import com.occaecat.ztoeschedule.data.repository.isSameHouse
+import com.occaecat.ztoeschedule.analytics.AddressAddMethod
+import com.occaecat.ztoeschedule.analytics.AnalyticsManager
+import com.occaecat.ztoeschedule.analytics.ErrorCategory
 import com.occaecat.ztoeschedule.domain.GroupedSchedule
 import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import com.occaecat.ztoeschedule.domain.model.getUserMessage
 import com.occaecat.ztoeschedule.domain.model.toAppError
-import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
-import com.occaecat.ztoeschedule.domain.notification.PowerStatusService
+import com.occaecat.ztoeschedule.domain.notification.NotificationSync
+import com.occaecat.ztoeschedule.domain.notification.StatusNotificationService
 import com.occaecat.ztoeschedule.domain.time.TimeProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -47,16 +52,20 @@ class EnergyScheduleViewModel @Inject constructor(
     private val networkObserver: com.occaecat.ztoeschedule.domain.NetworkObserver,
     private val timeProvider: TimeProvider,
     private val savedStateHandle: SavedStateHandle,
-    private val scheduledAlarmManager: com.occaecat.ztoeschedule.domain.notification.ScheduledAlarmManager,
+    private val analytics: AnalyticsManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     companion object {
         private const val OFFLINE_REFRESH_DEBOUNCE_MS = 30_000L
+        private const val STATUS_MAX_WAIT_MS = 10 * 60_000L
     }
 
     private val _uiState = MutableStateFlow(UiState(isLoading = true))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
     private var lastOfflineRefreshMs: Long = 0L
+    private var refreshJob: Job? = null
+    private var inspectJob: Job? = null
+    private var statusJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -79,10 +88,11 @@ class EnergyScheduleViewModel @Inject constructor(
             // 3. Mark initialization as complete so UI shows cache content
             _uiState.update { it.copy(isInitialLoadComplete = true) }
 
-            // 4. Trigger network refresh in background (don't await it here)
-            launch {
-                performRefreshAllSchedules(addrs, allowOffline = false)
-            }
+            // 4. Know the real connectivity before the first refresh, otherwise it always
+            //    takes the offline path and the network load happens only on a second pass
+            val initiallyConnected = networkObserver.isConnected.first()
+            _uiState.update { it.copy(isConnected = initiallyConnected) }
+            refreshAllSchedules(addrs, allowOffline = false)
 
             // 5. Start background observers
             val restoredInspectId = savedStateHandle.get<String>("inspected_id")
@@ -121,7 +131,9 @@ class EnergyScheduleViewModel @Inject constructor(
         addressesOverride: List<SavedAddress>? = null,
         allowOffline: Boolean = false
     ) {
-        viewModelScope.launch {
+        // A newer refresh supersedes the running one, so an older result never overwrites a newer one
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             performRefreshAllSchedules(addressesOverride, allowOffline)
         }
     }
@@ -158,7 +170,11 @@ class EnergyScheduleViewModel @Inject constructor(
         // If connected, perform network update
         if (_uiState.value.isConnected) {
             viewModelScope.launch {
-                repository.getMessages().onSuccess { messages ->
+                repository.getMessages().onSuccess { fetched ->
+                    // With the demo schedule added, show matching demo announcements too
+                    val messages = if (sortedAddresses.any { com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.isPreviewLocation(it.cherga, it.pidcherga) }) {
+                        com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generatePreviewMessages()
+                    } else fetched
                     _uiState.update { it.copy(infoMessages = messages, formattedMessage = formatMessages(messages)) }
                 }
             }
@@ -176,6 +192,7 @@ class EnergyScheduleViewModel @Inject constructor(
             }
             
             _uiState.update { it.copy(addressDataList = networkResults, isLoading = false) }
+            if (networkResults.any { it.isOffline }) analytics.logError(ErrorCategory.NETWORK_ERROR)
             refreshAllStatuses(sortedAddresses)
         } else {
             // Offline or cache-only mode
@@ -209,24 +226,10 @@ class EnergyScheduleViewModel @Inject constructor(
             if (result.isSuccess) {
                 val data = result.getOrThrow()
                 val groupedSchedule = ScheduleMapper.getGroupedSchedule(data.schedules)
-                val alarmAddress = Address(
-                    id = address.addressId,
-                    name = address.addressName,
-                    cherga = address.cherga,
-                    pidcherga = address.pidcherga
-                )
-                if (isPrimary) {
-                    val maxHoursAhead = if (useCacheOnly) 2 else 24
-                    scheduledAlarmManager.scheduleAlarmsForAddress(
-                        address = alarmAddress,
-                        schedules = groupedSchedule,
-                        maxHoursAhead = maxHoursAhead
-                    )
-                } else {
-                    scheduledAlarmManager.cancelAlarmsForAddress(alarmAddress)
-                }
+                // Fresh primary schedule is in the cache now: replan alerts from it
+                if (isPrimary && !useCacheOnly) NotificationSync.syncNow(context, fetch = false)
 
-                val cachedUpdated = repository.getCacheLastUpdated(address.cherga, address.pidcherga)
+                val cachedUpdated = repository.getCacheLastUpdated(address.cherga, address.pidcherga)?.takeIf { it > 0 }
                 val lastUpdateTime = cachedUpdated?.let { formatUpdateTime(it) }
                     ?: if (!useCacheOnly) formatUpdateTime(timeProvider.now()) else ""
 
@@ -234,10 +237,11 @@ class EnergyScheduleViewModel @Inject constructor(
                     address,
                     data.schedules,
                     groupedSchedule,
-                    repository.getCurrentStatus(data.schedules),
-                    useCacheOnly,
-                    false,
-                    lastUpdateTime
+                    repository.getCurrentStatus(data.schedules, timeProvider.now()),
+                    // Network failures fall back to the cache too: show them as offline
+                    isOffline = useCacheOnly || data.fromCache,
+                    isLoading = false,
+                    lastUpdateTime = lastUpdateTime
                 )
             } else {
                 _uiState.value.addressDataList.find { it.address.id == address.id }
@@ -245,6 +249,19 @@ class EnergyScheduleViewModel @Inject constructor(
                     ?: AddressDataState(address, isOffline = true)
             }
         }
+
+    /**
+     * Other screens (settings, add-address activity) write addresses straight to storage,
+     * so re-read on resume and reload only when the list actually changed.
+     */
+    fun reloadAddressesIfChanged() {
+        viewModelScope.launch {
+            val addrs = withContext(Dispatchers.IO) {
+                repository.getSavedAddresses().sortedBy { it.priority }
+            }
+            if (addrs != _uiState.value.savedAddresses) loadSavedAddresses()
+        }
+    }
 
     fun loadSavedAddresses() {
         viewModelScope.launch {
@@ -327,30 +344,34 @@ class EnergyScheduleViewModel @Inject constructor(
 
 
 
+    /**
+     * Current status per address, recomputed from the loaded schedules at every period boundary
+     * so the list never shows a period that already ended.
+     */
     private fun refreshAllStatuses(addresses: List<SavedAddress>) {
+        statusJob?.cancel()
         if (addresses.isEmpty()) {
             _uiState.update { it.copy(addressStatuses = emptyMap()) }
             return
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            val statusMap = mutableMapOf<String, GroupedSchedule?>()
-            val nowMs = timeProvider.now()
-            val isConnected = _uiState.value.isConnected
-            addresses.forEach { address ->
-                val cached = _uiState.value.addressDataList.find { it.address.id == address.id }
-                if (cached != null && cached.groupedSchedule.isNotEmpty()) {
-                    statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(cached.groupedSchedule, nowMs)
-                } else if (isConnected) {
-                    repository.getSchedule(address.cherga, address.pidcherga)
-                        .onSuccess { schedules ->
-                            statusMap[address.id] = ScheduleMapper.getCurrentGroupedStatus(
-                                ScheduleMapper.getGroupedSchedule(schedules),
-                                nowMs
-                            )
-                        }
+        statusJob = viewModelScope.launch {
+            while (true) {
+                val nowMs = timeProvider.now()
+                val dataList = _uiState.value.addressDataList
+                val groupsById = addresses.associate { address ->
+                    address.id to dataList.find { it.address.id == address.id }?.groupedSchedule.orEmpty()
                 }
+                val statusMap = groupsById.mapValues { (_, groups) -> ScheduleMapper.getCurrentGroupedStatus(groups, nowMs) }
+                _uiState.update { it.copy(addressStatuses = statusMap) }
+
+                val nextBoundary = groupsById.values.flatten()
+                    .flatMap { listOf(it.startMs, it.endMs) }
+                    .filter { it > nowMs }
+                    .minOrNull()
+                val waitMs = ((nextBoundary ?: (nowMs + STATUS_MAX_WAIT_MS)) - nowMs + 500L)
+                    .coerceIn(1_000L, STATUS_MAX_WAIT_MS)
+                delay(waitMs)
             }
-            _uiState.update { it.copy(addressStatuses = statusMap) }
         }
     }
 
@@ -361,7 +382,7 @@ class EnergyScheduleViewModel @Inject constructor(
                 return@launch
             }
             // Check for duplicates by addressId (unique identifier)
-            if (repository.isAddressAlreadyAdded(aI)) {
+            if (repository.isAddressAlreadyAdded(aI, aN)) {
                 // Address already exists, show error
                 _uiState.update { it.copy(
                     isAddingNewAddress = false,
@@ -378,38 +399,27 @@ class EnergyScheduleViewModel @Inject constructor(
             )
             val resolved = resolveMissingAddressNames(address)
             repository.saveNewAddress(resolved)
+            analytics.logAddressAdded(AddressAddMethod.MANUAL)
             loadSavedAddresses()
             _uiState.update { it.copy(isAddingNewAddress = false) }
-            NotificationScheduler.runImmediateCheck(context)
+            NotificationSync.syncNow(context)
         }
     }
 
-    fun deleteSavedAddress(id: String) { viewModelScope.launch { repository.deleteAddress(id); loadSavedAddresses(); NotificationScheduler.runImmediateCheck(context) } }    
+    fun deleteSavedAddress(id: String) {
+        viewModelScope.launch {
+            repository.deleteAddress(id)
+            analytics.logAddressRemoved()
+            loadSavedAddresses()
+            NotificationSync.syncNow(context)
+        }
+    }    
     fun updateAddressesOrder(list: List<SavedAddress>) {
         viewModelScope.launch {
             repository.reorderAddresses(list)
-            val primary = list.firstOrNull()
-            if (primary != null) {
-                val cached = repository.getCachedScheduleWithMessages(primary.cherga, primary.pidcherga)
-                cached.onSuccess { data ->
-                    val grouped = ScheduleMapper.getGroupedSchedule(data.schedules)
-                    if (grouped.isNotEmpty()) {
-                        scheduledAlarmManager.scheduleAlarmsForAddress(
-                            address = Address(
-                                id = primary.addressId,
-                                name = primary.addressName,
-                                cherga = primary.cherga,
-                                pidcherga = primary.pidcherga
-                            ),
-                            schedules = grouped,
-                            maxHoursAhead = 2
-                        )
-                    }
-                }
-            }
             loadSavedAddresses()
-            PowerStatusService.requestImmediateRefresh(context)
-            NotificationScheduler.runImmediateCheck(context)
+            // Primary address may have changed: replan from cache right away
+            NotificationSync.syncNow(context, fetch = false)
         }
     }
 
@@ -441,7 +451,7 @@ class EnergyScheduleViewModel @Inject constructor(
             repository.saveNewAddress(demoAddress)
             loadSavedAddresses()
             _uiState.update { it.copy(infoMessage = "Додано демо-локацію для тестування") }
-            NotificationScheduler.runImmediateCheck(context)
+            NotificationSync.syncNow(context)
         }
     }
 
@@ -454,25 +464,20 @@ class EnergyScheduleViewModel @Inject constructor(
     private fun loadThemeSettings() {
         viewModelScope.launch { repository.getDisplayModeFlow().collect { v -> _uiState.update { it.copy(displayMode = v) } } }
         viewModelScope.launch { repository.getColorThemeFlow().collect { v -> _uiState.update { it.copy(colorTheme = v) } } }
-        viewModelScope.launch { repository.getCornerRadiusFlow().collect { v -> _uiState.update { it.copy(cornerRadius = v) } } }
         viewModelScope.launch { repository.getDynamicColorsFlow().collect { v -> _uiState.update { it.copy(dynamicColors = v) } } }
         viewModelScope.launch { repository.getIsAmoledFlow().collect { v -> _uiState.update { it.copy(isAmoled = v) } } }
     }
 
     fun setDisplayMode(m: DisplayMode) = viewModelScope.launch { repository.setDisplayMode(m) }
     fun setColorTheme(t: ColorTheme) = viewModelScope.launch { repository.setColorTheme(t) }
-    fun setCornerRadius(r: Int) = viewModelScope.launch { repository.setCornerRadius(r) }
     fun setDynamicColors(e: Boolean) = viewModelScope.launch { repository.setDynamicColors(e) }
     fun setIsAmoled(e: Boolean) = viewModelScope.launch { repository.setIsAmoled(e) }
     fun setNotificationsEnabled(e: Boolean) = viewModelScope.launch { repository.setNotificationsEnabled(e) }
     fun setStatusNotificationEnabled(e: Boolean) = viewModelScope.launch { 
         repository.setStatusNotificationEnabled(e)
+        analytics.logNotificationToggle(e)
         // Immediately start or stop the status notification service
-        if (e) {
-            com.occaecat.ztoeschedule.domain.notification.PowerStatusService.start(context)
-        } else {
-            com.occaecat.ztoeschedule.domain.notification.PowerStatusService.stop(context)
-        }
+        if (e) StatusNotificationService.start(context) else StatusNotificationService.stop(context)
     }
 
     
@@ -480,22 +485,15 @@ class EnergyScheduleViewModel @Inject constructor(
     fun cancelAddingAddress() { _uiState.update { it.copy(isAddingNewAddress = false) } }
     fun dismissTimeSyncWarning() { _uiState.update { it.copy(isTimeOutOfSync = false) } }
     
-    fun clearData() = viewModelScope.launch { 
-        repository.clearAllData()
-        // Reset state completely - flows in init will refresh automatically
-        _uiState.update { 
-            UiState(
-                isInitialLoadComplete = true  // Keep true so UI doesn't freeze
-            ) 
-        }
-    }
     fun setShowWidgetConfig(show: Boolean) { _uiState.update { it.copy(showWidgetConfig = show) } }
     fun setRequestedAddressId(id: String?) { _uiState.update { it.copy(requestedAddressId = id) } }
-    fun selectWidgetAddress(address: SavedAddress) { viewModelScope.launch { repository.setPrimaryAddress(address.id); loadSavedAddresses(); setShowWidgetConfig(false); NotificationScheduler.runImmediateCheck(context) } }
+    fun selectWidgetAddress(address: SavedAddress) { viewModelScope.launch { repository.setPrimaryAddress(address.id); loadSavedAddresses(); setShowWidgetConfig(false); NotificationSync.syncNow(context) } }
     fun startInspectingAddress(address: SavedAddress) {
         savedStateHandle["inspected_id"] = address.id
         _uiState.update { it.copy(inspectedAddress = address, isInspectingLoading = true) }
-        viewModelScope.launch {
+        // Switching quickly between addresses must not show the previous one's schedule
+        inspectJob?.cancel()
+        inspectJob = viewModelScope.launch {
             val useCacheOnly = !_uiState.value.isConnected
             val data = loadSingleAddressData(address, useCacheOnly, false)
             _uiState.update {
@@ -507,13 +505,16 @@ class EnergyScheduleViewModel @Inject constructor(
             }
         }
     }
-    fun stopInspectingAddress() { savedStateHandle["inspected_id"] = null; _uiState.update { it.copy(inspectedAddress = null) } }
+    fun stopInspectingAddress() {
+        inspectJob?.cancel()
+        savedStateHandle["inspected_id"] = null
+        _uiState.update { it.copy(inspectedAddress = null, isInspectingLoading = false) }
+    }
     
     fun isInspectedAddressSaved(): Boolean {
         val inspected = _uiState.value.inspectedAddress ?: return false
-        return _uiState.value.savedAddresses.any { 
-            it.streetId == inspected.streetId && it.addressId == inspected.addressId 
-        }
+        val houseName = inspected.addressName.ifBlank { inspected.name }
+        return _uiState.value.savedAddresses.any { it.isSameHouse(inspected.addressId, houseName) }
     }
 
     fun saveInspectedAddress(customName: String? = null, customIcon: String? = null) {
@@ -537,6 +538,7 @@ class EnergyScheduleViewModel @Inject constructor(
                 )
                 val resolved = resolveMissingAddressNames(newAddress)
                 repository.saveNewAddress(resolved)
+                analytics.logAddressAdded(AddressAddMethod.LINK)
                 loadSavedAddresses()
                 _uiState.update { it.copy(inspectedAddress = resolved, infoMessage = "Адресу збережено") }
             }
@@ -707,7 +709,6 @@ data class UiState(
     val lastLoadFailed: Boolean = false, val isOffline: Boolean = false, val showWidgetConfig: Boolean = false,
     val displayMode: DisplayMode = DisplayMode.Comfortable,
     val colorTheme: ColorTheme = ColorTheme.System,
-    val cornerRadius: Int = 24,
     val dynamicColors: Boolean = true,
     val isAmoled: Boolean = false,
     val inspectedAddress: SavedAddress? = null, val inspectedScheduleList: List<Schedule> = emptyList(),

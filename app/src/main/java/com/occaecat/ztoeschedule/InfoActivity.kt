@@ -17,6 +17,7 @@ import android.content.Intent
 import com.occaecat.ztoeschedule.presentation.ui.info.AboutScreen
 import com.occaecat.ztoeschedule.presentation.ui.info.FaqScreen
 import com.occaecat.ztoeschedule.ui.theme.SvitloYeZhytomyrTheme
+import com.occaecat.ztoeschedule.ui.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -33,15 +34,7 @@ class InfoActivity : ComponentActivity() {
         val type = intent.getStringExtra("type") ?: "about"
 
         setContent {
-            val colorThemeState = preferencesManager.colorThemeFlow.collectAsStateWithLifecycle(initialValue = ColorTheme.System)
-            val colorTheme = colorThemeState.value
-            val cornerRadiusState = preferencesManager.cornerRadiusFlow.collectAsStateWithLifecycle(initialValue = 24)
-            val cornerRadius = cornerRadiusState.value
-
-            SvitloYeZhytomyrTheme(
-                themePreference = colorTheme,
-                cornerRadius = cornerRadius
-            ) {
+            AppTheme(preferencesManager) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

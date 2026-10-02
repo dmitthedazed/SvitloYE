@@ -25,10 +25,13 @@ import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressPickerScreen
 import com.occaecat.ztoeschedule.presentation.ui.addresses.AddressPickerResult
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import com.occaecat.ztoeschedule.ui.theme.SvitloYeZhytomyrTheme
+import com.occaecat.ztoeschedule.ui.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class AddressPickerActivity : ComponentActivity() {
+    @javax.inject.Inject lateinit var preferencesManager: com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,10 +48,7 @@ class AddressPickerActivity : ComponentActivity() {
                 }
             }
 
-            SvitloYeZhytomyrTheme(
-                themePreference = uiState.colorTheme,
-                cornerRadius = uiState.cornerRadius
-            ) {
+            AppTheme(preferencesManager) {
                 // Handle back press gracefully
                 BackHandler {
                     setResult(Activity.RESULT_CANCELED)

@@ -9,11 +9,11 @@ import android.service.quicksettings.TileService
 import android.util.Log
 import com.occaecat.ztoeschedule.MainActivity
 import com.occaecat.ztoeschedule.R
-import com.occaecat.ztoeschedule.data.repository.EnergyRepository
-import com.occaecat.ztoeschedule.domain.ScheduleMapper
 import com.occaecat.ztoeschedule.domain.time.TimeProvider
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -23,19 +23,18 @@ import javax.inject.Inject
 /**
  * Quick Settings tile service that displays current power status.
  *
- * Displays:
+ * Displays, from the cached schedule of the primary address:
  * - STATE_ACTIVE (tile ON) if power is currently available
- * - STATE_INACTIVE (tile OFF) if power is off or unknown
- * - Label showing "Світло є" or "Світла немає"
+ * - STATE_INACTIVE (tile OFF) for an outage or a possible outage, each with its own label
+ * - STATE_UNAVAILABLE when the schedule doesn't cover the current moment
  * - Subtitle showing primary address name
  *
  * Updates:
  * - onStartListening() - when tile becomes visible
- * - onClick() from NotificationScheduler.updateTile()
+ * - requestTileUpdate() after notification sync and status changes
  *
  * Threading:
- * - Network operations run on IO dispatcher
- * - Tile updates run on main thread
+ * - Cache reads run on IO dispatcher
  */
 @AndroidEntryPoint
 class PowerStatusTileService : TileService() {
@@ -45,12 +44,13 @@ class PowerStatusTileService : TileService() {
     }
 
     @Inject
-    lateinit var repository: EnergyRepository
+    lateinit var controller: NotificationController
 
     @Inject
     lateinit var timeProvider: TimeProvider
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var updateJob: Job? = null
 
     override fun onStartListening() {
         super.onStartListening()
@@ -85,7 +85,8 @@ class PowerStatusTileService : TileService() {
 
     override fun onStopListening() {
         super.onStopListening()
-        Log.d(TAG, "onStopListening()")
+        // The tile is no longer visible: don't touch it after this point
+        updateJob?.cancel()
     }
 
     override fun onDestroy() {
@@ -100,55 +101,26 @@ class PowerStatusTileService : TileService() {
      * Fetches primary address schedule and determines if power is available.
      */
     private fun updateTile() {
-        Log.d(TAG, "updateTile()")
+        val tile = qsTile ?: return
 
-        val tile = qsTile
-        if (tile == null) {
-            Log.w(TAG, "QS tile not available")
-            return
-        }
-
-        serviceScope.launch {
+        // The shade is opened often: read the local cache only, syncing is NotificationController's job
+        updateJob?.cancel()
+        updateJob = serviceScope.launch {
             try {
-                // Get primary address (sorted by priority)
-                val addresses = repository.getSavedAddresses()
-                    .sortedBy { it.priority }
-
-                val primaryAddress = addresses.firstOrNull()
-
-                if (primaryAddress == null) {
-                    Log.w(TAG, "No saved addresses")
+                val address = controller.primaryAddress()
+                if (address == null) {
                     updateTileState(tile, Tile.STATE_INACTIVE, "Немає адреси", "Налаштуйте")
                     return@launch
                 }
-
-                Log.d(TAG, "Fetching schedule for ${primaryAddress.name}")
-
-                // Fetch current schedule
-                val result = repository.getSchedule(primaryAddress.cherga, primaryAddress.pidcherga)
-
-                if (result.isFailure) {
-                    Log.w(TAG, "Failed to fetch schedule: ${result.exceptionOrNull()}")
-                    updateTileState(tile, Tile.STATE_INACTIVE, "Невідомо", primaryAddress.name)
-                    return@launch
+                val run = controller.cachedTimeline(address)?.currentRun(timeProvider.now())
+                when (run?.state) {
+                    PowerState.On -> updateTileState(tile, Tile.STATE_ACTIVE, "Світло є ✅", address.name)
+                    PowerState.Off -> updateTileState(tile, Tile.STATE_INACTIVE, "Світла немає 🔴", address.name)
+                    PowerState.Maybe -> updateTileState(tile, Tile.STATE_INACTIVE, "Можливе відключення 🟡", address.name)
+                    null -> updateTileState(tile, Tile.STATE_UNAVAILABLE, "Невідомо", address.name)
                 }
-
-                val schedules = result.getOrThrow()
-                val grouped = ScheduleMapper.getGroupedSchedule(schedules)
-                val currentStatus = ScheduleMapper.getCurrentGroupedStatus(grouped, timeProvider.now())
-
-                if (currentStatus != null) {
-                    val isLightOn = currentStatus.status == com.occaecat.ztoeschedule.data.model.ScheduleStatus.Available
-                    val state = if (isLightOn) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-                    val label = if (isLightOn) "Світло є ✅" else "Світла немає 🔴"
-
-                    Log.d(TAG, "Tile updated: state=$state, label=$label, address=${primaryAddress.name}")
-                    updateTileState(tile, state, label, primaryAddress.name)
-                } else {
-                    Log.w(TAG, "Could not determine current status")
-                    updateTileState(tile, Tile.STATE_INACTIVE, "Оновіть", primaryAddress.name)
-                }
-
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating tile", e)
                 updateTileState(tile, Tile.STATE_INACTIVE, "Помилка", "СвітлоЄ?")

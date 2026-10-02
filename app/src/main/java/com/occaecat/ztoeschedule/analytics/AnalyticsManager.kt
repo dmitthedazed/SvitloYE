@@ -2,6 +2,7 @@ package com.occaecat.ztoeschedule.analytics
 
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.content.Context
@@ -11,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
  * Minimal analytics wrapper for Firebase Analytics.
  * 
  * Privacy-first approach:
+ * - The user can turn it off in settings (together with crash reports)
  * - No PII (personally identifiable information) collected
  * - No location data logged
  * - No address details logged
@@ -27,12 +29,9 @@ class AnalyticsManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     
-    private val firebaseAnalytics: FirebaseAnalytics by lazy {
-        FirebaseAnalytics.getInstance(context).apply {
-            // Disable automatic data collection - we control what's sent
-            setAnalyticsCollectionEnabled(true)
-        }
-    }
+    // Collection on/off is decided by the user (Settings → Дані) via [setCollectionEnabled];
+    // Firebase persists that choice itself, so it must not be forced here
+    private val firebaseAnalytics: FirebaseAnalytics by lazy { FirebaseAnalytics.getInstance(context) }
     
     // ===== Screen Tracking =====
     
@@ -143,18 +142,10 @@ class AnalyticsManager @Inject constructor(
     
     // ===== Privacy Controls =====
     
-    /**
-     * Disable all analytics collection (user opt-out).
-     */
-    fun disableCollection() {
-        firebaseAnalytics.setAnalyticsCollectionEnabled(false)
-    }
-    
-    /**
-     * Enable analytics collection (user opt-in).
-     */
-    fun enableCollection() {
-        firebaseAnalytics.setAnalyticsCollectionEnabled(true)
+    /** Turns usage statistics and crash reports on or off together (user choice in settings). */
+    fun setCollectionEnabled(enabled: Boolean) {
+        firebaseAnalytics.setAnalyticsCollectionEnabled(enabled)
+        FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = enabled
     }
 }
 
@@ -164,7 +155,24 @@ class AnalyticsManager @Inject constructor(
 enum class AddressAddMethod {
     MANUAL,
     QR_CODE,
-    AUTO_LOCATION
+    AUTO_LOCATION,
+    /** Opened from a shared link or QR (both carry the same URL), then saved. */
+    LINK
+}
+
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+interface AnalyticsEntryPoint {
+    fun analytics(): AnalyticsManager
+}
+
+/** For composables that log directly (QR scanner, auto-location). */
+@androidx.compose.runtime.Composable
+fun rememberAnalytics(): AnalyticsManager {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return androidx.compose.runtime.remember {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, AnalyticsEntryPoint::class.java).analytics()
+    }
 }
 
 /**

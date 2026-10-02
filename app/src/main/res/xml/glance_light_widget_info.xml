@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Widget picker preview: Android 15+ shows the generated preview pushed by WidgetPreviews
+    (falling back to previewLayout), Android 12–14 previewLayout, older versions previewImage.
+-->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/widget_power_status_description"
-    android:minWidth="100dp"
-    android:minHeight="100dp"
+    android:description="@string/widget_light_description"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
     android:resizeMode="horizontal|vertical"
-    android:previewImage="@drawable/ic_launcher_foreground"
+    android:previewLayout="@layout/widget_preview_light"
+    android:previewImage="@drawable/ic_bolt"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

@@ -23,6 +23,7 @@ import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import com.occaecat.ztoeschedule.ui.theme.SvitloYeZhytomyrTheme
+import com.occaecat.ztoeschedule.ui.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -55,17 +56,10 @@ class InspectActivity : ComponentActivity() {
             
             var showSaveDialog by remember { mutableStateOf(false) }
             
-            val colorThemeState = preferencesManager.colorThemeFlow.collectAsStateWithLifecycle(initialValue = ColorTheme.System)
-            val colorTheme = colorThemeState.value
-            val cornerRadiusState = preferencesManager.cornerRadiusFlow.collectAsStateWithLifecycle(initialValue = 24)
-            val cornerRadius = cornerRadiusState.value
             val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
             val motionScheme = MaterialTheme.motionScheme
 
-            SvitloYeZhytomyrTheme(
-                themePreference = colorTheme,
-                cornerRadius = cornerRadius
-            ) {
+            AppTheme(preferencesManager) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val addr = uiState.inspectedAddress
                     
@@ -199,6 +193,8 @@ class InspectActivity : ComponentActivity() {
                                 addressName = currentAddr.addressName.ifBlank { currentAddr.name },
                                 cherga = currentAddr.cherga,
                                 pidcherga = currentAddr.pidcherga,
+                                iconName = currentAddr.iconName,
+                                isPrimary = currentAddr.priority == 1,
                                 currentStatus = null,
                                 schedules = schedulesRetrieved,
                                 groupedSchedule = groupedSchedulesRetrieved,

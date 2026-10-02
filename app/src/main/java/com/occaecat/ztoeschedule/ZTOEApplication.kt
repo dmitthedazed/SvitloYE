@@ -8,19 +8,33 @@ import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
-import com.occaecat.ztoeschedule.domain.notification.NotificationHelper
+import com.occaecat.ztoeschedule.domain.notification.NotificationChannels
 import com.lyft.kronos.KronosClock
+import com.occaecat.ztoeschedule.widget.WidgetPreviews
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import com.occaecat.ztoeschedule.analytics.AnalyticsManager
+import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 
 @HiltAndroidApp
 class ZTOEApplication : Application(), Configuration.Provider {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var kronosClock: KronosClock
+    @Inject lateinit var preferences: EnergyPreferencesManager
+    @Inject lateinit var analytics: AnalyticsManager
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
-        NotificationHelper.createAllChannels(this)
+        NotificationChannels.createAll(this)
         kronosClock.syncInBackground()
+        appScope.launch { WidgetPreviews.publishIfNeeded(this@ZTOEApplication) }
+        // Keep Firebase in line with the user's choice (also after "delete all data" reset it)
+        appScope.launch { preferences.analyticsEnabledFlow.collect(analytics::setCollectionEnabled) }
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             private var startedCount = 0
 

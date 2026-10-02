@@ -1,6 +1,7 @@
 package com.occaecat.ztoeschedule.domain.debug
 
 import com.occaecat.ztoeschedule.data.model.Schedule
+import com.occaecat.ztoeschedule.data.model.ScheduleMessagePart
 import com.occaecat.ztoeschedule.data.model.ScheduleStatus
 import java.text.SimpleDateFormat
 import java.util.*
@@ -125,6 +126,67 @@ object MockScheduleProvider {
         return cachedSchedules
     }
     
+    private const val PREVIEW_CHERGA = 9998
+    private const val PREVIEW_PIDCHERGA = 9998
+
+    /**
+     * Check if the given cherga/pidcherga combination is the realistic preview location
+     */
+    fun isPreviewLocation(cherga: Int, pidcherga: Int): Boolean {
+        return cherga == PREVIEW_CHERGA && pidcherga == PREVIEW_PIDCHERGA
+    }
+
+    fun getPreviewAddressName(): String = "Демо-графік"
+
+    /**
+     * Realistic two-day schedule in the server's 30-minute slot format, for UI work
+     * when there are no real outages. Today's outage is centred on the current time
+     * so the "live" states are always visible.
+     */
+    fun generatePreviewSchedule(): List<Schedule> {
+        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+        val calendar = Calendar.getInstance()
+        val today = dateFormat.format(calendar.time)
+        val nowSlot = (calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)) / 30
+        calendar.add(Calendar.DAY_OF_YEAR, 1)
+        val tomorrow = dateFormat.format(calendar.time)
+
+        // Slot ranges are [start, end) in 30-minute steps
+        fun colorFor(slot: Int, outages: List<IntRange>, probable: List<IntRange>) = when {
+            outages.any { slot in it } -> "red"
+            probable.any { slot in it } -> "yellow"
+            else -> "green"
+        }
+        val todayOutages = listOf(
+            (nowSlot - 3).coerceAtLeast(0) until (nowSlot + 4).coerceAtMost(48),
+            ((nowSlot + 14) % 48) until ((nowSlot + 20) % 48).coerceAtLeast((nowSlot + 14) % 48 + 1)
+        )
+        val todayProbable = listOf((nowSlot + 4).coerceAtMost(48) until (nowSlot + 6).coerceAtMost(48))
+        val tomorrowOutages = listOf(12 until 20, 32 until 40)
+        val tomorrowProbable = listOf(20 until 22, 40 until 42)
+
+        fun span(slot: Int): String {
+            fun t(s: Int) = if (s >= 48) "24:00" else "%02d:%02d".format(s / 2, (s % 2) * 30)
+            return "${t(slot)}-${t(slot + 1)}"
+        }
+        return (0 until 48).map { Schedule(today, span(it), colorFor(it, todayOutages, todayProbable)) } +
+            (0 until 48).map { Schedule(tomorrow, span(it), colorFor(it, tomorrowOutages, tomorrowProbable)) }
+    }
+
+    fun generatePreviewMessages(): List<ScheduleMessagePart> {
+        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+        val calendar = Calendar.getInstance()
+        val today = dateFormat.format(calendar.time)
+        calendar.add(Calendar.DAY_OF_YEAR, 1)
+        val tomorrow = dateFormat.format(calendar.time)
+        return listOf(
+            "УВАГА! ВАЖЛИВА ІНФОРМАЦІЯ!",
+            "За командою НЕК УКРЕНЕРГО $today на Житомирщині застосовуються графіки погодинних відключень електроенергії обсягом 2 черги.",
+            "На $tomorrow очікується застосування ГПВ з 06:00 до 22:00.",
+            "Просимо споживачів ощадливо використовувати електроенергію у години максимального навантаження."
+        ).mapIndexed { i, text -> ScheduleMessagePart(id = i + 1, text = text) }
+    }
+
     /**
      * Get demo address name for display
      */

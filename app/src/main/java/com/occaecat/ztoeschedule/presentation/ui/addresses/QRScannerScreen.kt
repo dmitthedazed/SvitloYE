@@ -46,6 +46,15 @@ import androidx.activity.compose.BackHandler
 
 import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Refresh
+import com.occaecat.ztoeschedule.presentation.ui.components.StepActions
+import com.occaecat.ztoeschedule.presentation.ui.components.StepGutter
+import com.occaecat.ztoeschedule.presentation.ui.components.StepHeroIcon
+import com.occaecat.ztoeschedule.presentation.ui.components.StepHeroPage
+import com.occaecat.ztoeschedule.presentation.ui.components.StepListHeader
+import com.occaecat.ztoeschedule.presentation.ui.components.StepPrimaryButton
+import com.occaecat.ztoeschedule.presentation.ui.components.StepSecondaryButton
 
 private const val TAG = "QRScanner"
 
@@ -91,83 +100,81 @@ fun QRScannerScreen(
         onDismiss()
     }
     
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.qr_title)) },
-                navigationIcon = {
-                    IconButton(onClick = { 
-                        onResult(QRScanResult.Cancelled)
-                        onDismiss()
-                    }) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.qr_close))
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { flashEnabled = !flashEnabled }) {
-                        Icon(
-                            imageVector = if (flashEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                            contentDescription = if (flashEnabled) stringResource(R.string.qr_flash_off) else stringResource(R.string.qr_flash_on)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black.copy(alpha = 0.7f),
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
-                    actionIconContentColor = Color.White
-                )
-            )
-        },
-        containerColor = Color.Black
-    ) { padding ->
+    if (!cameraPermissionState.status.isGranted) {
+        PermissionDeniedContent(
+            shouldShowRationale = cameraPermissionState.status.shouldShowRationale,
+            onRequestPermission = { cameraPermissionState.launchPermissionRequest() },
+            onDismiss = {
+                onResult(QRScanResult.Error(qrPermissionError))
+                onDismiss()
+            }
+        )
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+    ) {
+        StepListHeader(
+            title = stringResource(R.string.qr_instruction_title),
+            subtitle = stringResource(R.string.qr_instruction_desc)
+        )
+
+        // Camera viewport as a large rounded card instead of a full-bleed black screen
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = StepGutter)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color.Black)
         ) {
-            when {
-                !cameraPermissionState.status.isGranted -> {
-                    PermissionDeniedContent(
-                        shouldShowRationale = cameraPermissionState.status.shouldShowRationale,
-                        onRequestPermission = { cameraPermissionState.launchPermissionRequest() },
-                        onDismiss = {
-                            onResult(QRScanResult.Error(qrPermissionError))
-                            onDismiss()
-                        }
-                    )
+            CameraPreview(
+                flashEnabled = flashEnabled,
+                onBarcodeDetected = { barcode ->
+                    if (scanningState is ScanningState.Scanning && barcode != lastScannedCode) {
+                        lastScannedCode = barcode
+                        val result = QRAddressData.parse(barcode)
+                        scanningState = result.fold(
+                            onSuccess = { ScanningState.Success(it) },
+                            onFailure = { ScanningState.Error(it.message ?: qrUnknownError) }
+                        )
+                    }
                 }
-                
-                else -> {
-                    CameraPreview(
-                        flashEnabled = flashEnabled,
-                        onBarcodeDetected = { barcode ->
-                            if (scanningState is ScanningState.Scanning && barcode != lastScannedCode) {
-                                lastScannedCode = barcode
-                                val result = QRAddressData.parse(barcode)
-                                scanningState = result.fold(
-                                    onSuccess = { ScanningState.Success(it) },
-                                    onFailure = { ScanningState.Error(it.message ?: qrUnknownError) }
-                                )
-                            }
-                        }
-                    )
-                    
-                    // Scanning overlay
-                    ScannerOverlay(
-                        scanningState = scanningState,
-                        onRetry = { 
-                            scanningState = ScanningState.Scanning
-                            lastScannedCode = null
-                        },
-                        onDismiss = {
-                            onResult(QRScanResult.Error((scanningState as? ScanningState.Error)?.message ?: ""))
-                            onDismiss()
-                        }
-                    )
-                }
+            )
+
+            ScannerFrame(
+                scanningState = scanningState,
+                modifier = Modifier.align(Alignment.Center)
+            )
+
+            FilledTonalIconToggleButton(
+                checked = flashEnabled,
+                onCheckedChange = { flashEnabled = it },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                Icon(
+                    imageVector = if (flashEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                    contentDescription = if (flashEnabled) stringResource(R.string.qr_flash_off) else stringResource(R.string.qr_flash_on)
+                )
             }
         }
+
+        ScanStatus(
+            scanningState = scanningState,
+            onRetry = {
+                scanningState = ScanningState.Scanning
+                lastScannedCode = null
+            },
+            onDismiss = {
+                onResult(QRScanResult.Error((scanningState as? ScanningState.Error)?.message ?: ""))
+                onDismiss()
+            }
+        )
     }
 }
 
@@ -235,248 +242,147 @@ private fun CameraPreview(
     }
 }
 
+/** Corner brackets marking the scan area; tinted by scan state. */
 @Composable
-private fun ScannerOverlay(
+private fun ScannerFrame(
     scanningState: ScanningState,
-    onRetry: () -> Unit,
-    onDismiss: () -> Unit
+    modifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Scanning frame
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(280.dp)
-                .background(Color.Transparent)
-        ) {
-            // Corner indicators
-            val cornerSize = 40.dp
-            val cornerWidth = 4.dp
-            val cornerColor = when (scanningState) {
-                is ScanningState.Scanning -> Color.White
-                is ScanningState.Success -> Color.Green
-                is ScanningState.Error -> Color.Red
-            }
-            
-            // Top-left
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .size(cornerSize)
-            ) {
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .height(cornerWidth)
-                    .background(cornerColor))
-                Box(modifier = Modifier
-                    .fillMaxHeight()
-                    .width(cornerWidth)
-                    .background(cornerColor))
-            }
-            
-            // Top-right
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(cornerSize)
-            ) {
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .height(cornerWidth)
-                    .background(cornerColor))
-                Box(modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .fillMaxHeight()
-                    .width(cornerWidth)
-                    .background(cornerColor))
-            }
-            
-            // Bottom-left
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .size(cornerSize)
-            ) {
-                Box(modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .height(cornerWidth)
-                    .background(cornerColor))
-                Box(modifier = Modifier
-                    .fillMaxHeight()
-                    .width(cornerWidth)
-                    .background(cornerColor))
-            }
-            
-            // Bottom-right
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(cornerSize)
-            ) {
-                Box(modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .fillMaxWidth()
-                    .height(cornerWidth)
-                    .background(cornerColor))
-                Box(modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .fillMaxHeight()
-                    .width(cornerWidth)
-                    .background(cornerColor))
-            }
-        }
-        
-        // Instructions and status
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.7f))
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            when (scanningState) {
-                is ScanningState.Scanning -> {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = stringResource(R.string.qr_instruction_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.qr_instruction_desc),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-                
-                is ScanningState.Success -> {
-                    CircularProgressIndicator(
-                        color = Color.Green,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = stringResource(R.string.qr_success_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.Green,
-                        textAlign = TextAlign.Center
-                    )
-                    scanningState.data.displayName?.let { name ->
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-                
-                is ScanningState.Error -> {
-                    Text(
-                        text = "❌",
-                        style = MaterialTheme.typography.headlineLarge
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = stringResource(R.string.qr_error_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.Red,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = scanningState.message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text(stringResource(R.string.qr_cancel_btn))
-                        }
-                        Button(onClick = onRetry) {
-                            Text(stringResource(R.string.qr_retry_btn))
-                        }
-                    }
-                }
+    val cornerColor by androidx.compose.animation.animateColorAsState(
+        targetValue = when (scanningState) {
+            is ScanningState.Scanning -> Color.White
+            is ScanningState.Success -> MaterialTheme.colorScheme.primary
+            is ScanningState.Error -> MaterialTheme.colorScheme.error
+        },
+        label = "scanner_frame_color"
+    )
+    val cornerSize = 40.dp
+    val stroke = 5.dp
+    val corners = listOf(Alignment.TopStart, Alignment.TopEnd, Alignment.BottomStart, Alignment.BottomEnd)
+
+    Box(modifier = modifier.size(240.dp)) {
+        corners.forEach { corner ->
+            val top = corner == Alignment.TopStart || corner == Alignment.TopEnd
+            val start = corner == Alignment.TopStart || corner == Alignment.BottomStart
+            Box(Modifier.align(corner).size(cornerSize)) {
+                Box(
+                    Modifier
+                        .align(if (top) Alignment.TopCenter else Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(stroke)
+                        .background(cornerColor, RoundedCornerShape(50))
+                )
+                Box(
+                    Modifier
+                        .align(if (start) Alignment.CenterStart else Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .width(stroke)
+                        .background(cornerColor, RoundedCornerShape(50))
+                )
             }
         }
     }
 }
 
+/** Status area under the viewport: progress on success, message and actions on error. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ScanStatus(
+    scanningState: ScanningState,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    androidx.compose.animation.AnimatedContent(
+        targetState = scanningState,
+        contentKey = { it::class },
+        label = "scan_status"
+    ) { state ->
+        when (state) {
+            is ScanningState.Scanning -> Spacer(Modifier.fillMaxWidth().height(16.dp))
+
+            is ScanningState.Success -> Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = StepGutter + 8.dp, vertical = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LoadingIndicator(modifier = Modifier.size(40.dp), color = colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = stringResource(R.string.qr_success_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSurface
+                    )
+                    state.data.displayName?.let { name ->
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            is ScanningState.Error -> StepActions {
+                Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
+                StepPrimaryButton(
+                    text = stringResource(R.string.qr_retry_btn),
+                    onClick = onRetry
+                )
+                StepSecondaryButton(
+                    text = stringResource(R.string.qr_cancel_btn),
+                    onClick = onDismiss
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PermissionDeniedContent(
     shouldShowRationale: Boolean,
     onRequestPermission: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.QrCodeScanner,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(80.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Text(
-            text = stringResource(R.string.qr_permission_title),
-            style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = if (shouldShowRationale) {
-                stringResource(R.string.qr_permission_rationale)
-            } else {
-                stringResource(R.string.qr_permission_request)
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.White.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Button(
-            onClick = onRequestPermission,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(stringResource(R.string.qr_permission_btn))
+    val colorScheme = MaterialTheme.colorScheme
+    StepHeroPage(
+        hero = {
+            StepHeroIcon(
+                icon = Icons.Default.QrCodeScanner,
+                shape = MaterialShapes.Square.toShape(),
+                containerColor = colorScheme.secondaryContainer,
+                contentColor = colorScheme.onSecondaryContainer
+            )
+        },
+        title = stringResource(R.string.qr_permission_title),
+        subtitle = if (shouldShowRationale) {
+            stringResource(R.string.qr_permission_rationale)
+        } else {
+            stringResource(R.string.qr_permission_request)
+        },
+        actions = {
+            StepPrimaryButton(
+                text = stringResource(R.string.qr_permission_btn),
+                onClick = onRequestPermission
+            )
+            StepSecondaryButton(
+                text = stringResource(R.string.qr_cancel_btn),
+                onClick = onDismiss
+            )
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        TextButton(onClick = onDismiss) {
-            Text(stringResource(R.string.qr_cancel_btn), color = Color.White)
-        }
-    }
+    )
 }
 
 private sealed class ScanningState {

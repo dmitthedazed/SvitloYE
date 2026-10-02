@@ -1,4 +1,4 @@
 <resources>
-    <string name="home_no_address_title">Нету адреса</string>
-    <string name="home_no_address_desc">Добавьте хотя бы один адрес, чтобы получить актуальную информацию по графику</string>
+    <string name="home_no_address_title">Ще немає адреси</string>
+    <string name="home_no_address_desc">Додайте свою адресу, щоб бачити графік відключень і отримувати сповіщення</string>
 </resources>

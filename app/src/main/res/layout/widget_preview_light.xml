@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget-picker preview for Android 12–14; Android 15+ gets a generated one (LightWidget.providePreview). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_preview_card"
+    android:backgroundTint="@color/widget_preview_primary_container"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="8dp"
+    tools:ignore="HardcodedText">
+
+    <ImageView
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_bolt"
+        android:tint="@color/widget_preview_on_primary_container" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:maxLines="1"
+        android:text="До 17:00"
+        android:textColor="@color/widget_preview_on_primary_container"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+</LinearLayout>

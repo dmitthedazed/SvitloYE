@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Colours for the static widget-picker previews (previewLayout), mirroring the Glance theme roles. -->
+<resources>
+    <color name="widget_preview_surface">#FFF8F3</color>
+    <color name="widget_preview_on_surface">#211B11</color>
+    <color name="widget_preview_on_surface_variant">#514532</color>
+    <color name="widget_preview_primary_container">#FFB300</color>
+    <color name="widget_preview_on_primary_container">#6B4900</color>
+    <color name="widget_preview_secondary_container">#FFD38F</color>
+    <color name="widget_preview_surface_variant">#F3E0C7</color>
+    <color name="widget_preview_error">#BA1A1A</color>
+    <color name="widget_preview_error_container">#FFDAD6</color>
+</resources>

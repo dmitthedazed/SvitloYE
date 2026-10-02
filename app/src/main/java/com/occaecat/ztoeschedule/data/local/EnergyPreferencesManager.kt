@@ -16,8 +16,8 @@ import kotlinx.coroutines.flow.map
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.FontScale
-import com.occaecat.ztoeschedule.data.model.PriorityMode
-import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
+import com.occaecat.ztoeschedule.data.model.NotificationSettings
+import com.occaecat.ztoeschedule.data.model.QuietHours
 
 /**
  * Extension property to create DataStore instance
@@ -46,22 +46,28 @@ class EnergyPreferencesManager(private val context: Context) {
         private val KeyAddressName = stringPreferencesKey("address_name")
 
 
+        // Anonymous usage statistics and crash reports (opt-out)
+        private val KeyAnalyticsEnabled = booleanPreferencesKey("analytics_enabled")
+
         // Notification settings
-        private val KeyNotificationsEnabled = androidx.datastore.preferences.core.booleanPreferencesKey("notifications_enabled")
-        private val KeyNotificationMode = intPreferencesKey("notification_mode") // 0: All, 1: Important, 2: Silent
+        private val KeyNotificationsEnabled = booleanPreferencesKey("notifications_enabled")
         private val KeyNotificationAdvanceMinutes = intPreferencesKey("notification_advance_minutes")
-        private val KeyStatusNotificationEnabled = androidx.datastore.preferences.core.booleanPreferencesKey("status_notification_enabled")
-        
-        // Smart Notification Settings
-        private val KeyNotifQuietStart = intPreferencesKey("notif_quiet_start")
-        private val KeyNotifQuietEnd = intPreferencesKey("notif_quiet_end")
-        private val KeyNotifWorkday = androidx.datastore.preferences.core.booleanPreferencesKey("notif_workday")
-        private val KeyNotifPriority = intPreferencesKey("notif_priority")
+        private val KeyStatusNotificationEnabled = booleanPreferencesKey("status_notification_enabled")
+        private val KeyOutageAlerts = booleanPreferencesKey("notif_outage_alerts")
+        private val KeyRestoreAlerts = booleanPreferencesKey("notif_restore_alerts")
+        private val KeyScheduleChangeAlerts = booleanPreferencesKey("notif_schedule_change_alerts")
+        private val KeyQuietEnabled = booleanPreferencesKey("notif_quiet_enabled")
+        private val KeyQuietStartMinute = intPreferencesKey("notif_quiet_start_minute")
+        private val KeyQuietEndMinute = intPreferencesKey("notif_quiet_end_minute")
+
+        // Legacy keys, read once to migrate users to the new settings
+        private val LegacyQuietStartHour = intPreferencesKey("notif_quiet_start")
+        private val LegacyQuietEndHour = intPreferencesKey("notif_quiet_end")
+        private val LegacyPriority = intPreferencesKey("notif_priority") // 0 = All (quiet hours ignored)
 
         // Theme settings
         private val KeyDisplayMode = intPreferencesKey("display_mode")
         private val KeyColorTheme = intPreferencesKey("color_theme")
-        private val KeyCornerRadius = intPreferencesKey("corner_radius")
         private val KeyDynamicColors = booleanPreferencesKey("dynamic_colors")
         private val KeyIsAmoled = booleanPreferencesKey("is_amoled")
         private val KeyLiquidGlass = booleanPreferencesKey("liquid_glass")
@@ -76,16 +82,7 @@ class EnergyPreferencesManager(private val context: Context) {
         // Default values
         private const val DefaultCherga = 0
         private const val DefaultPidcherga = 0
-        private const val DefaultNotificationAdvanceMinutes = 15 // 15 minutes before
-        private const val DefaultCornerRadius = -1 // -1 means follow system
     }
-
-    /**
-     * Flow that emits corner radius preference
-     */
-    val cornerRadiusFlow: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[KeyCornerRadius] ?: DefaultCornerRadius
-    }.distinctUntilChanged()
 
     /**
      * Flow that emits dynamic colors preference
@@ -101,15 +98,6 @@ class EnergyPreferencesManager(private val context: Context) {
         preferences[KeyIsAmoled] ?: false
     }.distinctUntilChanged()
 
-    /**
-     * Save corner radius
-     */
-    suspend fun setCornerRadius(radius: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[KeyCornerRadius] = radius
-        }
-    }
-
     suspend fun setDynamicColors(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KeyDynamicColors] = enabled
@@ -119,6 +107,16 @@ class EnergyPreferencesManager(private val context: Context) {
     suspend fun setIsAmoled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KeyIsAmoled] = enabled
+        }
+    }
+
+    val analyticsEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KeyAnalyticsEnabled] ?: true
+    }.distinctUntilChanged()
+
+    suspend fun setAnalyticsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KeyAnalyticsEnabled] = enabled
         }
     }
 
@@ -148,24 +146,12 @@ class EnergyPreferencesManager(private val context: Context) {
         ColorTheme.entries.getOrElse(ordinal) { ColorTheme.System }
     }.distinctUntilChanged()
 
-    /**
-     * Flow that emits smart notification settings
-     */
-    val smartNotificationSettingsFlow: Flow<SmartNotificationSettings> = context.dataStore.data.map { preferences ->
-        val start = preferences[KeyNotifQuietStart] ?: 22
-        val end = preferences[KeyNotifQuietEnd] ?: 7
-        val workday = preferences[KeyNotifWorkday] ?: false
-        val priorityOrdinal = preferences[KeyNotifPriority] ?: PriorityMode.All.ordinal
-        val priority = PriorityMode.entries.getOrElse(priorityOrdinal) { PriorityMode.All }
-
-        SmartNotificationSettings(start, end, workday, priority)
-    }.distinctUntilChanged()
 
 
     /**
-     * Flow that emits the last known schedule hash
+     * Last seen schedule snapshot, used to detect schedule updates (see ScheduleChangeDetector)
      */
-    val lastScheduleHashFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+    val scheduleSnapshotFlow: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[KeyLastScheduleHash]
     }.distinctUntilChanged()
 
@@ -177,11 +163,11 @@ class EnergyPreferencesManager(private val context: Context) {
     }.distinctUntilChanged()
 
     /**
-     * Save last schedule hash
+     * Save schedule snapshot
      */
-    suspend fun saveLastScheduleHash(hash: String) {
+    suspend fun saveScheduleSnapshot(snapshot: String) {
         context.dataStore.edit { preferences ->
-            preferences[KeyLastScheduleHash] = hash
+            preferences[KeyLastScheduleHash] = snapshot
         }
     }
 
@@ -191,18 +177,6 @@ class EnergyPreferencesManager(private val context: Context) {
     suspend fun saveLastScheduleServerUpdatedMs(value: Long) {
         context.dataStore.edit { preferences ->
             preferences[KeyLastScheduleServerUpdatedMs] = value
-        }
-    }
-
-    /**
-     * Save smart notification settings
-     */
-    suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) {
-        context.dataStore.edit { preferences ->
-            preferences[KeyNotifQuietStart] = settings.quietHoursStart
-            preferences[KeyNotifQuietEnd] = settings.quietHoursEnd
-            preferences[KeyNotifWorkday] = settings.workdayMode
-            preferences[KeyNotifPriority] = settings.priorityMode.ordinal
         }
     }
 
@@ -283,57 +257,55 @@ class EnergyPreferencesManager(private val context: Context) {
 
 
 
-    /**
-     * Flow that emits notification enabled status
-     */
+    /** Master switch for pop-up alerts. */
     val notificationsEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[KeyNotificationsEnabled] ?: true // Enabled by default
+        preferences[KeyNotificationsEnabled] ?: true
     }.distinctUntilChanged()
 
-    /**
-     * Flow that emits notification advance time in minutes
-     */
-    val notificationAdvanceMinutesFlow: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[KeyNotificationAdvanceMinutes] ?: DefaultNotificationAdvanceMinutes
-    }.distinctUntilChanged()
-
-    /**
-     * Flow that emits status notification enabled status
-     */
     val statusNotificationEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KeyStatusNotificationEnabled] ?: false
     }.distinctUntilChanged()
 
-    val notificationModeFlow: Flow<Int> = context.dataStore.data.map { it[KeyNotificationMode] ?: 0 }.distinctUntilChanged()
+    val notificationSettingsFlow: Flow<NotificationSettings> = context.dataStore.data.map { p ->
+        val defaults = NotificationSettings()
+        val legacyQuiet = p[LegacyPriority]?.let { it != 0 } ?: false
+        NotificationSettings(
+            alertsEnabled = p[KeyNotificationsEnabled] ?: defaults.alertsEnabled,
+            outageAlerts = p[KeyOutageAlerts] ?: defaults.outageAlerts,
+            restoreAlerts = p[KeyRestoreAlerts] ?: defaults.restoreAlerts,
+            leadMinutes = p[KeyNotificationAdvanceMinutes] ?: defaults.leadMinutes,
+            scheduleChangeAlerts = p[KeyScheduleChangeAlerts] ?: defaults.scheduleChangeAlerts,
+            statusNotification = p[KeyStatusNotificationEnabled] ?: defaults.statusNotification,
+            quietHours = QuietHours(
+                enabled = p[KeyQuietEnabled] ?: legacyQuiet,
+                startMinute = p[KeyQuietStartMinute] ?: p[LegacyQuietStartHour]?.times(60) ?: defaults.quietHours.startMinute,
+                endMinute = p[KeyQuietEndMinute] ?: p[LegacyQuietEndHour]?.times(60) ?: defaults.quietHours.endMinute
+            )
+        )
+    }.distinctUntilChanged()
 
-    /**
-     * Save notification enabled status
-     */
     suspend fun setNotificationsEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KeyNotificationsEnabled] = enabled
-        }
+        context.dataStore.edit { it[KeyNotificationsEnabled] = enabled }
     }
 
-    suspend fun setNotificationMode(mode: Int) {
-        context.dataStore.edit { it[KeyNotificationMode] = mode }
-    }
-
-    /**
-     * Save notification advance time in minutes
-     */
-    suspend fun setNotificationAdvanceMinutes(minutes: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[KeyNotificationAdvanceMinutes] = minutes
-        }
-    }
-
-    /**
-     * Save status notification enabled status
-     */
     suspend fun setStatusNotificationEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KeyStatusNotificationEnabled] = enabled
+        context.dataStore.edit { it[KeyStatusNotificationEnabled] = enabled }
+    }
+
+    suspend fun saveNotificationSettings(settings: NotificationSettings) {
+        context.dataStore.edit { p ->
+            p[KeyNotificationsEnabled] = settings.alertsEnabled
+            p[KeyOutageAlerts] = settings.outageAlerts
+            p[KeyRestoreAlerts] = settings.restoreAlerts
+            p[KeyNotificationAdvanceMinutes] = settings.leadMinutes
+            p[KeyScheduleChangeAlerts] = settings.scheduleChangeAlerts
+            p[KeyStatusNotificationEnabled] = settings.statusNotification
+            p[KeyQuietEnabled] = settings.quietHours.enabled
+            p[KeyQuietStartMinute] = settings.quietHours.startMinute
+            p[KeyQuietEndMinute] = settings.quietHours.endMinute
+            p.remove(LegacyQuietStartHour)
+            p.remove(LegacyQuietEndHour)
+            p.remove(LegacyPriority)
         }
     }
 

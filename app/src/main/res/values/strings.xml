@@ -53,10 +53,6 @@
     <!-- Home Screen -->
     <string name="home_last_updated">Оновлено: %1$s</string>
     <string name="home_no_data">Немає даних</string>
-    <string name="home_next_outage">⏰ Відключення о %1$s</string>
-    <string name="home_next_restore">⏰ Увімкнення о %1$s</string>
-    <string name="home_time_to_outage">До відключення: %1$s</string>
-    <string name="home_time_to_restore">До увімкнення: %1$s</string>
     <string name="home_all_day_available">Сьогодні світло є весь день</string>
     <string name="home_no_outages_expected">За цією адресою відключення не передбачаються</string>
     <string name="address_status_light_stays_on">Світло є і буде</string>
@@ -105,57 +101,78 @@
     <string name="error_offline_banner">Офлайн режим. Дані можуть бути застарілими</string>
 
     <!-- Widget strings -->
+    <string name="widget_light_description">Мінімальний індикатор світла 1×1</string>
     <string name="widget_power_status_description">Компактний віджет статусу світла</string>
     <string name="widget_detailed_schedule_description">Детальний віджет з графіком відключень</string>
-    <string name="widget_loading">Завантаження…</string>
-    <string name="widget_error">Помилка завантаження</string>
-    <string name="widget_configure_btn">Налаштувати</string>
-    <string name="widget_configure_address">Налаштувати адресу</string>
-    <string name="widget_status_outage">Немає світла</string>
-    <string name="widget_status_available">Світло є</string>
-    <string name="widget_status_probable">Можливо</string>
-    <string name="widget_status_loading">Завантаження</string>
-    <string name="widget_status_outage_full">Відключення</string>
-    <string name="widget_status_available_full">Світло є</string>
-    <string name="widget_status_probable_full">Можливе відключення</string>
-    <string name="widget_status_syncing">Синхронізація…</string>
+    <string name="widget_state_on">Світло є</string>
+    <string name="widget_state_off">Світла немає</string>
+    <string name="widget_state_maybe">Можливе відключення</string>
+    <string name="widget_state_maybe_short">Можливо</string>
+    <string name="widget_state_unknown">Немає графіка</string>
+    <string name="widget_run_on">Світло є</string>
+    <string name="widget_run_off">Відключення</string>
+    <string name="widget_run_maybe">Можливе відкл.</string>
+    <string name="widget_next_on">Увімкнення о %1$s</string>
+    <string name="widget_next_off">Відключення о %1$s</string>
+    <string name="widget_next_maybe">Можливе відкл. о %1$s</string>
     <string name="widget_until">До %1$s</string>
-    <string name="widget_content_desc_outage">Відключення світла</string>
-    <string name="widget_content_desc_available">Світло є</string>
-    <string name="widget_content_desc_probable">Можливе відключення</string>
-    <string name="widget_content_desc_unknown">Статус невідомий</string>
+    <string name="widget_tomorrow_at">завтра %1$s</string>
+    <string name="widget_queue">Черга %1$s</string>
+    <string name="widget_upcoming">Далі</string>
+    <string name="widget_no_address_title">Оберіть адресу</string>
+    <string name="widget_no_address_body">Торкніться, щоб налаштувати</string>
+    <string name="widget_no_data_title">Немає даних</string>
+    <string name="widget_no_data_body">Відкрийте застосунок, щоб оновити графік</string>
+    <string name="widget_refresh">Оновити</string>
 
     <!-- Notification Channels -->
-    <string name="channel_alerts_name">Сповіщення про графік</string>
-    <string name="channel_alerts_desc">Попередження про майбутні відключення та увімкнення світла</string>
+    <string name="channel_alerts_name">Відключення та увімкнення</string>
+    <string name="channel_alerts_desc">Попередження перед відключенням і сповіщення про зміну стану за графіком</string>
+    <string name="channel_schedule_name">Оновлення графіка</string>
+    <string name="channel_schedule_desc">Коли графік на сьогодні чи завтра змінився</string>
     <string name="channel_status_name">Статус світла</string>
     <string name="channel_status_desc">Постійне сповіщення з поточним статусом світла</string>
     <string name="channel_live_update_name">Живі оновлення</string>
-    <string name="channel_live_update_desc">Статус світла в реальному часі на екрані блокування</string>
-    <string name="channel_info_name">Інформація</string>
-    <string name="channel_info_desc">Загальна інформація та оновлення від додатку</string>
-    
+    <string name="channel_live_update_desc">Статус світла в рядку стану й на екрані блокування</string>
+
     <!-- Notification Actions -->
     <string name="notif_action_refresh">Оновити</string>
-    
-    <!-- Notification Content -->
-    <string name="notif_network_unavailable">Мережа недоступна…</string>
-    <string name="notif_add_address">Додайте адресу в налаштуваннях</string>
-    <string name="notif_loading_error">Помилка завантаження…</string>
+
+    <!-- Status notification -->
+    <string name="notif_add_address">Додайте адресу, щоб бачити статус</string>
+    <string name="notif_no_schedule">Немає даних графіка</string>
     <string name="notif_loading_data">Завантаження даних…</string>
-    <string name="notif_title_with_address">СвітлоЄ! - %1$s</string>
-    
-    <!-- Notification Status -->
     <string name="notif_status_power_on">Світло є</string>
-    <string name="notif_status_probable">Можливо</string>
+    <string name="notif_status_probable">Можливе відключення</string>
     <string name="notif_status_outage">Відключення</string>
+    <string name="notif_status_unknown">Статус невідомий</string>
     <string name="notif_status_light_stays_on">🟢 Світло є і буде</string>
-    <string name="notif_title_format">%1$s %2$s • До %3$s</string>
+    <string name="notif_title_format">%1$s %2$s • до %3$s</string>
     <string name="notif_remaining_hm">%1$d год %2$d хв</string>
     <string name="notif_remaining_m">%1$d хв</string>
     <string name="notif_message_address">📍 %1$s</string>
-    <string name="notif_message_format">Залишилось: %1$s
-📍 %2$s</string>
+    <string name="notif_message_format">Залишилось: %1$s · 📍 %2$s</string>
+    <string name="notif_next_on">Далі: світло з %1$s</string>
+    <string name="notif_next_off">Далі: відключення о %1$s</string>
+    <string name="notif_next_maybe">Далі: можливе відключення о %1$s</string>
+
+    <!-- Alerts -->
+    <string name="notif_warning_off_title">⏳ Відключення через %1$d хв</string>
+    <string name="notif_warning_maybe_title">⏳ Можливе відключення через %1$d хв</string>
+    <string name="notif_change_off_title">🔴 Відключення за графіком</string>
+    <string name="notif_change_maybe_title">🟡 Можливе відключення</string>
+    <string name="notif_change_on_title">🟢 Світло має бути</string>
+    <string name="notif_change_maybe_on_title">🟡 Світло можуть увімкнути</string>
+    <string name="notif_alert_at_until">%1$s · о %2$s, до %3$s</string>
+    <string name="notif_alert_at">%1$s · о %2$s</string>
+    <string name="notif_alert_until">%1$s · до %2$s</string>
+
+    <!-- Schedule updates -->
+    <string name="notif_schedule_title">📅 Оновлено графік на %1$s</string>
+    <string name="notif_schedule_today">сьогодні</string>
+    <string name="notif_schedule_tomorrow">завтра</string>
+    <string name="notif_schedule_outages">Відключення: %1$s</string>
+    <string name="notif_schedule_no_outages">Відключень не заплановано</string>
 
     <!-- Keyboard Shortcuts -->
     <string name="shortcut_group_navigation">Навігація</string>
@@ -204,10 +221,21 @@
     <string name="onboarding_skip_dialog_message">Ви можете додати адресу пізніше у розділі \"Мої адреси\"</string>
     <string name="onboarding_skip_dialog_confirm">Пропустити</string>
     <string name="onboarding_skip_dialog_cancel">Залишитись</string>
-    <string name="onboarding_permissions_title">Сповіщення</string>
+    <string name="onboarding_permissions_title">Не пропустіть відключення</string>
     <string name="onboarding_permissions_subtitle">Дозвольте сповіщення та будильники для своєчасних нагадувань</string>
-    <string name="onboarding_permissions_notifications">Сповіщення про зміни статусу</string>
+    <string name="onboarding_permissions_notifications">Сповіщення</string>
     <string name="onboarding_permissions_alarms">Точні будильники</string>
-    <string name="onboarding_permissions_grant">Надати дозволи</string>
     <string name="onboarding_finish">Завершити</string>
+    <string name="onboarding_start">Почати</string>
+    <string name="onboarding_back">Назад</string>
+    <string name="onboarding_step_description">Крок %1$d з %2$d</string>
+    <string name="onboarding_feature_schedule_title">Графік для вашої адреси</string>
+    <string name="onboarding_feature_schedule_desc">Черга, підчерга та години відключень</string>
+    <string name="onboarding_feature_alerts_title">Нагадування заздалегідь</string>
+    <string name="onboarding_feature_alerts_desc">Сповіщення перед вимкненням і появою світла</string>
+    <string name="onboarding_feature_widgets_title">Віджети та плитка</string>
+    <string name="onboarding_feature_widgets_desc">Статус світла з головного екрана</string>
+    <string name="onboarding_permissions_notifications_desc">Попередження про зміни в графіку</string>
+    <string name="onboarding_permissions_alarms_desc">Щоб нагадування приходили вчасно</string>
+    <string name="onboarding_permissions_hint">Дозволи можна змінити будь-коли в налаштуваннях</string>
 </resources>

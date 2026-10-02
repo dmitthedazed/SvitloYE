@@ -1,68 +1,48 @@
 package com.occaecat.ztoeschedule.domain.notification
 
+import android.app.AlarmManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
- * BroadcastReceiver that restarts notification services after device boot.
- *
- * Triggered on: Intent.ACTION_BOOT_COMPLETED
- *
- * Actions:
- * 1. Schedule periodic power monitoring via WorkManager
- * 2. Start PowerStatusService if enabled in preferences
- *
- * Note: Runs on separate thread to avoid ANRs.
+ * Restores notifications after events that wipe or shift alarms:
+ * reboot, app update, clock/time zone change, exact-alarm permission change.
  */
+@AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {
 
-    companion object {
-        private const val TAG = "BootReceiver"
-    }
+    @Inject lateinit var preferences: EnergyPreferencesManager
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) {
-            return
-        }
+        if (intent.action !in handledActions) return
 
-        Log.d(TAG, "Device boot detected")
-
-        // Use goAsync() to prevent process kill before work completes
-        val pendingResult = goAsync()
-
-        // Run on background thread to avoid ANR
+        val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                // 1. Always schedule periodic monitoring
-                Log.d(TAG, "Scheduling power monitor")
-                NotificationScheduler.schedulePowerMonitoring(context)
-
-                // 2. Start status service if enabled
-                val preferencesManager = EnergyPreferencesManager(context)
-                val statusNotificationEnabled = preferencesManager.statusNotificationEnabledFlow.first()
-
-                if (statusNotificationEnabled) {
-                    Log.d(TAG, "Starting PowerStatusService")
-                    PowerStatusService.start(context)
-                } else {
-                    Log.d(TAG, "PowerStatusService disabled, skipping")
-                }
-
-                Log.i(TAG, "Boot initialization completed")
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during boot initialization", e)
+                NotificationSync.schedulePeriodic(context)
+                NotificationSync.syncNow(context, fetch = false)
+                if (preferences.statusNotificationEnabledFlow.first()) StatusNotificationService.start(context)
             } finally {
-                // Signal that async work is complete
-                pendingResult.finish()
+                pending.finish()
             }
         }
+    }
+
+    private companion object {
+        val handledActions = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED
+        )
     }
 }
