@@ -1,165 +1,217 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>СвітлоЄ? - Графік відключень Житомир</title>
-    <script>
-        window.onload = function() {
-            const params = new URLSearchParams(window.location.search);
-            const s = params.get('s');
-            const a = params.get('a');
-            
-            if (s && a) {
-                document.getElementById('content-landing').style.display = 'none';
-                document.getElementById('content-redirect').style.display = 'block';
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>СвітлоЄ? — графік відключень світла Житомирщини</title>
+<meta name="description" content="Неофіційний Android-застосунок для графіків відключень АТ «Житомиробленерго»: статус світла, сповіщення, віджети, Android Auto.">
+<meta property="og:title" content="СвітлоЄ? 2.0">
+<meta property="og:description" content="Чи є світло вдома — одним поглядом. Графіки відключень Житомирщини.">
+<meta property="og:image" content="https://raw.githubusercontent.com/dmitthedazed/SvitloYE/master/docs/banner.png">
+<meta name="theme-color" content="#0D1530">
+<link rel="icon" href="img/svitloye_logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  // Share-link redirect: ?s=..&a=.. → open the app via deep link, fall back to releases.
+  window.onload = function () {
+    const params = new URLSearchParams(window.location.search);
+    if (!(params.get('s') && params.get('a'))) return;
+    document.getElementById('content-landing').hidden = true;
+    document.getElementById('content-redirect').hidden = false;
+    let deepLink = "zt-energy://schedule/add?";
+    for (const [key, value] of params) deepLink += key + "=" + encodeURIComponent(value) + "&";
+    deepLink = deepLink.slice(0, -1);
+    document.getElementById('btn-open-app').href = deepLink;
+    const t = setTimeout(() => { window.location.href = "https://github.com/dmitthedazed/SvitloYE/releases/latest"; }, 2500);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(t); });
+    window.addEventListener('pagehide', () => clearTimeout(t));
+    window.location.href = deepLink;
+  };
+</script>
+<style>
+  :root {
+    --bg: #F7F4EC; --surface: #FFFFFF; --ink: #0D1530; --muted: #56607A;
+    --line: #E3DED0; --amber: #FFB800; --blue: #1A4FB8; --chip: #EEE9DC;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0B1128; --surface: #131B3A; --ink: #F2F4FB; --muted: #A9B3CF; --line: #253160; --chip: #1B2550; --blue: #7FA4FF; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Manrope, system-ui, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; text-decoration: none; }
+  .brand img { width: 36px; height: 36px; }
+  .brand b { color: var(--amber); }
+  nav .links a { margin-left: 22px; text-decoration: none; color: var(--muted); font-weight: 600; font-size: 15px; }
+  nav .links a:hover { color: var(--ink); }
 
-                let deepLink = "zt-energy://schedule/add?";
-                for (const [key, value] of params) {
-                    deepLink += key + "=" + encodeURIComponent(value) + "&";
-                }
-                deepLink = deepLink.slice(0, -1);
-                
-                // Прив'язуємо посилання до кнопки на випадок, якщо авто-перехід заблокує браузер
-                document.getElementById('btn-open-app').href = deepLink;
+  .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; padding: 48px 0 80px; }
+  .tag { display: inline-flex; gap: 8px; align-items: center; background: var(--chip); padding: 6px 14px; border-radius: 99px; font-size: 14px; font-weight: 700; }
+  .tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+  h1 { font-size: clamp(42px, 6.4vw, 76px); line-height: 1.02; letter-spacing: -0.035em; margin: 20px 0 18px; font-weight: 800; }
+  h1 span { color: var(--amber); }
+  .lead { font-size: 19px; color: var(--muted); max-width: 520px; margin: 0 0 30px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; border-radius: 99px; font-weight: 700; text-decoration: none; font-size: 16px; transition: transform .15s ease; }
+  .btn:active { transform: scale(.97); }
+  .btn-primary { background: var(--amber); color: #0D1530; }
+  .btn-ghost { border: 2px solid var(--line); }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+  .meta span { font-size: 13px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); padding: 5px 12px; border-radius: 99px; }
 
-                // Таймер для переходу в Google Play (збільшено до 2.5 сек)
-                let redirectTimeout = setTimeout(function() {
-                    window.location.href = "https://github.com/dmitthedazed/SvitloYE/releases";
-                }, 2500);
+  .phones { position: relative; height: 560px; }
+  .phones img { position: absolute; width: 250px; border-radius: 34px; box-shadow: 0 30px 60px -20px rgba(13,21,48,.45); border: 6px solid #0D1530; }
+  .phones img:first-child { left: 0; top: 40px; transform: rotate(-5deg); }
+  .phones img:last-child { right: 0; top: 0; transform: rotate(4deg); }
 
-                // Якщо додаток відкрився, браузер піде у фоновий режим. Тоді скасовуємо перехід в Google Play.
-                document.addEventListener('visibilitychange', function() {
-                    if (document.hidden || document.visibilityState === 'hidden') {
-                        clearTimeout(redirectTimeout);
-                    }
-                });
-                window.addEventListener('pagehide', function() {
-                    clearTimeout(redirectTimeout);
-                });
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -0.03em; margin: 0 0 12px; line-height: 1.1; }
+  .sub { color: var(--muted); margin: 0 0 40px; font-size: 17px; max-width: 600px; }
 
-                // Спроба автоматично відкрити додаток
-                window.location.href = deepLink;
-            }
-        };
-    </script>
-    <style>
-        :root {
-            --primary-color: #007bff;
-            --bg-color: #f0f2f5;
-            --text-color: #333;
-            --card-bg: #ffffff;
-        }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            text-align: center; 
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color); 
-            color: var(--text-color);
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 50px 20px;
-        }
-        .card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 40px 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-        }
-        h1 {
-            color: #111;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        h1 span {
-            color: #ffb300;
-        }
-        p {
-            color: #555;
-            font-size: 18px;
-            margin-bottom: 20px;
-        }
-        .features {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            text-align: left;
-            max-width: 400px;
-            margin: 30px auto;
-        }
-        .feature-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 18px;
-        }
-        .btn { 
-            background: var(--primary-color); 
-            color: white; 
-            padding: 15px 30px; 
-            text-decoration: none; 
-            border-radius: 12px; 
-            font-size: 18px; 
-            font-weight: 600;
-            display: inline-block;
-            margin-top: 10px;
-            transition: background 0.3s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .btn:hover {
-            background: #0056b3;
-        }
-        .btn-green {
-            background: #28a745;
-        }
-        .btn-green:hover {
-            background: #218838;
-        }
-        #content-redirect {
-            display: none;
-            padding: 50px 20px;
-        }
-        .footer {
-            margin-top: 40px;
-            font-size: 14px;
-            color: #888;
-        }
-    </style>
+  .shots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+  .shot img { width: 100%; border-radius: 26px; border: 5px solid #0D1530; display: block; }
+  .shot h3 { margin: 18px 0 4px; font-size: 18px; }
+  .shot p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 26px; }
+  .card .ic { font-size: 26px; }
+  .card h3 { margin: 12px 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .news { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .news ul { list-style: none; padding: 0; margin: 0; }
+  .news li { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; gap: 14px; font-weight: 600; }
+  .news li::before { content: ""; flex: none; width: 10px; height: 10px; margin-top: 8px; border-radius: 50%; background: var(--amber); }
+
+  .final { text-align: center; background: var(--ink); color: var(--bg); border-radius: 36px; padding: 64px 24px; margin: 72px 0; }
+  .final h2 { color: inherit; }
+  .final p { opacity: .75; margin: 0 auto 28px; max-width: 520px; }
+  footer { padding: 0 0 48px; color: var(--muted); font-size: 14px; text-align: center; }
+
+  #content-redirect { min-height: 100vh; display: grid; place-items: center; text-align: center; padding: 24px; }
+  #content-redirect[hidden] { display: none; }
+  #content-redirect img { width: 96px; }
+  .spinner { width: 34px; height: 34px; border: 4px solid var(--line); border-top-color: var(--amber); border-radius: 50%; margin: 24px auto; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+  @media (max-width: 900px) {
+    .hero, .news { grid-template-columns: 1fr; }
+    .phones { height: 440px; max-width: 420px; margin: 0 auto; width: 100%; }
+    .phones img { width: 190px; }
+    .shots { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: 1fr 1fr; }
+    nav .links a:not(:last-child) { display: none; }
+  }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: 1fr; }
+    .shots { gap: 16px; }
+    .phones { height: 360px; }
+    .phones img { width: 160px; border-width: 4px; border-radius: 24px; }
+  }
+</style>
 </head>
 <body>
-    <!-- Сторінка редиректу (для Deep Links) -->
-    <div id="content-redirect">
-        <h1>СвітлоЄ! 💡</h1>
-        <p>Завантажуємо розклад...</p>
-        <p style="font-size: 14px; color: #888;">Якщо нічого не відбувається, натисніть кнопку нижче:</p>
-        <a id="btn-open-app" href="#" class="btn" style="margin-bottom: 20px;">⚡ Відкрити в додатку</a><br>
-        <a href="https://github.com/dmitthedazed/SvitloYE/releases" class="btn btn-green">Завантажити APK</a>
-    </div>
 
-    <!-- Лендінг (для звичайних відвідувачів) -->
-    <div class="container" id="content-landing">
-        <div class="card">
-            <h1>Світло<span>Є</span>!</h1>
-            <p>Ваш надійний помічник для відстеження графіків відключень електроенергії у Житомирі та області.</p>
-            
-            <div class="features">
-                <div class="feature-item">⚡ <strong>Завжди під рукою:</strong> зручний перегляд черг та графіків.</div>
-                <div class="feature-item">🔔 <strong>Сповіщення:</strong> дізнавайтесь про зміни першими.</div>
-                <div class="feature-item">📱 <strong>Офлайн доступ:</strong> графік доступний навіть без інтернету.</div>
-                <div class="feature-item">🚀 <strong>Легко:</strong> швидко додавайте свої адреси.</div>
-            </div>
+<div id="content-redirect" hidden>
+  <div>
+    <img src="img/svitloye_logo.svg" alt="">
+    <h2>Відкриваємо СвітлоЄ?</h2>
+    <div class="spinner"></div>
+    <p class="sub" style="margin:0 auto 24px">Якщо застосунок не відкрився автоматично, натисніть кнопку нижче.</p>
+    <a id="btn-open-app" class="btn btn-primary" href="#">Відкрити в застосунку</a>
+  </div>
+</div>
 
-            <a href="https://github.com/dmitthedazed/SvitloYE/releases" class="btn">Завантажити додаток</a>
+<div id="content-landing">
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="#"><img src="img/svitloye_logo.svg" alt=""><span>Світло<b>Є?</b></span></a>
+      <div class="links">
+        <a href="#features">Можливості</a>
+        <a href="#new">Що нового</a>
+        <a href="https://github.com/dmitthedazed/SvitloYE">GitHub</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <span class="tag"><i></i>Версія 2.0 вже доступна</span>
+        <h1>Чи є світло?<br><span>Знаєте першими.</span></h1>
+        <p class="lead">Графіки відключень АТ «Житомиробленерго» для вашої адреси — з таймером до наступної зміни, сповіщеннями та віджетами.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/dmitthedazed/SvitloYE/releases/latest">⬇ Завантажити APK</a>
+          <a class="btn btn-ghost" href="https://github.com/dmitthedazed/SvitloYE">Код на GitHub</a>
         </div>
-        
-        <div class="footer">
-            <p>© 2024 СвітлоЄ. Житомир та область.</p>
-        </div>
+        <div class="meta"><span>Android 8.0+</span><span>Без реклами</span><span>Material You</span><span>Відкритий код</span></div>
+      </div>
+      <div class="phones">
+        <img src="img/more.png" alt="Екран статистики дня">
+        <img src="img/home.png" alt="Головний екран зі статусом світла">
+      </div>
+    </header>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Все про світло — на одному екрані</h2>
+      <p class="sub">Без зайвих кроків: відкрили застосунок і одразу бачите стан для своєї черги.</p>
+      <div class="shots">
+        <div class="shot"><img src="img/home.png" alt="Головна" loading="lazy"><h3>Статус зараз</h3><p>«Світло є» чи «немає», час до зміни та підсумок дня.</p></div>
+        <div class="shot"><img src="img/bell.png" alt="Повідомлення" loading="lazy"><h3>Офіційні новини</h3><p>Оголошення обленерго з посиланням на джерело.</p></div>
+        <div class="shot"><img src="img/addr.png" alt="Мої адреси" loading="lazy"><h3>Кілька адрес</h3><p>Дім, робота, батьки — пошук, геолокація або QR.</p></div>
+        <div class="shot"><img src="img/more.png" alt="Додатково" loading="lazy"><h3>Статистика</h3><p>Скільки годин зі світлом і без нього сьогодні.</p></div>
+      </div>
     </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>І навіть не треба відкривати</h2>
+      <p class="sub">СвітлоЄ? працює там, де вам зручно.</p>
+      <div class="grid">
+        <div class="card"><div class="ic">🔔</div><h3>Розумні сповіщення</h3><p>Попередження перед вимкненням і ввімкненням, зміни графіка, статус у шторці.</p></div>
+        <div class="card"><div class="ic">🧩</div><h3>Віджети</h3><p>Компактний статус, картка стану і детальний графік на робочому столі.</p></div>
+        <div class="card"><div class="ic">⚡</div><h3>Швидка плитка</h3><p>Статус світла одним свайпом у шторці налаштувань.</p></div>
+        <div class="card"><div class="ic">🚗</div><h3>Android Auto</h3><p>Графік на екрані автомобіля.</p></div>
+        <div class="card"><div class="ic">🎨</div><h3>Material You</h3><p>Кольори з ваших шпалер, світла й темна теми.</p></div>
+        <div class="card"><div class="ic">🗺️</div><h3>Вся область</h3><p>Житомир, Бердичів, Коростень, Звягель та всі населені пункти ZTOE.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="new">
+    <div class="wrap news">
+      <div>
+        <h2>Що нового у 2.0</h2>
+        <p class="sub">Найбільше оновлення з моменту запуску: застосунок переписано майже повністю.</p>
+      </div>
+      <ul>
+        <li>Нова система сповіщень: точні будильники та детектор змін графіка</li>
+        <li>Нові віджети на Jetpack Glance</li>
+        <li>Інтерфейс Material 3 Expressive і новий логотип</li>
+        <li>Анімований splash-екран та оновлений онбординг</li>
+        <li>Коректний київський час незалежно від налаштувань телефону</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <div class="final">
+      <h2>Встановіть СвітлоЄ? 2.0</h2>
+      <p>Безкоштовно, без реклами, з відкритим кодом. Потрібен Android 8.0 або новіший.</p>
+      <a class="btn btn-primary" href="https://github.com/dmitthedazed/SvitloYE/releases/latest">⬇ Завантажити APK</a>
+    </div>
+    <footer>
+      Неофіційний застосунок. Дані з відкритих джерел АТ «Житомиробленерго» — у разі розбіжностей орієнтуйтеся на <a href="https://www.ztoe.com.ua">ztoe.com.ua</a>.<br>
+      Зроблено з турботою про енергонезалежність 🇺🇦
+    </footer>
+  </div>
+</div>
+
 </body>
 </html>
