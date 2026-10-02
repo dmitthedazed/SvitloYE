@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- miuix-blur (liquid glass dock) declares minSdk 33; it is only used on API 33+,
+         see LocalLiquidGlass gating in MainScreen -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
+
     <!-- Permissions for notifications and foreground service -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
@@ -139,13 +143,16 @@
                 android:resource="@xml/widget_detailed_schedule_info" />
         </receiver>
 
-        <!-- Boot Receiver for restarting notifications after device reboot -->
+        <!-- Restores alarms after reboot, update, clock change or exact-alarm permission change -->
         <receiver
             android:name=".domain.notification.BootReceiver"
-            android:enabled="true"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
@@ -153,16 +160,13 @@
             android:name=".domain.notification.NotificationActionReceiver"
             android:exported="false" />
 
-        <!-- Status Change Alarm Receiver (for exact scheduled notifications) -->
+        <!-- Fires scheduled outage warnings and status change alerts -->
         <receiver
-            android:name=".domain.notification.StatusChangeAlarmReceiver"
-            android:enabled="true"
+            android:name=".domain.notification.AlertReceiver"
             android:exported="false" />
 
-        <!-- Power Status Service (Unified) -->
         <service
-            android:name=".domain.notification.PowerStatusService"
-            android:enabled="true"
+            android:name=".domain.notification.StatusNotificationService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property

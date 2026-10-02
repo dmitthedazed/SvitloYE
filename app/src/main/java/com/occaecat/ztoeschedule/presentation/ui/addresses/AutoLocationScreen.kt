@@ -35,6 +35,12 @@ import kotlin.coroutines.resumeWithException
 
 import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
+import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
+import com.occaecat.ztoeschedule.presentation.ui.components.StepHeroIcon
+import com.occaecat.ztoeschedule.presentation.ui.components.StepHeroPage
+import com.occaecat.ztoeschedule.presentation.ui.components.StepLeadingIcon
+import com.occaecat.ztoeschedule.presentation.ui.components.StepPrimaryButton
+import com.occaecat.ztoeschedule.presentation.ui.components.StepSecondaryButton
 
 /**
  * State for auto-location detection
@@ -111,6 +117,7 @@ fun AutoLocationScreen(
     
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             if (showTopBar) {
                 TopAppBar(
@@ -129,19 +136,16 @@ fun AutoLocationScreen(
             }
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .consumeWindowInsets(padding)
         ) {
             when (val currentState = state) {
                 is AutoLocationState.Idle,
                 is AutoLocationState.RequestingPermission -> {
                     PermissionContent(
-                        permissionsState = locationPermissions,
                         onRequestPermission = { locationPermissions.launchMultiplePermissionRequest() },
                         onManualSelection = onManualSelection
                     )
@@ -168,8 +172,8 @@ fun AutoLocationScreen(
                         message = currentState.message,
                         canRetry = currentState.canRetry,
                         onRetry = {
-                            state = AutoLocationState.GettingLocation
-                            // Trigger retry
+                            // Idle re-arms the detection effect above
+                            state = AutoLocationState.Idle
                         },
                         onManualSelection = onManualSelection
                     )
@@ -179,124 +183,62 @@ fun AutoLocationScreen(
     }
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PermissionContent(
-    permissionsState: MultiplePermissionsState,
     onRequestPermission: () -> Unit,
     onManualSelection: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.size(100.dp),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
+    val colorScheme = MaterialTheme.colorScheme
+    StepHeroPage(
+        hero = {
+            StepHeroIcon(
+                icon = Icons.Default.MyLocation,
+                shape = MaterialShapes.Pentagon.toShape(),
+                containerColor = colorScheme.secondaryContainer,
+                contentColor = colorScheme.onSecondaryContainer
+            )
+        },
+        title = stringResource(R.string.loc_permission_title),
+        subtitle = stringResource(R.string.loc_permission_desc),
+        actions = {
+            StepPrimaryButton(
+                text = stringResource(R.string.loc_grant_btn),
+                onClick = onRequestPermission
+            )
+            StepSecondaryButton(
+                text = stringResource(R.string.loc_manual_btn),
+                onClick = onManualSelection
             )
         }
-    }
-    
-    Spacer(modifier = Modifier.height(24.dp))
-    
-    Text(
-        text = stringResource(R.string.loc_permission_title),
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
     )
-    
-    Spacer(modifier = Modifier.height(8.dp))
-    
-    Text(
-        text = stringResource(R.string.loc_permission_desc),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center
-    )
-    
-    Spacer(modifier = Modifier.height(32.dp))
-    
-    Button(
-        onClick = onRequestPermission,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Icon(Icons.Default.MyLocation, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(stringResource(R.string.loc_grant_btn))
-    }
-    
-    Spacer(modifier = Modifier.height(16.dp))
-    
-    OutlinedButton(
-        onClick = onManualSelection,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Icon(Icons.Default.Edit, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(stringResource(R.string.loc_manual_btn))
-    }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingContent(state: AutoLocationState) {
-    val (icon, title, subtitle) = when (state) {
-        is AutoLocationState.GettingLocation -> Triple(
-            Icons.Default.GpsFixed,
-            stringResource(R.string.loc_status_getting),
-            stringResource(R.string.loc_status_getting_sub)
-        )
-        is AutoLocationState.Geocoding -> Triple(
-            Icons.Default.Map,
-            stringResource(R.string.loc_status_geocoding),
-            stringResource(R.string.loc_status_geocoding_sub)
-        )
-        is AutoLocationState.SearchingRem -> Triple(
-            Icons.Default.Search,
-            stringResource(R.string.loc_status_searching),
-            stringResource(R.string.loc_status_searching_sub)
-        )
-        else -> Triple(Icons.Default.HourglassTop, stringResource(R.string.loc_status_loading), "")
+    val colorScheme = MaterialTheme.colorScheme
+    val (title, subtitle) = when (state) {
+        is AutoLocationState.GettingLocation -> stringResource(R.string.loc_status_getting) to stringResource(R.string.loc_status_getting_sub)
+        is AutoLocationState.Geocoding -> stringResource(R.string.loc_status_geocoding) to stringResource(R.string.loc_status_geocoding_sub)
+        is AutoLocationState.SearchingRem -> stringResource(R.string.loc_status_searching) to stringResource(R.string.loc_status_searching_sub)
+        else -> stringResource(R.string.loc_status_loading) to null
     }
-    
-    CircularProgressIndicator(
-        modifier = Modifier.size(80.dp),
-        strokeWidth = 6.dp
+
+    StepHeroPage(
+        hero = {
+            ContainedLoadingIndicator(
+                modifier = Modifier.size(144.dp),
+                containerColor = colorScheme.secondaryContainer,
+                indicatorColor = colorScheme.onSecondaryContainer
+            )
+        },
+        title = title,
+        subtitle = subtitle
     )
-    
-    Spacer(modifier = Modifier.height(32.dp))
-    
-    Icon(
-        imageVector = icon,
-        contentDescription = null,
-        modifier = Modifier.size(32.dp),
-        tint = MaterialTheme.colorScheme.primary
-    )
-    
-    Spacer(modifier = Modifier.height(16.dp))
-    
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
-    )
-    
-    if (subtitle.isNotEmpty()) {
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SuccessContent(
     state: AutoLocationState.Success,
@@ -306,167 +248,79 @@ private fun SuccessContent(
     showRemSuggestions: Boolean
 ) {
     val currentLocale = LocalLocale.current.platformLocale
-    Icon(
-        imageVector = Icons.Default.CheckCircle,
-        contentDescription = null,
-        modifier = Modifier.size(64.dp),
-        tint = MaterialTheme.colorScheme.primary
-    )
-    
-    Spacer(modifier = Modifier.height(24.dp))
-    
-    Text(
-        text = stringResource(R.string.loc_success_title),
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
-    )
-    
-    Spacer(modifier = Modifier.height(8.dp))
-    
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = state.detectedAddress.rawAddress,
-                style = MaterialTheme.typography.bodyLarge
-            )
-        }
-    }
-    
-    Spacer(modifier = Modifier.height(24.dp))
+    val colorScheme = MaterialTheme.colorScheme
+    fun distanceLabel(km: Double) = "≈ ${String.format(currentLocale, "%.1f", km)} км"
 
-    if (onAddressDetected != null) {
-        Button(
-            onClick = { onAddressDetected(state.detectedAddress) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(stringResource(R.string.action_save_address))
-        }
-    }
+    // Suggested REM first, then up to three more nearby ones
+    val rems = if (showRemSuggestions) state.allRems.take(4) else emptyList()
 
-    if (showRemSuggestions && state.suggestedRem != null) {
-        Text(
-            text = stringResource(R.string.loc_suggested_rem),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        ElevatedCard(
-            onClick = { onRemSelected(state.suggestedRem) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Business,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(16.dp))
-                
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = state.suggestedRem.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    val distance = state.allRems.find { it.rem.id == state.suggestedRem.id }?.distanceKm
-                    if (distance != null) {
-                        Text(
-                            text = "≈ ${String.format(currentLocale, "%.1f", distance)} км",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+    StepHeroPage(
+        hero = {
+            StepHeroIcon(
+                icon = Icons.Default.CheckCircle,
+                shape = MaterialShapes.Cookie9Sided.toShape(),
+                containerColor = colorScheme.primaryContainer,
+                contentColor = colorScheme.onPrimaryContainer
+            )
+        },
+        title = stringResource(R.string.loc_success_title),
+        subtitle = state.detectedAddress.rawAddress,
+        actions = {
+            if (onAddressDetected != null) {
+                StepPrimaryButton(
+                    text = stringResource(R.string.action_save_address),
+                    icon = Icons.Default.Check,
+                    onClick = { onAddressDetected(state.detectedAddress) }
                 )
             }
+            StepSecondaryButton(
+                text = stringResource(R.string.loc_manual_rem_btn),
+                onClick = onManualSelection
+            )
         }
-    }
-    
-    // Show other nearby REMs
-    if (showRemSuggestions && state.allRems.size > 1) {
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Text(
-            text = stringResource(R.string.loc_other_rems),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        state.allRems.drop(1).take(3).forEach { remWithDistance ->
-            OutlinedCard(
-                onClick = { onRemSelected(remWithDistance.rem) },
+    ) {
+        if (rems.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.loc_suggested_rem).trimEnd(':'),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = remWithDistance.rem.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = "≈ ${String.format(currentLocale, "%.1f", remWithDistance.distanceKm)} км",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    .padding(start = 8.dp, bottom = 8.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                rems.forEachIndexed { index, remWithDistance ->
+                    val isSuggested = index == 0
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = rems.size,
+                        headlineContent = {
+                            Text(remWithDistance.rem.name, fontWeight = if (isSuggested) FontWeight.Bold else FontWeight.Normal)
+                        },
+                        supportingContent = { Text(distanceLabel(remWithDistance.distanceKm)) },
+                        leadingContent = {
+                            if (isSuggested) {
+                                StepLeadingIcon(
+                                    icon = Icons.Default.Star,
+                                    containerColor = colorScheme.primary,
+                                    contentColor = colorScheme.onPrimary
+                                )
+                            } else {
+                                StepLeadingIcon(Icons.Default.Business)
+                            }
+                        },
+                        trailingContent = {
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = colorScheme.onSurfaceVariant)
+                        },
+                        onClick = { onRemSelected(remWithDistance.rem) }
                     )
                 }
             }
         }
-    }
-    
-    Spacer(modifier = Modifier.height(24.dp))
-    
-    TextButton(onClick = onManualSelection) {
-        Icon(Icons.Default.Edit, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(stringResource(R.string.loc_manual_rem_btn))
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ErrorContent(
     message: String,
@@ -474,54 +328,31 @@ private fun ErrorContent(
     onRetry: () -> Unit,
     onManualSelection: () -> Unit
 ) {
-    Icon(
-        imageVector = Icons.Default.ErrorOutline,
-        contentDescription = null,
-        modifier = Modifier.size(64.dp),
-        tint = MaterialTheme.colorScheme.error
-    )
-    
-    Spacer(modifier = Modifier.height(24.dp))
-    
-    Text(
-        text = stringResource(R.string.loc_error_title),
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
-    )
-    
-    Spacer(modifier = Modifier.height(8.dp))
-    
-    Text(
-        text = message,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center
-    )
-    
-    Spacer(modifier = Modifier.height(32.dp))
-    
-    if (canRetry) {
-        Button(
-            onClick = onRetry,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Refresh, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(stringResource(R.string.loc_retry_btn))
+    val colorScheme = MaterialTheme.colorScheme
+    StepHeroPage(
+        hero = {
+            StepHeroIcon(
+                icon = Icons.Default.LocationOff,
+                shape = MaterialShapes.Cookie4Sided.toShape(),
+                containerColor = colorScheme.errorContainer,
+                contentColor = colorScheme.onErrorContainer
+            )
+        },
+        title = stringResource(R.string.loc_error_title),
+        subtitle = message,
+        actions = {
+            if (canRetry) {
+                StepPrimaryButton(
+                    text = stringResource(R.string.loc_retry_btn),
+                    onClick = onRetry
+                )
+            }
+            StepSecondaryButton(
+                text = stringResource(R.string.loc_manual_btn),
+                onClick = onManualSelection
+            )
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-    
-    OutlinedButton(
-        onClick = onManualSelection,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Icon(Icons.Default.Edit, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(stringResource(R.string.loc_manual_btn))
-    }
+    )
 }
 
 private suspend fun detectLocation(

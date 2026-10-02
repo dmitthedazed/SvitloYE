@@ -44,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
@@ -68,11 +69,15 @@ import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import kotlinx.coroutines.launch
 
 import com.occaecat.ztoeschedule.ui.theme.robotoFlexTopBar
-import com.occaecat.ztoeschedule.ui.theme.LocalGlassBackdrop
-import com.occaecat.ztoeschedule.presentation.ui.glass.GlassNavItem
-import com.occaecat.ztoeschedule.presentation.ui.glass.LiquidGlassBackground
-import com.occaecat.ztoeschedule.presentation.ui.glass.LiquidGlassNavBar
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.occaecat.ztoeschedule.presentation.ui.glass.dock.FloatingBottomBar
+import com.occaecat.ztoeschedule.presentation.ui.glass.glassCapsule
+import com.occaecat.ztoeschedule.presentation.ui.glass.dock.FloatingBottomBarItem
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
+import com.kyant.backdrop.effects.blur
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
@@ -83,6 +88,10 @@ fun MainScreen(
     windowSizeClass: WindowSizeClass
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        viewModel.reloadAddressesIfChanged()
+        onPauseOrDispose { }
+    }
     val reduceMotion = false
     val mainScaffoldLayout = remember(windowSizeClass.widthSizeClass) {
         mainScaffoldLayoutFor(windowSizeClass.widthSizeClass)
@@ -98,12 +107,13 @@ fun MainScreen(
     val pagerState = rememberPagerState(pageCount = { uiState.addressDataList.size })
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val snackbarHostState = remember { SnackbarHostState() }
-    var showMenu by remember { mutableStateOf(false) }
     var activityLaunched by rememberSaveable { mutableStateOf(false) }
     var showAddAddressSheet by remember { mutableStateOf(false) }
     
     // Scroll behavior for TopAppBar
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    // One list state per address page so pages can be kept at the same scroll position
+    val homeListStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
     val motionScheme = MaterialTheme.motionScheme
 
     val offlineUpdated = remember(uiState.addressDataList) {
@@ -208,19 +218,19 @@ fun MainScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         val context = LocalContext.current
-        val liquidGlass = com.occaecat.ztoeschedule.ui.theme.LocalLiquidGlass.current && !useWideLayout
-        val bgBackdrop = if (liquidGlass) rememberLayerBackdrop() else null
-
-        // Animated gradient background — the backdrop source for all glass elements
-        if (bgBackdrop != null) {
-            LiquidGlassBackground(modifier = Modifier.layerBackdrop(bgBackdrop))
+        // Liquid Glass is a mode for the floating chrome only (dock, FAB); screens keep their
+        // Material surfaces. Lens and highlight shaders need RuntimeShader: Android 13+
+        val liquidGlass = com.occaecat.ztoeschedule.ui.theme.LocalLiquidGlass.current && !useWideLayout &&
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+        // Screen content recorded once and refracted by every glass element and the edge blurs
+        val pageColor = MaterialTheme.colorScheme.surface
+        val contentBackdrop = rememberLayerBackdrop {
+            drawRect(pageColor)
+            drawContent()
         }
 
-        androidx.compose.runtime.CompositionLocalProvider(LocalGlassBackdrop provides bgBackdrop) {
         Box(modifier = Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxSize()
-        ) {
+        Row(Modifier.fillMaxSize()) {
             if (useWideLayout) {
                 NavigationRail(
                     modifier = Modifier.statusBarsPadding(),
@@ -246,80 +256,59 @@ fun MainScreen(
 
             Scaffold(
                 modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-                snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                snackbarHost = {
+                    SnackbarHost(hostState = snackbarHostState) { data ->
+                        if (liquidGlass) com.occaecat.ztoeschedule.presentation.ui.glass.GlassSnackbar(contentBackdrop, data, Modifier.padding(bottom = 84.dp))
+                        else Snackbar(data)
+                    }
+                },
                 topBar = {
                     if (shouldShowBars) {
                         Column {
                             Box(contentAlignment = Alignment.BottomCenter) {
                                 TopAppBar(
                                 colors = TopAppBarDefaults.topAppBarColors(
+                                    // Transparent: the page colour and blur come from EdgeBlur underneath
                                     containerColor = Color.Transparent,
-                                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                                    scrolledContainerColor = Color.Transparent
                                 ),
                                 scrollBehavior = scrollBehavior,
                                 title = { 
                                     AnimatedContent(
                                         targetState = currentTitle, 
                                         transitionSpec = {
-                                            slideInVertically(
-                                                animationSpec = motionScheme.defaultSpatialSpec(),
-                                                initialOffsetY = { (-it * 1.25).toInt() }
-                                            ).togetherWith(
-                                                slideOutVertically(
-                                                    animationSpec = motionScheme.defaultSpatialSpec(),
-                                                    targetOffsetY = { (it * 1.25).toInt() }
-                                                )
-                                            )
+                                            (slideInVertically(motionScheme.defaultSpatialSpec()) { -it / 2 } + fadeIn(motionScheme.defaultEffectsSpec()))
+                                                .togetherWith(slideOutVertically(motionScheme.defaultSpatialSpec()) { it / 2 } + fadeOut(motionScheme.fastEffectsSpec()))
                                         },
                                         label = "title_animation",
-                                        modifier = Modifier.fillMaxWidth(0.9f),
                                         contentAlignment = Alignment.CenterStart
                                     ) { title -> 
-                                        Column(horizontalAlignment = Alignment.Start) {
-                                            Text(
-                                                text = title, 
-                                                style = MaterialTheme.typography.headlineLarge.copy(
-                                                    fontSize = 32.sp,
-                                                    lineHeight = 32.sp,
-                                                    fontFamily = robotoFlexTopBar
-                                                ),
-                                                textAlign = TextAlign.Start,
-                                                maxLines = 1
-                                            )
-                                            if (currentRoute == "home" && uiState.addressDataList.size > 1) {
-                                                Text(
-                                                    stringResource(R.string.home_page_indicator, pagerState.currentPage + 1, uiState.addressDataList.size),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
+                                        Text(
+                                            text = title, 
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     } 
                                 },
                                 actions = { 
-                                    Box { 
-                                        IconButton(onClick = { showMenu = true }, modifier = Modifier.pointerHoverIcon(PointerIcon.Hand)) { 
-                                            Icon(Icons.Default.MoreVert, stringResource(R.string.home_menu)) 
-                                        }
-                                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) { 
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.home_refresh_all)) },
-                                                leadingIcon = { Icon(Icons.Default.Refresh, null) },
-                                                enabled = uiState.isConnected,
-                                                onClick = {
-                                                    showMenu = false
-                                                    if (!uiState.isConnected) {
-                                                        showOfflineSnackbar()
-                                                    } else {
-                                                        viewModel.refreshAllSchedules()
-                                                    }
-                                                }
-                                            )
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.home_configure_widget)) }, leadingIcon = { Icon(Icons.Default.Widgets, null) }, onClick = { showMenu = false; viewModel.setShowWidgetConfig(true) })
-                                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                                            DropdownMenuItem(text = { Text(stringResource(R.string.home_help_faq)) }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, null) }, onClick = { showMenu = false; navController.navigate("faq") }) 
-                                        } 
-                                    } 
+                                    if (currentRoute == "home" && uiState.addressDataList.size > 1) {
+                                        com.occaecat.ztoeschedule.presentation.ui.components.PageIndicatorDots(
+                                            current = pagerState.currentPage,
+                                            total = uiState.addressDataList.size,
+                                            description = stringResource(R.string.home_page_indicator, pagerState.currentPage + 1, uiState.addressDataList.size),
+                                            fillCompleted = false,
+                                            modifier = Modifier
+                                                .padding(end = 16.dp)
+                                                .then(
+                                                    if (liquidGlass) Modifier
+                                                        .glassCapsule(contentBackdrop)
+                                                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                                                    else Modifier
+                                                )
+                                        )
+                                    }
                                 }
                             )
                             if (uiState.isLoading) {
@@ -330,36 +319,43 @@ fun MainScreen(
                                         .offset(y = 2.dp),
                                     color = MaterialTheme.colorScheme.primary, 
                                     trackColor = Color.Transparent,
-                                    wavelength = 20.dp
+                                    wavelength = 20.dp,
+                                    // Default speed (one wavelength per second) feels frantic
+                                    waveSpeed = 5.dp
                                 )
                             }
                             }
                             if (!uiState.isConnected) {
                                 Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                        .then(if (liquidGlass) Modifier.glassCapsule(contentBackdrop, RoundedCornerShape(20.dp)) else Modifier),
+                                    color = if (liquidGlass) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    shape = RoundedCornerShape(20.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.SignalWifiOff,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         val offlineText = if (!offlineUpdated.isNullOrBlank()) {
-                                            stringResource(R.string.error_offline_banner) + " - " +
+                                            stringResource(R.string.error_offline_banner) + " · " +
                                                 stringResource(R.string.home_last_updated, offlineUpdated)
                                         } else {
                                             stringResource(R.string.error_offline_banner)
                                         }
                                         Text(
                                             text = offlineText,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.weight(1f)
                                         )
@@ -376,7 +372,7 @@ fun MainScreen(
                 },
                 bottomBar = {
                     AnimatedVisibility(
-                        visible = !useWideLayout && shouldShowBars && bgBackdrop == null,
+                        visible = !useWideLayout && shouldShowBars && !liquidGlass,
                         enter = if (reduceMotion) EnterTransition.None else slideInVertically(initialOffsetY = { it }) + fadeIn(),
                         exit = if (reduceMotion) ExitTransition.None else slideOutVertically(targetOffsetY = { it }) + fadeOut()
                     ) {
@@ -446,38 +442,108 @@ fun MainScreen(
                         enter = if (reduceMotion) EnterTransition.None else scaleIn() + fadeIn(),
                         exit = if (reduceMotion) ExitTransition.None else scaleOut() + fadeOut()
                     ) { 
-                        ExtendedFloatingActionButton(
-                            modifier = Modifier.navigationBarsPadding(),
-                            onClick = { 
-                                if (!uiState.isConnected) {
-                                    showOfflineSnackbar()
-                                } else {
-                                    showAddAddressSheet = true
-                                }
-                            }, 
-                            icon = { Icon(Icons.Default.AddLocation, null) }, 
-                            text = { Text(stringResource(R.string.home_add)) }, 
-                            containerColor = MaterialTheme.colorScheme.primaryContainer, 
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ) 
+                        val onAddClick = {
+                            if (!uiState.isConnected) {
+                                showOfflineSnackbar()
+                            } else {
+                                showAddAddressSheet = true
+                            }
+                        }
+                        if (liquidGlass) {
+                            // The glass dock is an overlay, so lift the FAB above it
+                            com.occaecat.ztoeschedule.presentation.ui.glass.GlassExtendedFab(
+                                backdrop = contentBackdrop,
+                                text = stringResource(R.string.home_add),
+                                icon = Icons.Default.AddLocation,
+                                onClick = onAddClick,
+                                modifier = Modifier
+                                    .navigationBarsPadding()
+                                    .padding(bottom = 84.dp)
+                            )
+                        } else {
+                            ExtendedFloatingActionButton(
+                                modifier = Modifier.navigationBarsPadding(),
+                                onClick = onAddClick,
+                                icon = { Icon(Icons.Default.AddLocation, null) },
+                                text = { Text(stringResource(R.string.home_add)) },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     } 
                 }
             ) { padding ->
                 val br = listOf("home", "notifications", "addresses", "more"); fun gRI(r: String?): Int = br.indexOf(r)
+                // The top bar's collapse state is shared by every tab; a tab that can't scroll
+                // would otherwise be stuck without a top bar
+                LaunchedEffect(currentRoute) {
+                    scrollBehavior.state.heightOffset = 0f
+                    scrollBehavior.state.contentOffset = 0f
+                }
+                // Keep neighbouring address pages at the same scroll position as the current one
+                LaunchedEffect(pagerState.currentPage, uiState.addressDataList.map { it.address.id }) {
+                    val ids = uiState.addressDataList.map { it.address.id }
+                    val current = ids.getOrNull(pagerState.currentPage) ?: return@LaunchedEffect
+                    val currentState = homeListStates.getOrPut(current) { androidx.compose.foundation.lazy.LazyListState() }
+                    snapshotFlow { currentState.firstVisibleItemIndex to currentState.firstVisibleItemScrollOffset }
+                        .collect { (index, offset) ->
+                            ids.forEach { id ->
+                                if (id != current) {
+                                    homeListStates.getOrPut(id) { androidx.compose.foundation.lazy.LazyListState() }
+                                        .requestScrollToItem(index, offset)
+                                }
+                            }
+                        }
+                }
+                // With the liquid-glass bar the navigation is an overlay, not part of the Scaffold padding
+                val tabPadding = if (liquidGlass) {
+                    PaddingValues(
+                        start = padding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                        top = padding.calculateTopPadding(),
+                        end = padding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                        bottom = padding.calculateBottomPadding() + 96.dp
+                    )
+                } else padding
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize().layerBackdrop(contentBackdrop)) {
                         NavHost(
                             navController = navController, startDestination = "home", modifier = Modifier.fillMaxSize(),
-                            enterTransition = { if (reduceMotion) EnterTransition.None else run { val f = gRI(initialState.destination.route); val t = gRI(targetState.destination.route); if (f != -1 && t != -1) { if (t > f) slideInHorizontally { it } + fadeIn() else slideInHorizontally { -it } + fadeIn() } else slideInHorizontally { it } + fadeIn() } },
-                            exitTransition = { if (reduceMotion) ExitTransition.None else run { val f = gRI(initialState.destination.route); val t = gRI(targetState.destination.route); if (f != -1 && t != -1) { if (t > f) slideOutHorizontally { -it } + fadeOut() else slideOutHorizontally { it } + fadeOut() } else slideOutHorizontally { -it } + fadeOut() } },
-                            popEnterTransition = { if (reduceMotion) EnterTransition.None else run { val f = gRI(initialState.destination.route); val t = gRI(targetState.destination.route); if (f != -1 && t != -1) { if (t > f) slideInHorizontally { it } + fadeIn() else slideInHorizontally { -it } + fadeIn() } else slideInHorizontally { it } + fadeIn() } },
-                            popExitTransition = { if (reduceMotion) ExitTransition.None else run { val f = gRI(initialState.destination.route); val t = gRI(targetState.destination.route); if (f != -1 && t != -1) { val s = if (t > f) slideOutHorizontally { -it } else slideOutHorizontally { it }; s + fadeOut() + scaleOut(targetScale = 0.9f) } else slideOutHorizontally { it } + fadeOut() + scaleOut(targetScale = 0.9f) } }
+                            // Tabs use Material "fade through"; other destinations a short shared-axis slide
+                            enterTransition = {
+                                when {
+                                    reduceMotion -> EnterTransition.None
+                                    gRI(initialState.destination.route) != -1 && gRI(targetState.destination.route) != -1 -> fadeThroughIn()
+                                    else -> sharedAxisIn(forward = true)
+                                }
+                            },
+                            exitTransition = {
+                                when {
+                                    reduceMotion -> ExitTransition.None
+                                    gRI(initialState.destination.route) != -1 && gRI(targetState.destination.route) != -1 -> fadeThroughOut()
+                                    else -> sharedAxisOut(forward = true)
+                                }
+                            },
+                            popEnterTransition = {
+                                when {
+                                    reduceMotion -> EnterTransition.None
+                                    gRI(initialState.destination.route) != -1 && gRI(targetState.destination.route) != -1 -> fadeThroughIn()
+                                    else -> sharedAxisIn(forward = false)
+                                }
+                            },
+                            popExitTransition = {
+                                when {
+                                    reduceMotion -> ExitTransition.None
+                                    gRI(initialState.destination.route) != -1 && gRI(targetState.destination.route) != -1 -> fadeThroughOut()
+                                    else -> sharedAxisOut(forward = false)
+                                }
+                            }
                         ) {
                             composable("home") { 
                                 val ctx = LocalContext.current
                                 LaunchedEffect(pagerState.currentPage, uiState.addressDataList) { 
-                                    if (uiState.addressDataList.isNotEmpty()) { 
-                                        val id = uiState.addressDataList[pagerState.currentPage].address.id
+                                    // The list can change size (address added/removed) before the pager catches up
+                                    uiState.addressDataList.getOrNull(pagerState.currentPage)?.let { current ->
+                                        val id = current.address.id
                                         androidx.core.content.pm.ShortcutManagerCompat.reportShortcutUsed(ctx, "address_$id") 
                                     } 
                                 }
@@ -494,9 +560,7 @@ fun MainScreen(
                                         }
                                     } else if (uiState.addressDataList.isEmpty()) {
                                         EmptyHomePlaceholder(
-                                            modifier = Modifier
-                                                .padding(padding)
-                                                .fillMaxSize(),
+                                            contentPadding = tabPadding,
                                             onAddAddress = {
                                                 if (!uiState.isConnected) {
                                                     showOfflineSnackbar()
@@ -518,9 +582,11 @@ fun MainScreen(
                                                     } 
                                                 } else false 
                                             }, 
-                                            beyondViewportPageCount = 1
+                                            // Neighbours are composed lazily as the user swipes, so entering
+                                            // Home builds one page instead of three
+                                            beyondViewportPageCount = 0
                                         ) { page -> 
-                                            val d = uiState.addressDataList[page]
+                                            val d = uiState.addressDataList.getOrNull(page) ?: return@HorizontalPager
                                             HomeTab(
                                                 remId = d.address.remId,
                                                 cityId = d.address.cityId,
@@ -530,6 +596,8 @@ fun MainScreen(
                                                 addressName = d.address.addressName.ifBlank { d.address.name },
                                                 cherga = d.address.cherga,
                                                 pidcherga = d.address.pidcherga,
+                                                iconName = d.address.iconName,
+                                                isPrimary = page == 0,
                                                 currentStatus = d.currentStatus,
                                                 schedules = d.scheduleList,
                                                 groupedSchedule = d.groupedSchedule,
@@ -541,7 +609,8 @@ fun MainScreen(
                                                     }
                                                 },
                                                 modifier = Modifier.fillMaxSize(),
-                                                contentPadding = padding,
+                                                contentPadding = tabPadding,
+                                                listState = homeListStates.getOrPut(d.address.id) { androidx.compose.foundation.lazy.LazyListState() },
                                                 lastUpdateTime = d.lastUpdateTime,
                                                 isOffline = d.isOffline,
                                                 isLoading = uiState.isLoading,
@@ -553,7 +622,7 @@ fun MainScreen(
 
                                 }
                             }
-                            composable("notifications") { NotificationsTab(uiState.infoMessages, uiState.formattedMessage, uiState.lastUpdateTime, Modifier.fillMaxSize(), padding, uiState.isLoading) }
+                            composable("notifications") { NotificationsTab(uiState.infoMessages, uiState.formattedMessage, uiState.lastUpdateTime, Modifier.fillMaxSize(), tabPadding, uiState.isLoading) }
                             composable("addresses") { 
                                 val context = LocalContext.current
                                 MyAddressesTab(
@@ -617,7 +686,7 @@ fun MainScreen(
                                         }
                                     },
                                     modifier = Modifier.fillMaxSize(),
-                                    contentPadding = padding
+                                    contentPadding = tabPadding
                                 ) 
                             }
                             composable("more") { 
@@ -635,41 +704,105 @@ fun MainScreen(
                                     onNavigateToFaq = { context.startActivity(Intent(context, com.occaecat.ztoeschedule.InfoActivity::class.java).apply { putExtra("type", "faq") }) },
                                     onNavigateToFeedback = { context.startActivity(Intent(context, com.occaecat.ztoeschedule.InfoActivity::class.java).apply { putExtra("type", "feedback") }) },
                                     onAddDemoLocation = { viewModel.addDemoLocation() },
-                                    contentPadding = padding
+                                    contentPadding = tabPadding
                                 ) 
                             }
                     composable("integrations") { IntegrationsScreen(onBack = { navController.popBackStack() }) }
                 }
+            }
+            if (!useWideLayout && shouldShowBars && !liquidGlass) {
+                EdgeBlur(
+                    backdrop = contentBackdrop,
+                    fromTop = false,
+                    height = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 104.dp,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+            if (shouldShowBars) {
+                // Covers the status bar and the top bar, shrinking as the bar scrolls away
+                val topBarVisibleHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                    (TopAppBarDefaults.TopAppBarExpandedHeight.toPx() + scrollBehavior.state.heightOffset).coerceAtLeast(0f).toDp()
+                }
+                EdgeBlur(
+                    backdrop = contentBackdrop,
+                    fromTop = true,
+                    height = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + topBarVisibleHeight + 24.dp,
+                    tintAlpha = 0.8f,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
             }
         }
             }
         }
 
         // Liquid Glass bottom nav overlay — sibling to Row inside inner Box, blurs through gradient background
-        if (bgBackdrop != null && shouldShowBars && !useWideLayout) {
+        if (liquidGlass && shouldShowBars) {
             AnimatedVisibility(
                 visible = true,
                 modifier = Modifier.align(Alignment.BottomCenter),
                 enter = if (reduceMotion) EnterTransition.None else slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = if (reduceMotion) ExitTransition.None else slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
-                LiquidGlassNavBar(
-                    items = navItems.map { GlassNavItem(it.route, it.label, it.selectedIcon, it.unselectedIcon) },
-                    currentRoute = currentRoute,
-                    backdrop = bgBackdrop,
-                    onNavigate = { route ->
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                val selectedTab = navItems.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    FloatingBottomBar(
+                        modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
+                        selectedIndex = selectedTab,
+                        onSelected = { index ->
+                            val route = navItems[index].route
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (route != currentRoute) {
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
+                        tabsCount = navItems.size,
+                        isBlurEnabled = true,
+                        blurBackdrop = contentBackdrop
+                    ) { activateTab ->
+                        navItems.forEachIndexed { index, item ->
+                            FloatingBottomBarItem(
+                                selected = index == selectedTab,
+                                onClick = { activateTab(index) },
+                            ) {
+                                val tabColor = LocalContentColor.current
+                                val icon: @Composable () -> Unit = {
+                                    Icon(
+                                        imageVector = if (index == selectedTab) item.selectedIcon else item.unselectedIcon,
+                                        contentDescription = item.label,
+                                        tint = tabColor
+                                    )
+                                }
+                                if (item.route == "notifications" && uiState.infoMessages.isNotEmpty()) {
+                                    BadgedBox(badge = { Badge { Text("${uiState.infoMessages.size}") } }) { icon() }
+                                } else {
+                                    icon()
+                                }
+                                Text(
+                                    text = item.label,
+                                    color = tabColor,
+                                    fontSize = 10.sp,
+                                    lineHeight = 12.sp,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
-                )
+                }
             }
         }
         } // close inner Box
-        } // close CompositionLocalProvider
 
         val widgetPaneTitle = stringResource(R.string.widget_select_pane_title)
         if (uiState.showWidgetConfig) {
@@ -735,54 +868,99 @@ fun MainScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EmptyHomePlaceholder(
-    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues,
     onAddAddress: () -> Unit
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(220.dp)
-                .padding(bottom = 24.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                repeat(3) { index ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                    )
-                    if (index < 2) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
+    com.occaecat.ztoeschedule.presentation.ui.components.EmptyStatePage(
+        icon = Icons.Default.Bolt,
+        shape = MaterialShapes.Sunny.toShape(),
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        rotateHero = true,
+        title = stringResource(R.string.home_no_address_title),
+        body = stringResource(R.string.home_no_address_desc),
+        contentPadding = contentPadding,
+        actionText = "Додати адресу",
+        actionIcon = Icons.Default.AddLocationAlt,
+        onAction = onAddAddress,
+        chips = listOf(
+            com.occaecat.ztoeschedule.presentation.ui.components.EmptyStateChip(Icons.Default.Schedule, "Графік"),
+            com.occaecat.ztoeschedule.presentation.ui.components.EmptyStateChip(Icons.Default.NotificationsActive, "Сповіщення"),
+            com.occaecat.ztoeschedule.presentation.ui.components.EmptyStateChip(Icons.Default.Widgets, "Віджети")
+        )
+    )
+}
+
+// Material motion: fade through for switching top-level tabs
+private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
+// Fade only: scaling a whole tab forces every frame of the pager to be re-rasterised, which
+// is what made returning to Home stutter
+private fun fadeThroughIn(): EnterTransition =
+    fadeIn(tween(durationMillis = 210, delayMillis = 90, easing = EmphasizedDecelerate))
+
+private fun fadeThroughOut(): ExitTransition =
+    fadeOut(tween(durationMillis = 90, easing = EmphasizedAccelerate))
+
+// Shared X axis for drilling into a destination and back
+private fun sharedAxisIn(forward: Boolean): EnterTransition =
+    slideInHorizontally(tween(300, easing = EmphasizedDecelerate)) { (if (forward) 1 else -1) * it / 10 } +
+        fadeIn(tween(210, delayMillis = 90, easing = EmphasizedDecelerate))
+
+private fun sharedAxisOut(forward: Boolean): ExitTransition =
+    slideOutHorizontally(tween(300, easing = EmphasizedDecelerate)) { (if (forward) -1 else 1) * it / 10 } +
+        fadeOut(tween(90, easing = EmphasizedAccelerate))
+
+/**
+ * Soft blur at a screen edge (behind the floating navigation, or under the status bar once the
+ * top bar scrolls away), strongest at the edge and fading out towards the content.
+ *
+ * The blurred copy is drawn over an opaque background: a blur near the layer edge becomes
+ * semi-transparent, and without the fill the sharp content underneath would show through as seams.
+ */
+@Composable
+private fun EdgeBlur(
+    backdrop: com.kyant.backdrop.Backdrop,
+    fromTop: Boolean,
+    height: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    tintAlpha: Float = 0.55f
+) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val blurPx = with(density) { 6.dp.toPx() }
+    val surface = MaterialTheme.colorScheme.surface
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawRect(surface)
+                drawContent()
+                val edgeStops = listOf(Color.Transparent, surface.copy(alpha = tintAlpha))
+                drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(if (fromTop) edgeStops.reversed() else edgeStops))
+                // Fade the layer out towards the content over the last 24dp so there is no hard edge
+                val fade = (24.dp.toPx() / size.height).coerceIn(0f, 1f)
+                val maskStops = if (fromTop) {
+                    arrayOf(0f to Color.Black, (1f - fade) to Color.Black, 1f to Color.Transparent)
+                } else {
+                    arrayOf(0f to Color.Transparent, fade to Color.Black, 1f to Color.Black)
                 }
+                drawRect(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(*maskStops),
+                    blendMode = androidx.compose.ui.graphics.BlendMode.DstIn
+                )
             }
-        }
-        Text(
-            text = stringResource(R.string.home_no_address_title),
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.home_no_address_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onAddAddress) {
-            Text(stringResource(R.string.home_add))
-        }
-    }
+            // Must come after drawWithContent so the fill sits under, and the mask over, the blur.
+            // Plain variant: drawBackdrop adds a glass rim highlight that showed up as seams at the edges
+            .drawPlainBackdrop(
+                backdrop = backdrop,
+                shape = { androidx.compose.ui.graphics.RectangleShape },
+                effects = { blur(blurPx) }
+            )
+    )
 }

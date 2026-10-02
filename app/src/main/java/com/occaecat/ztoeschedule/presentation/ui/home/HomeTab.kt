@@ -63,10 +63,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur as glassBlur
-import com.kyant.backdrop.effects.lens as glassLens
-import com.kyant.backdrop.effects.vibrancy as glassVibrancy
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -90,11 +86,13 @@ fun HomeTab(
     isOffline: Boolean = false,
     isLoading: Boolean = false,
     streetId: String = "",
-    addressId: String = ""
+    addressId: String = "",
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    iconName: String = "",
+    isPrimary: Boolean = false
 ) {
     var isRefreshing by rememberSaveable { mutableStateOf(false) }
     val refreshState = rememberPullToRefreshState()
-    val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var highlightTrigger by remember { mutableLongStateOf(0L) }
     
@@ -140,10 +138,10 @@ fun HomeTab(
     var selectedGroupForMenu by remember { mutableStateOf<GroupedSchedule?>(null) }
     val sheetState = rememberModalBottomSheetState()
 
+    // Content scrolls under the (translucent, blurred) top bar, so padding goes into the list
     PullToRefreshBox(
         modifier = modifier
-            .fillMaxSize()
-            .padding(top = contentPadding.calculateTopPadding()),
+            .fillMaxSize(),
         state = refreshState,
         isRefreshing = isRefreshing,
         onRefresh = {
@@ -158,7 +156,9 @@ fun HomeTab(
             PullToRefreshDefaults.LoadingIndicator(
                 state = refreshState,
                 isRefreshing = isRefreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = contentPadding.calculateTopPadding()),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -171,9 +171,9 @@ fun HomeTab(
                 .fillMaxSize(),
             contentPadding = PaddingValues(
                 start = 16.dp, 
-                top = 16.dp, 
+                top = contentPadding.calculateTopPadding() + 16.dp, 
                 end = 16.dp, 
-                bottom = contentPadding.calculateBottomPadding() + 80.dp
+                bottom = contentPadding.calculateBottomPadding() + 16.dp
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -190,7 +190,7 @@ fun HomeTab(
                         pidcherga = pidcherga,
                         onClick = {
                             coroutineScope.launch {
-                                val targetDate = activeGroup?.date ?: SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())
+                                val targetDate = activeGroup?.date ?: todayDate
                                 val sortedDates = groupedByDate.keys.toList().sortedBy { it.split(".").reversed().joinToString("") }
                                 val dateIndex = sortedDates.indexOf(targetDate)
                                 
@@ -213,59 +213,54 @@ fun HomeTab(
                 }
 
                 item(contentType = "address_card") {
-                    Column(modifier = Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AddressInfoCard(
-                            cityName = cityName, 
-                            streetName = streetName, 
-                            addressName = addressName, 
-                            cherga = cherga, 
-                            pidcherga = pidcherga, 
-                            groupedSchedule = groupedSchedule,
-                            cityId = cityId,
-                            streetId = streetId,
-                            addressId = addressId,
-                            remId = remId,
-                            remName = remName
-                        )
-                        if (lastUpdateTime.isNotEmpty()) {
-                            Text(
-                                text = stringResource(R.string.home_last_updated, lastUpdateTime), 
-                                style = MaterialTheme.typography.labelSmall, 
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, 
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
-                        }
-                    }
+                    AddressInfoCard(
+                        cityName = cityName, 
+                        streetName = streetName, 
+                        addressName = addressName, 
+                        cherga = cherga, 
+                        pidcherga = pidcherga, 
+                        groupedSchedule = groupedSchedule,
+                        lastUpdateTime = lastUpdateTime,
+                        cityId = cityId,
+                        streetId = streetId,
+                        addressId = addressId,
+                        remId = remId,
+                        remName = remName,
+                        iconName = iconName,
+                        isPrimary = isPrimary,
+                        modifier = Modifier.animateItem()
+                    )
                 }
 
                 visibleGroupedByDate.forEach { (date, items) ->
-                    stickyHeader(key = date, contentType = "header") {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().semantics { heading() }, 
-                            color = MaterialTheme.colorScheme.surface
-                        ) {
-                            Text(
-                                text = "🗓 $date", 
-                                style = MaterialTheme.typography.titleSmall, 
-                                color = MaterialTheme.colorScheme.primary, 
-                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp)
-                            )
-                        }
+                    // Not sticky: a pinned header would hide behind the translucent top bar
+                    item(key = date, contentType = "header") {
+                        DayHeader(
+                            date = date,
+                            todayDate = todayDate,
+                            items = items,
+                            modifier = Modifier.semantics { heading() }
+                        )
                     }
                     item(key = "${date}_content", contentType = "daily_card") {
                         Column(
                             modifier = Modifier.animateItem(),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
+                            DayTimelineBar(
+                                items = items,
+                                nowMs = if (date == todayDate) currentTimeMs else null
+                            )
                             items.forEachIndexed { idx, group ->
                                 key(group.span) {
                                     ScheduleListItemSimple(
                                         group = group, 
                                         isActive = (group == activeGroup), 
+                                        isPast = group.endMs <= currentTimeMs,
                                         address = fullAddress,
                                         highlightTrigger = highlightTrigger,
-                                        index = idx,
-                                        totalCount = items.size,
+                                        index = idx + 1,
+                                        totalCount = items.size + 1,
                                         onLongClick = { selectedGroupForMenu = group }
                                     )
                                 }
@@ -285,41 +280,118 @@ fun HomeTab(
             if (streetName.isNotEmpty()) append("$streetName, ")
             append(addressName)
         }
+        val dismiss: () -> Unit = {
+            coroutineScope.launch { sheetState.hide() }.invokeOnCompletion { selectedGroupForMenu = null }
+        }
 
         ModalBottomSheet(
             onDismissRequest = { selectedGroupForMenu = null },
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
-            Column(Modifier.padding(bottom = 32.dp)) {
-                Text(
-                    text = "${group.date} • ${TimeUtils.formatSpanToSystem(context, group.span)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(16.dp)
-                )
-                
-                ListItem(
-                    headlineContent = { Text("Додати в календар") },
-                    leadingContent = { Icon(Icons.Default.Event, null) },
-                    modifier = Modifier.clickable {
-                        addToCalendar(context, group, fullAddress)
-                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion { selectedGroupForMenu = null }
+            IntervalActionsSheet(
+                group = group,
+                todayDate = todayDate,
+                isActive = group == activeGroup,
+                onAddToCalendar = { addToCalendar(context, group, fullAddress); dismiss() },
+                onCopy = { copyToClipboard(context, group, fullAddress); dismiss() },
+                onShare = { shareInterval(context, group, fullAddress); dismiss() }
+            )
+        }
+    }
+}
+
+/** Long-press sheet: what this interval is, then what you can do with it. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun IntervalActionsSheet(
+    group: GroupedSchedule,
+    todayDate: String,
+    isActive: Boolean,
+    onAddToCalendar: () -> Unit,
+    onCopy: () -> Unit,
+    onShare: () -> Unit
+) {
+    val context = LocalContext.current
+    val colorScheme = MaterialTheme.colorScheme
+    val (dayPrimary, daySecondary) = remember(group.date, todayDate) { dayLabels(group.date, todayDate) }
+    val (container, content, shape, icon) = when (group.status) {
+        ScheduleStatus.Available -> SheetStyle(colorScheme.surfaceContainerHighest, colorScheme.onSurface, MaterialShapes.Sunny, Icons.Default.LightMode)
+        ScheduleStatus.Probable -> SheetStyle(colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer, MaterialShapes.Clover4Leaf, Icons.Default.WarningAmber)
+        else -> SheetStyle(colorScheme.errorContainer, colorScheme.onErrorContainer, MaterialShapes.Cookie4Sided, Icons.Default.PowerOff)
+    }
+    val calendarTitle = if (group.status == ScheduleStatus.Available) "Додати в календар" else "Нагадати в календарі"
+    val calendarSubtitle = if (group.status == ScheduleStatus.Available) "Подія на час, коли світло є" else "Подія з часом відключення та адресою"
+
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
+        Surface(color = container, contentColor = content, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .background(content, shape.toShape()),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = container, modifier = Modifier.size(28.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = listOf(dayPrimary, daySecondary).filter { it.isNotEmpty() }.joinToString(", "),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.alpha(0.8f)
+                    )
+                    Text(
+                        text = TimeUtils.formatSpanToSystem(context, group.span),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${group.displayText} · ${group.formattedDuration}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                if (isActive) {
+                    Surface(color = content, contentColor = container, shape = CircleShape) {
+                        Text(
+                            stringResource(R.string.home_status_now),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
                     }
-                )
-                
-                ListItem(
-                    headlineContent = { Text("Скопіювати") },
-                    leadingContent = { Icon(Icons.Default.ContentCopy, null) },
-                    modifier = Modifier.clickable {
-                        copyToClipboard(context, group)
-                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion { selectedGroupForMenu = null }
-                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        val actions = listOf(
+            Triple(Icons.Default.Event, calendarTitle to calendarSubtitle, onAddToCalendar),
+            Triple(Icons.Default.Share, "Поділитися" to "Надіслати інтервал з адресою", onShare),
+            Triple(Icons.Default.ContentCopy, "Скопіювати" to "Текст для месенджера", onCopy)
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            actions.forEachIndexed { index, (actionIcon, labels, action) ->
+                com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem(
+                    index = index,
+                    totalCount = actions.size,
+                    headlineContent = { Text(labels.first, fontWeight = FontWeight.SemiBold) },
+                    supportingContent = { Text(labels.second) },
+                    leadingContent = { com.occaecat.ztoeschedule.presentation.ui.components.StepLeadingIcon(actionIcon) },
+                    onClick = action
                 )
             }
         }
     }
 }
+
+private data class SheetStyle(
+    val container: Color,
+    val content: Color,
+    val shape: androidx.graphics.shapes.RoundedPolygon,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
 
 @Composable
 private fun HomeTabSkeleton() {
@@ -386,36 +458,13 @@ private fun CurrentStatusCard(
     
     val containerColor by animateColorAsState(containerColorByState, label = "c")
     val contentColor by animateColorAsState(contentColorByState, label = "ct")
-    val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
     val displayMode = com.occaecat.ztoeschedule.ui.theme.LocalDisplayMode.current
-    val glassBackdrop = com.occaecat.ztoeschedule.ui.theme.LocalGlassBackdrop.current
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val glassBlurPx = with(density) { 20.dp.toPx() }
-    val glassLensHeightPx = with(density) { 10.dp.toPx() }
-    val glassLensAmountPx = with(density) { 20.dp.toPx() }
-    val cardShape = MaterialTheme.shapes.extraLarge
-    val glassModifier = if (glassBackdrop != null) {
-        Modifier.drawBackdrop(
-            backdrop = glassBackdrop,
-            shape = { cardShape },
-            effects = {
-                glassVibrancy()
-                glassBlur(glassBlurPx)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    glassLens(glassLensHeightPx, glassLensAmountPx, true)
-                }
-            }
-        )
-    } else Modifier
+    val cardShape = RoundedCornerShape(28.dp)
 
-    val adaptivePadding = remember(radius, displayMode) {
-        val base = when (displayMode) {
-            com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 12f
-            com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> 16f
-            com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 24f
-        }
-        val extra = if (radius > 16) (radius - 16).toFloat() / 2f else 0f
-        (base + extra).dp
+    val cardPadding = when (displayMode) {
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 16.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable -> 20.dp
+        com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 24.dp
     }
     val statusIconSize = when (displayMode) {
         com.occaecat.ztoeschedule.data.model.DisplayMode.Compact -> 48.dp
@@ -423,36 +472,28 @@ private fun CurrentStatusCard(
         com.occaecat.ztoeschedule.data.model.DisplayMode.Spacious -> 80.dp
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "p")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(tween(1200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "s"
-    )
-    
-    ElevatedCard(
+    val statusShape = when (status) {
+        ScheduleStatus.Available -> MaterialShapes.Sunny
+        ScheduleStatus.Probable -> MaterialShapes.Clover4Leaf
+        else -> MaterialShapes.Cookie4Sided
+    }.toShape()
+
+    Surface(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .animateContentSize()
-            .then(glassModifier)
             .semantics {
                 liveRegion = LiveRegionMode.Assertive
             },
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (glassBackdrop != null) containerColor.copy(alpha = 0.25f) else containerColor,
-            contentColor = contentColor
-        )
+        shape = cardShape,
+        color = containerColor,
+        contentColor = contentColor
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(adaptivePadding),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(cardPadding)) {
             val statusIcon = when (status) {
-                ScheduleStatus.Available -> Icons.Default.CheckCircle
-                ScheduleStatus.Probable -> Icons.Default.Warning
+                ScheduleStatus.Available -> Icons.Default.LightMode
+                ScheduleStatus.Probable -> Icons.Default.WarningAmber
                 else -> Icons.Default.PowerOff
             }
             val statusDescription = when (status) {
@@ -462,88 +503,72 @@ private fun CurrentStatusCard(
             }
             val statusText = activeGroup?.displayText ?: currentStatus?.displayText ?: stringResource(R.string.home_no_data)
 
-            if (hideLiveTiming) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(statusIconSize)
+                        .background(contentColor, statusShape),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
+                        imageVector = statusIcon,
                         contentDescription = statusDescription,
-                        modifier = Modifier.size(statusIconSize)
+                        tint = containerColor.copy(alpha = 1f),
+                        modifier = Modifier.size(statusIconSize * 0.5f)
                     )
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = stringResource(R.string.home_all_day_available),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.alpha(0.8f)
-                        )
-                    }
                 }
-            } else {
-                Icon(
-                    imageVector = statusIcon,
-                    contentDescription = statusDescription,
-                    modifier = Modifier.size(statusIconSize).graphicsLayer {
-                        scaleX = pulseScale
-                        scaleY = pulseScale
-                    }
-                )
-                Spacer(Modifier.height(if (displayMode == com.occaecat.ztoeschedule.data.model.DisplayMode.Compact) 8.dp else 16.dp))
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.home_status_now),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.alpha(0.8f)
+                    )
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            if (hideLiveTiming) {
+                Spacer(Modifier.height(12.dp))
                 Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    text = stringResource(R.string.home_all_day_available),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.alpha(0.85f)
                 )
-                if (activeGroup != null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Spacer(Modifier.height(8.dp))
-                        val nextGroup = remember(activeGroup, groupedSchedule) {
-                            val idx = groupedSchedule.indexOf(activeGroup)
-                            if (idx != -1 && idx < groupedSchedule.size - 1) groupedSchedule[idx + 1] else null
-                        }
+            } else if (activeGroup != null) {
+                val nextGroup = remember(activeGroup, groupedSchedule) {
+                    val idx = groupedSchedule.indexOf(activeGroup)
+                    if (idx != -1 && idx < groupedSchedule.size - 1) groupedSchedule[idx + 1] else null
+                }
+                val noOutagesExpected = remember(cherga, pidcherga, hasElectricity, activeGroup, groupedSchedule) {
+                    (cherga == 0 && pidcherga == 0) || (hasElectricity && groupedSchedule.none {
+                        it.status != ScheduleStatus.Available && it.startMs > activeGroup.startMs
+                    })
+                }
 
-                        val noOutagesExpected = remember(cherga, pidcherga, hasElectricity, activeGroup, groupedSchedule) {
-                            (cherga == 0 && pidcherga == 0) || (hasElectricity && groupedSchedule.none {
-                                it.status != ScheduleStatus.Available && it.startMs > activeGroup.startMs
-                            })
-                        }
-
-                        if (noOutagesExpected) {
-                            Text(
-                                text = stringResource(R.string.home_no_outages_expected),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.alpha(0.8f)
-                            )
-                        } else {
-                            val nextChangeTime = if (nextGroup != null) TimeUtils.formatToSystemTime(LocalContext.current, nextGroup.startTime) else "—"
-                            Text(
-                                text = if (hasElectricity) stringResource(R.string.home_next_outage, nextChangeTime) else stringResource(R.string.home_next_restore, nextChangeTime),
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.alpha(0.8f)
-                            )
-                        }
-
-                        Spacer(Modifier.height(24.dp))
-                        LiveProgressBar(activeGroup, contentColor, hasElectricity)
-                    }
+                Spacer(Modifier.height(20.dp))
+                if (noOutagesExpected) {
+                    Text(
+                        text = stringResource(R.string.home_no_outages_expected),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.alpha(0.85f)
+                    )
+                } else {
+                    val nextChangeTime = if (nextGroup != null) TimeUtils.formatToSystemTime(LocalContext.current, nextGroup.startTime) else "—"
+                    LiveProgressBar(
+                        activeGroup = activeGroup,
+                        contentColor = contentColor,
+                        hasElectricity = hasElectricity,
+                        nextChangeTime = nextChangeTime
+                    )
                 }
             }
         }
@@ -552,7 +577,12 @@ private fun CurrentStatusCard(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun LiveProgressBar(activeGroup: GroupedSchedule, contentColor: Color, hasElectricity: Boolean) {
+private fun LiveProgressBar(
+    activeGroup: GroupedSchedule,
+    contentColor: Color,
+    hasElectricity: Boolean,
+    nextChangeTime: String
+) {
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(activeGroup) {
         while (true) {
@@ -566,40 +596,44 @@ private fun LiveProgressBar(activeGroup: GroupedSchedule, contentColor: Color, h
     }
     val msRemaining = activeGroup.endMs - nowMs
     val timeRemainingText = when {
-        msRemaining <= 0 -> pluralStringResource(R.plurals.second, 0, 0)
-        msRemaining < 60000 -> {
-            val seconds = (msRemaining / 1000).toInt().coerceAtLeast(1)
-            pluralStringResource(R.plurals.second, seconds, seconds)
-        }
+        msRemaining < 60_000 -> "<1 хв"
         else -> {
-            val rem = msRemaining / 60000
-            val h = (rem / 60).toInt()
-            val m = (rem % 60).toInt()
-            val hStr = if (h > 0) pluralStringResource(R.plurals.hour, h, h) + " " else ""
-            val mStr = pluralStringResource(R.plurals.minute, m, m)
-            hStr + mStr
+            val rem = msRemaining / 60_000
+            ScheduleMapper.formatDuration((rem / 60).toInt(), (rem % 60).toInt())
         }
     }
     val animatedProgress by animateFloatAsState(progress, ProgressIndicatorDefaults.ProgressAnimationSpec, label = "pr")
     
     Column(Modifier.fillMaxWidth()) {
-        LinearProgressIndicator(
-            progress = { animatedProgress }, 
+        LinearWavyProgressIndicator(
+            progress = { animatedProgress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(12.dp)
-                .clip(CircleShape), 
-            color = contentColor, 
-            trackColor = contentColor.copy(alpha = 0.2f), 
-            strokeCap = StrokeCap.Round
+                .height(14.dp),
+            color = contentColor,
+            trackColor = contentColor.copy(alpha = 0.2f),
+            // Default speed (one wavelength per second) feels frantic
+            waveSpeed = WavyProgressIndicatorDefaults.LinearDeterminateWavelength / 4
         )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = if (hasElectricity) stringResource(R.string.home_time_to_outage, timeRemainingText) else stringResource(R.string.home_time_to_restore, timeRemainingText), 
-            style = MaterialTheme.typography.titleMedium, 
-            fontWeight = FontWeight.Medium, 
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
+        Spacer(Modifier.height(16.dp))
+        Row {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = if (hasElectricity) "до відключення" else "до увімкнення",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.alpha(0.8f)
+                )
+                Text(timeRemainingText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = if (hasElectricity) "відключення" else "увімкнення",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.alpha(0.8f)
+                )
+                Text(nextChangeTime, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -617,7 +651,10 @@ private fun AddressInfoCard(
     streetId: String = "",
     addressId: String = "",
     remId: String = "",
-    remName: String = ""
+    remName: String = "",
+    lastUpdateTime: String = "",
+    iconName: String = "",
+    isPrimary: Boolean = false
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -660,54 +697,64 @@ private fun AddressInfoCard(
             ""
         }
     }
-    val radius = com.occaecat.ztoeschedule.ui.theme.LocalCornerRadius.current
-    val hPadding = remember(radius) {
-        val base = 12.0
-        val extra = if (radius > 20) (radius - 20).toDouble() / 2.5 else 0.0
-        (base + extra).dp
-    }
-    
+    val primaryLine = listOf(streetName, addressName).filter { it.isNotBlank() }.joinToString(", ").ifBlank { cityName }
+    val secondaryLine = listOfNotNull(
+        cityName.takeIf { it.isNotBlank() && primaryLine != cityName },
+        lastUpdateTime.takeIf { it.isNotBlank() }?.let { stringResource(R.string.home_last_updated, it) }
+    ).joinToString(" · ")
+    // Demo presets use placeholder queues (9998/9999) that mean nothing to users
+    val showQueue = cherga in 1..99
+
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant, 
-        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(28.dp),
         modifier = modifier
             .fillMaxWidth()
             .animateContentSize()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = hPadding, vertical = 8.dp), 
+            modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 16.dp, bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.LocationOn, 
-                contentDescription = "Адреса", 
-                modifier = Modifier.size(24.dp), 
-                tint = MaterialTheme.colorScheme.primary
-            )
-            
-            Spacer(Modifier.width(8.dp))
-            
+            com.occaecat.ztoeschedule.presentation.ui.components.AddressIconBadge(iconName = iconName, isPrimary = isPrimary, size = 48.dp)
+            Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = fullAddress,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee()
+                    text = primaryLine,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
+                if (secondaryLine.isNotBlank()) {
+                    Text(
+                        text = secondaryLine,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (showQueue) {
+                Spacer(Modifier.width(8.dp))
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer, shape = CircleShape) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("черга", style = MaterialTheme.typography.labelSmall)
+                        Text("$cherga.$pidcherga", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
 
             Box(modifier = Modifier.padding(start = 4.dp)) {
-                IconButton(
-                    onClick = { showShareMenu = true }, 
-                    modifier = Modifier.size(32.dp)
-                ) {
+                FilledTonalIconButton(onClick = { showShareMenu = true }) {
                     Icon(
                         imageVector = Icons.Default.Share, 
                         contentDescription = "Поділитися", 
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 
@@ -806,20 +853,6 @@ private fun AddressInfoCard(
                 }
             }
             
-            Spacer(Modifier.width(8.dp))
-            
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer, 
-                shape = CircleShape
-            ) {
-                Text(
-                    text = "$cherga.$pidcherga", 
-                    style = MaterialTheme.typography.labelMedium, 
-                    fontWeight = FontWeight.Bold, 
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), 
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
         }
     }
 
@@ -898,6 +931,7 @@ private fun QrCodeDialog(
 private fun ScheduleListItemSimple(
     group: GroupedSchedule, 
     isActive: Boolean, 
+    isPast: Boolean,
     address: String, 
     highlightTrigger: Long,
     index: Int,
@@ -955,14 +989,14 @@ private fun ScheduleListItemSimple(
         bottomStart = bottomRadius, bottomEnd = bottomRadius
     )
     
-    val statusColor = when (group.status) {
-        ScheduleStatus.Available -> MaterialTheme.colorScheme.primary
-        ScheduleStatus.Probable -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.error
+    val statusColor = statusColorFor(group.status)
+    val onStatusColor = when (group.status) {
+        ScheduleStatus.Available -> MaterialTheme.colorScheme.onSurface
+        ScheduleStatus.Probable -> MaterialTheme.colorScheme.onTertiary
+        else -> MaterialTheme.colorScheme.onError
     }
-    
     val containerColor = if (isActive) {
-        statusColor.copy(alpha = 0.12f)
+        androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surfaceContainerHigh, statusColor, if (group.status == ScheduleStatus.Available) 0.35f else 0.16f)
     } else {
         MaterialTheme.colorScheme.surfaceContainerHigh
     }
@@ -987,103 +1021,217 @@ private fun ScheduleListItemSimple(
             )
             .testTag("schedule_slot_${group.startTime}"),
         color = containerColor,
-        shape = shape,
-        border = if (isActive) BorderStroke(1.dp, statusColor.copy(alpha = 0.38f)) else null
+        shape = shape
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = itemVerticalPadding),
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = itemVerticalPadding)
+                // Past intervals of today recede so the upcoming ones stand out
+                .alpha(if (isPast && !isActive) 0.5f else 1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status Icon with background
-            Surface(
-                modifier = Modifier.size(circleIconSize),
-                shape = CircleShape,
-                color = statusColor.copy(alpha = 0.12f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .width(6.dp)
+                    .height(circleIconSize - 8.dp)
+                    .background(statusColor, CircleShape)
+            )
+
+            Spacer(Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = TimeUtils.formatSpanToSystem(context, group.span),
+                    style = timeTextStyle,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = when (group.status) {
                             ScheduleStatus.Available -> Icons.Default.LightMode
                             ScheduleStatus.Probable -> Icons.Default.WarningAmber
                             else -> Icons.Default.FlashOff
                         },
-                        contentDescription = when (group.status) {
-                            ScheduleStatus.Available -> "Електроенергія є"
-                            ScheduleStatus.Probable -> "Можливе відключення"
-                            else -> "Електроенергія відсутня"
-                        },
-                        modifier = Modifier.size(innerIconSize),
-                        tint = statusColor
+                        contentDescription = null,
+                        modifier = Modifier.size(innerIconSize * 0.7f),
+                        tint = if (group.status == ScheduleStatus.Available) MaterialTheme.colorScheme.onSurfaceVariant else statusColor
                     )
-                }
-            }
-
-            Spacer(Modifier.width(16.dp))
-
-            // Time and Status Text
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = TimeUtils.formatSpanToSystem(context, group.span),
-                    style = timeTextStyle,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                
-                Spacer(Modifier.height(4.dp))
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Duration badge
-                    val badgeContentColor = when (group.status) {
-                        ScheduleStatus.Available -> MaterialTheme.colorScheme.onPrimary
-                        ScheduleStatus.Probable -> MaterialTheme.colorScheme.onTertiary
-                        else -> MaterialTheme.colorScheme.onError
-                    }
-                    
-                    Surface(
-                        color = statusColor,
-                        shape = MaterialTheme.shapes.small
-                    ) {
-                        Text(
-                            text = group.formattedDuration,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = badgeContentColor,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         text = group.displayText, 
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
 
-            // Actions
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isActive) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = CircleShape,
-                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.38f))
-                    ) {
-                        Text(
-                            text = stringResource(R.string.home_status_now),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+            Spacer(Modifier.width(12.dp))
+            if (isActive) {
+                Surface(color = statusColor, contentColor = onStatusColor, shape = CircleShape) {
+                    Text(
+                        text = stringResource(R.string.home_status_now),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = group.formattedDuration,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+/**
+ * "Light on" is the calm default, so it stays neutral; outages must never be confused with it
+ * (primary and error can be near-identical hues in dynamic themes).
+ */
+@Composable
+private fun statusColorFor(status: ScheduleStatus): Color = when (status) {
+    ScheduleStatus.Available -> MaterialTheme.colorScheme.outlineVariant
+    // A paler outage colour: tertiary can be the same hue as error in some schemes
+    ScheduleStatus.Probable -> androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.surfaceContainerHigh, 0.5f)
+    else -> MaterialTheme.colorScheme.error
+}
+
+private val UA_MONTHS = listOf(
+    "січня", "лютого", "березня", "квітня", "травня", "червня",
+    "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"
+)
+private val UA_WEEKDAYS = listOf("Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "Пʼятниця", "Субота")
+
+/** "Сьогодні" / "Завтра" / weekday, plus "29 вересня". */
+private fun dayLabels(date: String, todayDate: String): Pair<String, String> {
+    val fmt = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+    val cal = Calendar.getInstance()
+    val parsed = runCatching { fmt.parse(date) }.getOrNull() ?: return date to ""
+    cal.time = parsed
+    val secondary = "${cal.get(Calendar.DAY_OF_MONTH)} ${UA_MONTHS[cal.get(Calendar.MONTH)]}"
+    val today = runCatching { fmt.parse(todayDate) }.getOrNull()
+    val dayDiff = if (today != null) ((parsed.time - today.time) / (24 * 60 * 60 * 1000.0)).let { Math.round(it) } else null
+    val primary = when (dayDiff) {
+        0L -> "Сьогодні"
+        1L -> "Завтра"
+        -1L -> "Вчора"
+        else -> UA_WEEKDAYS[cal.get(Calendar.DAY_OF_WEEK) - 1]
+    }
+    return primary to secondary
+}
+
+private fun GroupedSchedule.minutes(): Int =
+    (durationHours * 60 + durationMinutes).takeIf { it > 0 } ?: ((endMs - startMs) / 60000).toInt().coerceAtLeast(0)
+
+@Composable
+private fun DayHeader(
+    date: String,
+    todayDate: String,
+    items: List<GroupedSchedule>,
+    modifier: Modifier = Modifier
+) {
+    val (primary, secondary) = remember(date, todayDate) { dayLabels(date, todayDate) }
+    val outageMinutes = remember(items) { items.filter { it.status == ScheduleStatus.Outage }.sumOf { it.minutes() } }
+    val probableMinutes = remember(items) { items.filter { it.status == ScheduleStatus.Probable }.sumOf { it.minutes() } }
+
+    Surface(modifier = modifier.fillMaxWidth(), color = Color.Transparent) {
+        Row(
+            modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 12.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                Text(primary, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (secondary.isNotEmpty()) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        secondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+            }
+            val (label, container, content) = when {
+                outageMinutes > 0 -> Triple(
+                    "без світла ${ScheduleMapper.formatDuration(outageMinutes / 60, outageMinutes % 60)}",
+                    MaterialTheme.colorScheme.errorContainer,
+                    MaterialTheme.colorScheme.onErrorContainer
+                )
+                probableMinutes > 0 -> Triple(
+                    "можливі ${ScheduleMapper.formatDuration(probableMinutes / 60, probableMinutes % 60)}",
+                    MaterialTheme.colorScheme.tertiaryContainer,
+                    MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                else -> Triple("без відключень", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+            Surface(color = container, contentColor = content, shape = CircleShape) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Whole day at a glance: coloured segments across 24 h with a "now" marker for today. */
+@Composable
+private fun DayTimelineBar(items: List<GroupedSchedule>, nowMs: Long?) {
+    val colorScheme = MaterialTheme.colorScheme
+    val dayStartMs = items.firstOrNull()?.startMs ?: return
+    val totalMinutes = items.sumOf { it.minutes() }.coerceAtLeast(1)
+
+    Surface(
+        color = colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth().height(20.dp)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .align(Alignment.Center),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items.forEachIndexed { i, group ->
+                        val shape = RoundedCornerShape(
+                            topStart = if (i == 0) 7.dp else 2.dp, bottomStart = if (i == 0) 7.dp else 2.dp,
+                            topEnd = if (i == items.lastIndex) 7.dp else 2.dp, bottomEnd = if (i == items.lastIndex) 7.dp else 2.dp
+                        )
+                        Box(
+                            Modifier
+                                .weight(group.minutes().coerceAtLeast(1).toFloat())
+                                .fillMaxHeight()
+                                .background(statusColorFor(group.status), shape)
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
+                }
+                if (nowMs != null) {
+                    val fraction = ((nowMs - dayStartMs) / 60000f / totalMinutes).coerceIn(0f, 1f)
+                    Box(
+                        Modifier
+                            .offset(x = (maxWidth - 4.dp) * fraction)
+                            .width(4.dp)
+                            .fillMaxHeight()
+                            .background(colorScheme.onSurface, CircleShape)
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf("00", "06", "12", "18", "24").forEach {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1183,8 +1331,12 @@ private fun addToCalendar(context: android.content.Context, group: GroupedSchedu
         }
         val intent = Intent(Intent.ACTION_INSERT).apply {
             data = CalendarContract.Events.CONTENT_URI
-            putExtra(CalendarContract.Events.TITLE, "Відключення світла 🔴")
-            putExtra(CalendarContract.Events.DESCRIPTION, "Заплановане відключення за адресою: $address")
+            putExtra(CalendarContract.Events.TITLE, when (group.status) {
+                ScheduleStatus.Available -> "Світло є"
+                ScheduleStatus.Probable -> "Можливе відключення світла"
+                else -> "Відключення світла"
+            })
+            putExtra(CalendarContract.Events.DESCRIPTION, "${group.displayText} за адресою: $address")
             putExtra(CalendarContract.Events.EVENT_LOCATION, address)
             putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startCal.timeInMillis)
             putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endCal.timeInMillis)
@@ -1195,11 +1347,22 @@ private fun addToCalendar(context: android.content.Context, group: GroupedSchedu
     } catch (ex: Exception) { ex.printStackTrace() }
 }
 
-private fun copyToClipboard(context: android.content.Context, group: GroupedSchedule) {
+private fun intervalText(group: GroupedSchedule, address: String): String =
+    "${group.date}, ${group.span} — ${group.displayText} (${group.formattedDuration})\n$address"
+
+private fun copyToClipboard(context: android.content.Context, group: GroupedSchedule, address: String) {
     val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    val clip = android.content.ClipData.newPlainText("Schedule", "${group.date}: ${group.span} - ${group.displayText}")
+    val clip = android.content.ClipData.newPlainText("Schedule", intervalText(group, address))
     clipboardManager.setPrimaryClip(clip)
     if (Build.VERSION.SDK_INT < 33) {
         android.widget.Toast.makeText(context, "Скопійовано", android.widget.Toast.LENGTH_SHORT).show()
     }
+}
+
+private fun shareInterval(context: android.content.Context, group: GroupedSchedule, address: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, intervalText(group, address))
+    }
+    context.startActivity(Intent.createChooser(intent, "Поділитися"))
 }

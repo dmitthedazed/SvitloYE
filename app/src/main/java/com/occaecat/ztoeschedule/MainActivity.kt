@@ -22,9 +22,11 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.occaecat.ztoeschedule.data.local.EnergyPreferencesManager
 import com.occaecat.ztoeschedule.data.model.ColorTheme
-import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
+import com.occaecat.ztoeschedule.domain.notification.NotificationSync
+import com.occaecat.ztoeschedule.domain.notification.StatusNotificationService
 import com.occaecat.ztoeschedule.presentation.ui.MainScreen
 import com.occaecat.ztoeschedule.ui.theme.SvitloYeZhytomyrTheme
+import com.occaecat.ztoeschedule.ui.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
@@ -90,17 +92,10 @@ class MainActivity : ComponentActivity() {
                 return@launch
             }
 
-            // Schedule notification monitoring
-            NotificationScheduler.schedulePowerMonitoring(this@MainActivity)
-
-            // Trigger immediate check to update widgets
-            NotificationScheduler.runImmediateCheck(this@MainActivity)
-
-            // Ensure persistent notification services are running if enabled
-            val statusEnabled = preferencesManager.statusNotificationEnabledFlow.first()
-            if (statusEnabled) {
-                // Unified service handles both standard and live activity styles internally
-                com.occaecat.ztoeschedule.domain.notification.PowerStatusService.start(this@MainActivity)
+            NotificationSync.schedulePeriodic(this@MainActivity)
+            NotificationSync.syncNow(this@MainActivity)
+            if (preferencesManager.statusNotificationEnabledFlow.first()) {
+                StatusNotificationService.start(this@MainActivity)
             }
 
             keepSplash = false
@@ -138,21 +133,7 @@ class MainActivity : ComponentActivity() {
                 handleIntent(intent, viewModel)
             }
 
-            val colorTheme by preferencesManager.colorThemeFlow.collectAsStateWithLifecycle(initialValue = ColorTheme.System)
-            val cornerRadius by preferencesManager.cornerRadiusFlow.collectAsStateWithLifecycle(initialValue = 24)
-            val dynamicColors by preferencesManager.dynamicColorsFlow.collectAsStateWithLifecycle(initialValue = true)
-            val isAmoled by preferencesManager.isAmoledFlow.collectAsStateWithLifecycle(initialValue = false)
-            val displayMode by preferencesManager.displayModeFlow.collectAsStateWithLifecycle(initialValue = com.occaecat.ztoeschedule.data.model.DisplayMode.Comfortable)
-            val liquidGlass by preferencesManager.liquidGlassFlow.collectAsStateWithLifecycle(initialValue = false)
-
-            SvitloYeZhytomyrTheme(
-                themePreference = colorTheme,
-                cornerRadius = cornerRadius,
-                displayMode = displayMode,
-                liquidGlass = liquidGlass,
-                dynamicColor = dynamicColors,
-                isAmoled = isAmoled
-            ) {
+            AppTheme(preferencesManager) {
                 val windowSizeClass = calculateWindowSizeClass(this@MainActivity)
                 Surface(
                     modifier = Modifier.fillMaxSize(),

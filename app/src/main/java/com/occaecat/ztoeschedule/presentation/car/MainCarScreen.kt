@@ -50,9 +50,10 @@ class MainCarScreen(
                 val now = timeProvider.now()
 
                 addresses.forEach { address ->
-                    val scheduleResult = repository.getSchedule(address.cherga, address.pidcherga)
+                    // Network first, cache as a fallback (and the fresh answer refreshes the cache)
+                    val scheduleResult = repository.getScheduleWithMessages(address.cherga, address.pidcherga)
                     if (scheduleResult.isSuccess) {
-                        val schedule = scheduleResult.getOrThrow()
+                        val schedule = scheduleResult.getOrThrow().schedules
                         val grouped = ScheduleMapper.getGroupedSchedule(schedule)
                         val currentStatus = ScheduleMapper.getCurrentGroupedStatus(grouped, now)
 

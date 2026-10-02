@@ -6,44 +6,41 @@
 package com.occaecat.ztoeschedule.presentation.ui.settings
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
-import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.location.LocationServices
+import com.occaecat.ztoeschedule.BuildConfig
 import com.occaecat.ztoeschedule.R
-import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
+import com.occaecat.ztoeschedule.data.model.ColorTheme
+import com.occaecat.ztoeschedule.data.model.DisplayMode
+import com.occaecat.ztoeschedule.presentation.ui.components.ExpressiveHeroBadge
 import com.occaecat.ztoeschedule.presentation.ui.more.IntegrationsScreen
 import com.occaecat.ztoeschedule.presentation.viewmodel.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +73,9 @@ fun SettingsScreenRoot(
     )
 }
 
+private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
 @Composable
 private fun SettingsScreen(
     state: SettingsState,
@@ -87,182 +87,172 @@ private fun SettingsScreen(
     AnimatedContent(
         targetState = currentRoute,
         transitionSpec = {
+            // Material shared X axis: short slide + cross-fade, like the rest of the app
+            // Going back pops the page first, so the page we leave is no longer in the stack
             val initialIndex = backStack.indexOf(initialState)
-            val targetIndex = backStack.indexOf(targetState)
-            val isForward = if (initialIndex == -1) false else targetIndex > initialIndex
-
-            if (isForward) {
-                (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
-            } else {
-                (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
-            }
+            val forward = initialIndex != -1 && backStack.indexOf(targetState) > initialIndex
+            val dir = if (forward) 1 else -1
+            (slideInHorizontally(tween(300, easing = EmphasizedDecelerate)) { dir * it / 10 } +
+                fadeIn(tween(210, delayMillis = 90, easing = EmphasizedDecelerate)))
+                .togetherWith(
+                    slideOutHorizontally(tween(300, easing = EmphasizedDecelerate)) { -dir * it / 10 } +
+                        fadeOut(tween(90, easing = EmphasizedAccelerate))
+                )
         },
         label = "SettingsNavigation"
     ) { route ->
         when (route) {
-            SettingsRoute.Main -> MainSettingsList(
-                onAction = onAction
-            )
-            SettingsRoute.Style -> StyleSettingsScreen(
-                state = state,
-                onAction = onAction
-            )
-            SettingsRoute.Notifications -> NotificationSettingsScreen(
-                state = state,
-                onAction = onAction
-            )
-            SettingsRoute.Language -> PlaceholderSettingsScreen(
-                title = "Мова",
-                text = "Використовується системна мова",
-                onBackClick = { onAction(SettingsAction.GoBack) }
-            )
-            SettingsRoute.Developers -> DeveloperSettingsScreen(
-                onAction = onAction
-            )
-            SettingsRoute.Integrations -> IntegrationsScreen(
-                onBack = { onAction(SettingsAction.GoBack) }
-            )
+            SettingsRoute.Main -> MainSettingsList(state = state, onAction = onAction)
+            SettingsRoute.Style -> StyleSettingsScreen(state = state, onAction = onAction)
+            SettingsRoute.Notifications -> NotificationSettingsScreen(state = state, onAction = onAction)
+            // Only Ukrainian is shipped; the old placeholder page is folded into the main list
+            SettingsRoute.Language -> MainSettingsList(state = state, onAction = onAction)
+            SettingsRoute.Developers -> DeveloperSettingsScreen(onAction = onAction)
+            SettingsRoute.Integrations -> IntegrationsScreen(onBack = { onAction(SettingsAction.GoBack) })
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private fun themeSummary(state: SettingsState): String {
+    val theme = when (state.colorTheme) {
+        ColorTheme.System -> "Системна тема"
+        ColorTheme.Light -> "Світла тема"
+        ColorTheme.Dark -> "Темна тема"
+        ColorTheme.Amoled -> "Чорна тема"
+        ColorTheme.Contrast -> "Контрастна тема"
+    }
+    val extras = buildList {
+        if (state.dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add("Material You")
+        if (state.liquidGlass) add("Liquid Glass")
+    }
+    return (listOf(theme) + extras).joinToString(" · ")
+}
+
 @Composable
 private fun MainSettingsList(
+    state: SettingsState,
     onAction: (SettingsAction) -> Unit
 ) {
     var showClearDialog by remember { mutableStateOf(false) }
 
-    val appearanceItems = listOf(
-        SettingsItem(
-            title = "Стиль та тема",
-            subtitle = "Кольори, режим темряви, розмір",
-            icon = { Icon(Icons.Default.Palette, null) },
-            onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Style)) }
-        ),
-        SettingsItem(
-            title = "Сповіщення",
-            subtitle = "Налаштування повідомлень",
-            icon = { Icon(Icons.Default.Notifications, null) },
-            onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Notifications)) }
-        ),
-        SettingsItem(
-            title = "Мова",
-            subtitle = "Українська (Системна)",
-            icon = { Icon(Icons.Default.Language, null) },
-            onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Language)) }
-        )
-    )
+    SettingsPage(
+        title = "Налаштування",
+        onBack = { onAction(SettingsAction.GoBack) }
+    ) {
+        item(key = "hero") { AppIdentityCard() }
 
-    val advancedItems = listOf(
-        SettingsItem(
-            title = "Видалити дані",
-            subtitle = "Очистити кеш та збережені адреси",
-            icon = { Icon(Icons.Default.DeleteForever, null) },
-            onClick = { showClearDialog = true }
-        ),
-        SettingsItem(
-            title = "Налаштування розробника",
-            subtitle = "Інструменти налагодження та інтеграції",
-            icon = { Icon(Icons.Default.Code, null) },
-            onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Developers)) }
-        )
-    )
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = { onAction(SettingsAction.GoBack) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .consumeWindowInsets(padding)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                top = padding.calculateTopPadding() + 16.dp,
-                bottom = padding.calculateBottomPadding() + 16.dp
-            )
-        ) {
-            itemsIndexed(appearanceItems) { index, item ->
-                SettingsGroupItem(
-                    index = index,
-                    totalCount = appearanceItems.size,
-                    leadingContent = { item.icon() },
-                    headlineContent = { Text(item.title) },
-                    supportingContent = {
-                        Text(item.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
-                    trailingContent = {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
-                    },
-                    onClick = item.onClick
+        settingsSection(
+            "Вигляд",
+            listOf(
+                SettingsRow(
+                    title = "Стиль та тема",
+                    subtitle = themeSummary(state),
+                    icon = Icons.Default.Palette,
+                    accent = SettingsAccent.Primary,
+                    onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Style)) }
+                ),
+                SettingsRow(
+                    title = "Розмір інтерфейсу",
+                    subtitle = "Щільність списків і карток",
+                    icon = Icons.Default.FormatSize,
+                    trailing = SettingsTrailing.Value(
+                        when (state.displayMode) {
+                            DisplayMode.Compact -> "Щільний"
+                            DisplayMode.Comfortable -> "Зручний"
+                            DisplayMode.Spacious -> "Великий"
+                        }
+                    ),
+                    onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Style)) }
                 )
-            }
+            )
+        )
 
-            item { Spacer(Modifier.height(16.dp)) }
-
-            itemsIndexed(advancedItems) { index, item ->
-                SettingsGroupItem(
-                    index = index,
-                    totalCount = advancedItems.size,
-                    leadingContent = { item.icon() },
-                    headlineContent = { Text(item.title) },
-                    supportingContent = {
-                        Text(item.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
-                    trailingContent = {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
-                    },
-                    onClick = item.onClick
+        settingsSection(
+            "Сповіщення",
+            listOf(
+                SettingsRow(
+                    title = "Сповіщення",
+                    subtitle = if (state.notifications.alertsEnabled) "Увімкнено" else "Вимкнено",
+                    icon = Icons.Default.NotificationsActive,
+                    accent = SettingsAccent.Tertiary,
+                    onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Notifications)) }
                 )
-            }
-        }
+            )
+        )
+
+        settingsSection(
+            "Можливості",
+            listOf(
+                SettingsRow(
+                    title = "Функції та інтеграції",
+                    subtitle = "Android Auto, віджети, посилання",
+                    icon = Icons.Default.Extension,
+                    onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Integrations)) }
+                )
+            )
+        )
+
+        settingsSection(
+            "Дані",
+            listOf(
+                SettingsRow(
+                    title = "Видалити дані",
+                    subtitle = "Очистити кеш та збережені адреси",
+                    icon = Icons.Default.DeleteForever,
+                    accent = SettingsAccent.Error,
+                    trailing = SettingsTrailing.None,
+                    onClick = { showClearDialog = true }
+                ),
+                SettingsRow(
+                    title = "Анонімна статистика",
+                    subtitle = "Знеособлені дані про використання та збої допомагають покращувати застосунок. Адреси не передаються",
+                    icon = Icons.Default.Analytics,
+                    trailing = SettingsTrailing.Toggle(state.analyticsEnabled) { onAction(SettingsAction.SetAnalytics(it)) },
+                    onClick = { onAction(SettingsAction.SetAnalytics(!state.analyticsEnabled)) }
+                ),
+                SettingsRow(
+                    title = "Для розробників",
+                    subtitle = "Демо-дані та діагностика",
+                    icon = Icons.Default.Code,
+                    accent = SettingsAccent.Neutral,
+                    onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Developers)) }
+                )
+            )
+        )
     }
-
 
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            icon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) },
+            icon = { Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("Видалити всі дані?") },
-            text = { Text("Всі збережені адреси та налаштування будуть видалені.") },
+            text = { Text("Усі збережені адреси та налаштування буде видалено. Цю дію не можна скасувати.") },
             confirmButton = {
                 Button(
                     onClick = { showClearDialog = false; onAction(SettingsAction.ClearData) },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("ВИДАЛИТИ ВСЕ")
-                }
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) { Text("Видалити") }
             },
             dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("Скасувати") } }
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DeveloperSettingsScreen(
     onAction: (SettingsAction) -> Unit
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    val scrollState = rememberScrollState()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val scope = rememberCoroutineScope()
-    
+
     var gpsAddress by remember { mutableStateOf<String?>(null) }
     var isLoadingGps by remember { mutableStateOf(false) }
     var gpsError by remember { mutableStateOf<String?>(null) }
-    
+
     val fetchLocation: () -> Unit = {
         isLoadingGps = true
         gpsError = null
@@ -274,7 +264,7 @@ fun DeveloperSettingsScreen(
                         if (location != null) {
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    val geocoder = Geocoder(context, Locale("uk", "UA"))
+                                    val geocoder = Geocoder(context, Locale.forLanguageTag("uk-UA"))
                                     if (!Geocoder.isPresent()) {
                                         withContext(Dispatchers.Main) {
                                             gpsError = "Геокодування недоступне"
@@ -282,15 +272,17 @@ fun DeveloperSettingsScreen(
                                         }
                                         return@launch
                                     }
+                                    @Suppress("DEPRECATION")
                                     val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
                                     withContext(Dispatchers.Main) {
                                         if (!addresses.isNullOrEmpty()) {
                                             val address = addresses[0]
-                                            val parts = mutableListOf<String>()
-                                            if (!address.adminArea.isNullOrEmpty()) parts.add(address.adminArea)
-                                            if (!address.thoroughfare.isNullOrEmpty()) parts.add(address.thoroughfare)
-                                            if (!address.featureName.isNullOrEmpty()) parts.add(address.featureName)
-                                            gpsAddress = if (parts.isNotEmpty()) parts.joinToString(", ") else "Невідома адреса"
+                                            val parts = listOfNotNull(
+                                                address.adminArea?.takeIf { it.isNotEmpty() },
+                                                address.thoroughfare?.takeIf { it.isNotEmpty() },
+                                                address.featureName?.takeIf { it.isNotEmpty() }
+                                            )
+                                            gpsAddress = parts.joinToString(", ").ifEmpty { "Невідома адреса" }
                                         } else {
                                             gpsError = "Адреса не знайдена"
                                         }
@@ -318,202 +310,94 @@ fun DeveloperSettingsScreen(
             }
         }
     }
-    
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        if (fineGranted || coarseGranted) {
-            fetchLocation()
-        } else {
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) fetchLocation() else {
             gpsError = "Дозвіл відхилено"
             isLoadingGps = false
         }
     }
-    
+
     val requestLocationWithPermission: () -> Unit = {
-        val hasFinePermission = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasCoarsePermission = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        
-        if (hasFinePermission || hasCoarsePermission) {
+        val hasPermission = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        if (hasPermission) {
             fetchLocation()
         } else {
             locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
         }
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text("Розробник") },
-                navigationIcon = {
-                    IconButton(onClick = { onAction(SettingsAction.GoBack) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .consumeWindowInsets(padding)
-                .verticalScroll(scrollState)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // GPS Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ),
-                onClick = { requestLocationWithPermission() }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isLoadingGps) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MyLocation,
-                            contentDescription = "GPS",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Отримати адресу по GPS",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (gpsError != null) {
-                            Text(
-                                text = gpsError!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        } else if (gpsAddress != null) {
-                            Text(
-                                text = gpsAddress!!,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        } else {
-                            Text(
-                                text = "Натисніть для перевірки",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
+    SettingsPage(
+        title = "Для розробників",
+        subtitle = "Діагностика та демо-дані",
+        onBack = { onAction(SettingsAction.GoBack) }
+    ) {
+        settingsSection(
+            "Діагностика",
+            listOf(
+                SettingsRow(
+                    title = "Адреса за GPS",
+                    subtitle = gpsError ?: gpsAddress ?: "Визначити поточну адресу",
+                    icon = Icons.Default.MyLocation,
+                    accent = if (gpsError != null) SettingsAccent.Error else SettingsAccent.Primary,
+                    trailing = when {
+                        isLoadingGps -> SettingsTrailing.Progress
+                        gpsAddress != null && gpsError == null -> SettingsTrailing.Action("Копіювати")
+                        else -> SettingsTrailing.None
+                    },
+                    onClick = {
+                        val address = gpsAddress
+                        if (address != null && gpsError == null) {
+                            clipboardManager.setText(AnnotatedString(address))
+                        } else if (!isLoadingGps) {
+                            requestLocationWithPermission()
                         }
                     }
-                    if (gpsAddress != null && gpsError == null) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy",
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clickable {
-                                    clipboardManager.setText(AnnotatedString(gpsAddress!!))
-                                }
-                        )
-                    }
-                }
-            }
-
-            // Integrations & Demo items
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                SettingsGroupItem(
-                    index = 0,
-                    totalCount = 2,
-                    leadingContent = { Icon(Icons.Default.Extension, null) },
-                    headlineContent = { Text("Функції та інтеграції") },
-                    supportingContent = { Text("Android Auto, віджети та інше") },
-                    trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp)) },
-                    onClick = { onAction(SettingsAction.Navigate(SettingsRoute.Integrations)) }
                 )
-                
-                SettingsGroupItem(
-                    index = 1,
-                    totalCount = 3,
-                    leadingContent = { Icon(Icons.Default.BugReport, null, tint = MaterialTheme.colorScheme.error) },
-                    headlineContent = { Text("Додати демо-локацію") },
-                    supportingContent = { Text("Для тестування сповіщень") },
+            )
+        )
+
+        settingsSection(
+            "Демо-дані",
+            listOf(
+                SettingsRow(
+                    title = "Додати демо-графік",
+                    subtitle = "Реалістичний графік з відключеннями",
+                    icon = Icons.Default.CalendarMonth,
+                    accent = SettingsAccent.Tertiary,
+                    trailing = SettingsTrailing.None,
+                    onClick = { onAction(SettingsAction.AddPreviewLocation) }
+                ),
+                SettingsRow(
+                    title = "Додати демо-локацію",
+                    subtitle = "Статус змінюється щохвилини — для тестування сповіщень",
+                    icon = Icons.Default.BugReport,
+                    accent = SettingsAccent.Tertiary,
+                    trailing = SettingsTrailing.None,
                     onClick = { onAction(SettingsAction.AddDemoLocation) }
                 )
-                
-                SettingsGroupItem(
-                    index = 2,
-                    totalCount = 3,
-                    leadingContent = { Icon(Icons.Default.SettingsBackupRestore, null, tint = MaterialTheme.colorScheme.tertiary) },
-                    headlineContent = { Text("Скинути онбординг") },
-                    supportingContent = { Text("Перезапустити привітання") },
+            )
+        )
+
+        settingsSection(
+            "Скидання",
+            listOf(
+                SettingsRow(
+                    title = "Скинути онбординг",
+                    subtitle = "Показати привітання при наступному запуску",
+                    icon = Icons.Default.SettingsBackupRestore,
+                    accent = SettingsAccent.Neutral,
+                    trailing = SettingsTrailing.None,
                     onClick = { onAction(SettingsAction.ResetSettings) }
                 )
-            }
-        }
-    }
-}
-
-private data class SettingsItem(
-    val title: String,
-    val subtitle: String,
-    val icon: @Composable () -> Unit,
-    val onClick: () -> Unit
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlaceholderSettingsScreen(title: String, text: String, onBackClick: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
             )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .consumeWindowInsets(padding),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text)
-        }
+        )
     }
 }

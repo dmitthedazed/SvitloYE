@@ -45,6 +45,10 @@ import com.occaecat.ztoeschedule.domain.TimeUtils
 import com.occaecat.ztoeschedule.presentation.ui.home.HomeTab
 import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
 import com.occaecat.ztoeschedule.presentation.ui.components.ScaleIndication
+import com.occaecat.ztoeschedule.presentation.ui.components.StepGutter
+import com.occaecat.ztoeschedule.presentation.ui.components.AddressIconBadge
+import com.occaecat.ztoeschedule.presentation.ui.components.StepHeroIcon
+import com.occaecat.ztoeschedule.presentation.ui.components.StepPrimaryButton
 import java.util.Collections
 import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.LayoutDirection
@@ -74,7 +78,7 @@ fun MyAddressesTab(
             Crossfade(targetState = when { isLoading && addresses.isEmpty() -> "l"; addresses.isEmpty() -> "e"; else -> "c" }, label = "f") { state ->
                 when (state) {
                     "l" -> AddressesSkeleton(contentPadding)
-                    "e" -> EmptyAddressesView(onStartAdding, Modifier.fillMaxSize().padding(contentPadding))
+                    "e" -> EmptyAddressesView(onStartAdding, contentPadding)
                     else -> DraggableAddressList(addresses, addressStatuses, if (useWideLayout) selectedId else null, onDeleteAddress, onStartAdding, onUpdateOrder, { if (useWideLayout) selectedId = it.id else onInspectAddress(it) }, Modifier.fillMaxSize(), contentPadding)
                 }
             }
@@ -93,6 +97,8 @@ fun MyAddressesTab(
                         addressName = selectedAddr.addressName,
                         cherga = selectedAddr.cherga,
                         pidcherga = selectedAddr.pidcherga,
+                        iconName = selectedAddr.iconName,
+                        isPrimary = selectedAddr.id == addresses.firstOrNull()?.id,
                         currentStatus = null,
                         schedules = inspectedScheduleList,
                         groupedSchedule = inspectedGroupedSchedule,
@@ -142,9 +148,10 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
             start = cp.calculateStartPadding(LayoutDirection.Ltr) + 16.dp, 
             top = cp.calculateTopPadding() + 16.dp, 
             end = cp.calculateEndPadding(LayoutDirection.Ltr) + 16.dp, 
-            bottom = cp.calculateBottomPadding() + 80.dp
+            // Room for the "Додати" FAB above the navigation
+            bottom = cp.calculateBottomPadding() + 88.dp
         ), 
-        verticalArrangement = Arrangement.spacedBy(2.dp) // Grouped style
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         itemsIndexed(list, key = { _, item -> item.id }) { idx, addr ->
             val isD = idx == dragIdx; val isS = addr.id == selectedId
@@ -154,10 +161,10 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
             var showMenu by remember { mutableStateOf(false) }
             Box(Modifier.zIndex(if (isD) 1f else 0f).animateItem()) {
                 SwipeToDismissBox(state = dState, enableDismissFromStartToEnd = false, backgroundContent = {
-                    val p = dState.progress
-                    val c = androidx.compose.ui.graphics.lerp(Color.LightGray.copy(alpha = 0.12f), MaterialTheme.colorScheme.errorContainer, if (dState.dismissDirection == SwipeToDismissBoxValue.EndToStart) p else 0f)
-                    Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.CenterEnd) {
-                        Icon(Icons.Default.Delete, null, tint = if (p > 0.5f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    val p = if (dState.dismissDirection == SwipeToDismissBoxValue.EndToStart) dState.progress else 0f
+                    val c = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surfaceContainerLow, MaterialTheme.colorScheme.errorContainer, (p * 2f).coerceAtMost(1f))
+                    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp)).background(c).padding(horizontal = 24.dp), contentAlignment = Alignment.CenterEnd) {
+                        Icon(Icons.Default.Delete, "Видалити", tint = if (p > 0.25f) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }) {
                     AddressItem(
@@ -194,11 +201,31 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
                 }
             }
         }
+        item(key = "gesture_hint") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .animateItem(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.TouchApp, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Утримуйте картку, щоб змінити порядок.\nПроведіть вліво, щоб видалити.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
     }
     if (pDialog != null) AlertDialog(onDismissRequest = { pId = null; list = addrs }, icon = { Icon(Icons.Default.Star, null, tint = MaterialTheme.colorScheme.primary) }, title = { Text("Змінити головну адресу?") }, text = { Text("Ви вибрали ${pDialog.name} як основну.") }, confirmButton = { Button(onClick = { onUpdate(list); pId = null }) { Text("Так") } }, dismissButton = { TextButton(onClick = { pId = null; list = addrs }) { Text("Скасувати") } })
     if (dAddr != null) AlertDialog(onDismissRequest = { dId = null }, icon = { Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error) }, title = { Text("Видалити адресу?") }, text = { Text("Ви впевнені, що хочете видалити ${dAddr.name}?") }, confirmButton = { TextButton(onClick = { onDelete(dAddr.id); dId = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Видалити") } }, dismissButton = { TextButton(onClick = { dId = null }) { Text("Залишити") } })
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AddressItem(
     a: SavedAddress, 
@@ -214,32 +241,20 @@ private fun AddressItem(
     val colorScheme = MaterialTheme.colorScheme
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val corner by animateDpAsState(if (isPressed) 40.dp else 28.dp, label = "corner")
 
-    val topRadius by animateDpAsState(
-        targetValue = if (isPressed) 40.dp else if (index == 0) 24.dp else 4.dp,
-        label = "tr"
-    )
-    val bottomRadius by animateDpAsState(
-        targetValue = if (isPressed) 40.dp else if (index == totalCount - 1) 24.dp else 4.dp,
-        label = "br"
-    )
-
-    val shape = RoundedCornerShape(
-        topStart = topRadius, topEnd = topRadius,
-        bottomStart = bottomRadius, bottomEnd = bottomRadius
-    )
-
+    // Main address is highlighted; selection (wide layout) uses the secondary role
     val containerColor = when {
         isSel -> colorScheme.secondaryContainer
-        isP -> colorScheme.primaryContainer.copy(alpha = 0.7f)
+        isP -> colorScheme.primaryContainer
         else -> colorScheme.surfaceContainerHigh
     }
-    
     val onContainerColor = when {
         isSel -> colorScheme.onSecondaryContainer
         isP -> colorScheme.onPrimaryContainer
         else -> colorScheme.onSurface
     }
+    val addressLine = listOf(a.streetName, a.addressName).filter { it.isNotBlank() }.joinToString(", ")
 
     Surface(
         onClick = onClick,
@@ -247,108 +262,72 @@ private fun AddressItem(
         modifier = modifier
             .fillMaxWidth()
             .semantics { onClick(label = "проглянути", action = { onClick(); true }) },
-        shape = shape,
+        shape = RoundedCornerShape(corner),
         color = containerColor,
-        tonalElevation = if (isSel || isP) 4.dp else 2.dp,
-        shadowElevation = if (isPressed) 8.dp else 3.dp,
-        border = if (isSel) BorderStroke(1.dp, colorScheme.primary.copy(alpha = 0.5f)) else null
+        contentColor = onContainerColor,
+        border = if (isSel) BorderStroke(2.dp, colorScheme.primary) else null
     ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(52.dp), 
-                    shape = CircleShape, 
-                    color = if(isP) colorScheme.primary else colorScheme.primaryContainer.copy(alpha = 0.4f)
-                ) { 
-                    Box(contentAlignment = Alignment.Center) { 
-                        Icon(
-                            imageVector = getIconForName(a.iconName), 
-                            contentDescription = null, 
-                            modifier = Modifier.size(28.dp), 
-                            tint = if(isP) colorScheme.onPrimary else colorScheme.onPrimaryContainer
-                        ) 
-                    } 
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) { 
+                AddressIconBadge(iconName = a.iconName, isPrimary = isP)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = a.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (isP) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(color = colorScheme.primary, contentColor = colorScheme.onPrimary, shape = CircleShape) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Icons.Default.Star, null, modifier = Modifier.size(12.dp))
+                                    Text("Головна", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
                     Text(
-                        text = a.name, 
-                        style = MaterialTheme.typography.titleMedium, 
-                        fontWeight = FontWeight.ExtraBold,
-                        color = onContainerColor
-                    ) 
-                    Text(
-                        text = "${a.cityName}, ${a.streetName}", 
-                        style = MaterialTheme.typography.bodySmall, 
-                        color = onContainerColor.copy(alpha = 0.8f),
+                        text = addressLine.ifBlank { a.cityName },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = onContainerColor.copy(alpha = 0.78f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    ) 
+                    )
+                    if (addressLine.isNotBlank()) {
+                        Text(
+                            text = a.cityName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = onContainerColor.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (a.cherga in 1..99) { // demo presets use placeholder queues
+                    Spacer(Modifier.width(12.dp))
+                    Surface(color = onContainerColor.copy(alpha = 0.1f), shape = CircleShape) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("черга", style = MaterialTheme.typography.labelSmall, color = onContainerColor.copy(alpha = 0.7f))
+                            Text("${a.cherga}.${a.pidcherga}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
             if (s != null) { 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 StatusInfoSection(s, onContainerColor, nowMs) 
-            }
-            
-            Spacer(Modifier.height(12.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(), 
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) { 
-                Surface(
-                    color = onContainerColor.copy(alpha = 0.1f),
-                    shape = CircleShape,
-                    tonalElevation = 1.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bolt,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = onContainerColor
-                        )
-                        Text(
-                            text = "${a.cherga}.${a.pidcherga}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = onContainerColor
-                        )
-                    }
-                }
-                
-                if (isP) { 
-                    Surface(
-                        color = colorScheme.primary,
-                        shape = CircleShape,
-                        tonalElevation = 2.dp
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = colorScheme.onPrimary
-                            )
-                            Text(
-                                text = "Головна", 
-                                style = MaterialTheme.typography.labelSmall, 
-                                fontWeight = FontWeight.Bold,
-                                color = colorScheme.onPrimary
-                            )
-                        }
-                    }
-                } 
             }
         }
     }
@@ -389,17 +368,15 @@ private fun StatusInfoSection(s: GroupedSchedule, contentColor: Color, nowMs: Lo
     
     Surface(
         modifier = modifier.fillMaxWidth().testTag("status_info_section"),
-        shape = MaterialTheme.shapes.large,
-        color = animatedStatusColor.copy(alpha = if (hideLiveTiming) 0.16f else 0.1f),
-        tonalElevation = if (hideLiveTiming) 2.dp else 1.dp
+        shape = RoundedCornerShape(20.dp),
+        color = animatedStatusColor.copy(alpha = 0.14f)
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(32.dp),
                     shape = CircleShape,
-                    color = animatedStatusColor,
-                    tonalElevation = 2.dp
+                    color = animatedStatusColor
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -499,9 +476,22 @@ private fun rememberAdaptiveNowMs(
     return rememberNowMs(tickMs)
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun EmptyAddressesView(onAdd: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.testTag("empty_addresses_view"), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { Icon(Icons.Default.LocationOff, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Text("Список адрес порожній", style = MaterialTheme.typography.titleMedium); Button(onClick = onAdd, shape = MaterialTheme.shapes.medium) { Text("Додати адресу") } } }
+private fun EmptyAddressesView(onAdd: () -> Unit, contentPadding: PaddingValues) {
+    com.occaecat.ztoeschedule.presentation.ui.components.EmptyStatePage(
+        icon = Icons.Default.AddLocationAlt,
+        shape = MaterialShapes.Clover4Leaf.toShape(),
+        title = "Ще немає адрес",
+        body = "Додайте дім, роботу чи рідних, щоб стежити за графіком для кожної адреси",
+        contentPadding = contentPadding,
+        actionText = "Додати адресу",
+        actionIcon = Icons.Default.Add,
+        onAction = onAdd,
+        chips = listOf(
+            com.occaecat.ztoeschedule.presentation.ui.components.EmptyStateChip(Icons.Default.Edit, "Вручну"),
+            com.occaecat.ztoeschedule.presentation.ui.components.EmptyStateChip(Icons.Default.MyLocation, "GPS"),
+            com.occaecat.ztoeschedule.presentation.ui.components.EmptyStateChip(Icons.Default.QrCodeScanner, "QR-код")
+        )
+    )
 }
-
-private fun getIconForName(name: String) = when (name) { "home" -> Icons.Default.Home; "apartment" -> Icons.Default.Apartment; "work" -> Icons.Default.Work; "school" -> Icons.Default.School; "star" -> Icons.Default.Star; else -> Icons.Default.LocationOn }

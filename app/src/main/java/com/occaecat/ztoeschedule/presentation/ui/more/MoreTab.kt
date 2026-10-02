@@ -6,53 +6,39 @@
 package com.occaecat.ztoeschedule.presentation.ui.more
 
 import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.carousel.rememberCarouselState
-import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.lerp
 import androidx.core.net.toUri
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.Schedule
+import com.occaecat.ztoeschedule.domain.DailyStats
 import com.occaecat.ztoeschedule.domain.StatisticsCalculator
 import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
-import com.occaecat.ztoeschedule.presentation.ui.components.DailyStatisticsCard
-import java.text.SimpleDateFormat
+import com.occaecat.ztoeschedule.presentation.ui.components.StepGutter
+import com.occaecat.ztoeschedule.presentation.ui.components.StepLeadingIcon
+import com.occaecat.ztoeschedule.domain.time.ScheduleZone
 import java.util.*
-import kotlin.math.max
 
 @Composable
 fun MoreTab(
@@ -72,254 +58,294 @@ fun MoreTab(
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     val context = LocalContext.current
-    val scrollState = rememberScrollState()
     val colorScheme = MaterialTheme.colorScheme
-    val density = LocalDensity.current
-    val windowWidthDp = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
-    
-    // Window width check for foldables and tablets
-    val isWideScreen = windowWidthDp > 600.dp
-    
-    var sDateMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    val sDateStr = remember(sDateMillis) { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(sDateMillis)) }
-    
-    val promo = remember(colorScheme) { 
-        listOf(
-            PromoItem("Про проект", "Хто ми", Icons.Default.Info, colorScheme.secondaryContainer, colorScheme.onSecondaryContainer, onNavigateToAbout), 
-            PromoItem("Зв'язок", "Напишіть нам", Icons.Default.Email, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer, onNavigateToFeedback),
-            PromoItem("Питання", "FAQ", Icons.AutoMirrored.Filled.Help, colorScheme.surfaceContainerHigh, colorScheme.onSurfaceVariant, onNavigateToFaq)
-        ) 
+
+    // Schedule days are Kyiv days; roll over at midnight while the screen stays open
+    var todayStr by remember { mutableStateOf(ScheduleZone.todayString(System.currentTimeMillis())) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(ScheduleZone.nextMidnight(now) - now + 1_000L)
+            todayStr = ScheduleZone.todayString(System.currentTimeMillis())
+        }
     }
+    val stats = remember(scheduleList, todayStr) { StatisticsCalculator.calculateDailyStats(scheduleList, todayStr) }
+    val hasStats = stats.totalOutageMinutes > 0 || stats.totalOnMinutes > 0 || stats.totalProbableMinutes > 0
+    val addressLabel = listOf(currentAddressStreetName, currentAddressHouseName)
+        .filter { it.isNotBlank() }
+        .joinToString(", ")
 
-    val carouselState = rememberCarouselState { promo.size }
+    val shortcuts = listOf(
+        Shortcut("Про проєкт", "Хто ми", Icons.Default.Info, MaterialShapes.Cookie4Sided, colorScheme.secondaryContainer, colorScheme.onSecondaryContainer, onNavigateToAbout),
+        Shortcut("Зв'язок", "Напишіть нам", Icons.Default.Email, MaterialShapes.Clover4Leaf, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer, onNavigateToFeedback),
+        Shortcut("Питання", "FAQ", Icons.AutoMirrored.Filled.Help, MaterialShapes.Sunny, colorScheme.primaryContainer, colorScheme.onPrimaryContainer, onNavigateToFaq)
+    )
+    val services = listOf(
+        ServiceItem("Сайт ZTOE", "ztoe.com.ua", Icons.Default.Language, "https://www.ztoe.com.ua"),
+        ServiceItem("Графік онлайн", "Пошук відключень на сайті", Icons.Default.CalendarMonth, "https://www.ztoe.com.ua/unhooking-search.php")
+    )
 
+    val scrollState = rememberScrollState()
     Column(
         modifier = modifier
             .fillMaxSize()
+            // Only scrollable (and able to collapse the top bar) when the content doesn't fit
+            .verticalScroll(scrollState, enabled = scrollState.maxValue > 0)
             .padding(contentPadding)
-            .padding(bottom = 80.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+            .padding(bottom = 16.dp)
     ) {
-        HorizontalMultiBrowseCarousel(
-            state = carouselState,
-            preferredItemWidth = 186.dp,
-            itemSpacing = 8.dp,
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            modifier = Modifier.fillMaxWidth().height(221.dp)
-        ) { index ->
-            val item = promo[index]
-            
-            // Mask using a generic path shape
-            val pathShape = remember {
-                object : Shape {
-                    override fun createOutline(
-                        size: Size,
-                        layoutDirection: LayoutDirection,
-                        density: Density,
-                    ): Outline {
-                        val radiusPx = density.run { 24.dp.toPx() }
-                        val roundRect =
-                            RoundRect(0f, 0f, size.width, size.height, CornerRadius(radiusPx))
-                        val shapePath = Path().apply { addRoundRect(roundRect) }
-                        return Outline.Generic(shapePath)
-                    }
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .height(205.dp)
-                    .maskClip(pathShape)
-                    .maskBorder(BorderStroke(1.dp, item.contentColor.copy(alpha = 0.5f)), pathShape)
-                    .background(item.containerColor)
-                    .clickable(onClick = item.onClick)
-            ) {
-                // Background Icon
-                Icon(
-                    imageVector = item.icon,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp)
-                        .graphicsLayer { alpha = 0.1f },
-                    tint = item.contentColor
-                )
-                
-                // Fading Chip
-                ElevatedAssistChip(
-                    onClick = item.onClick,
-                    label = { Text(item.title) },
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(bottom = 16.dp)
-                        .graphicsLayer {
-                            // Fade the chip in once the carousel item's size is large enough to
-                            // display the entire chip
-                            alpha = lerp(
-                                0f,
-                                1f,
-                                max(
-                                    size.width - (carouselItemDrawInfo.maxSize) +
-                                        carouselItemDrawInfo.size,
-                                    0f,
-                                ) / size.width,
-                            )
-                            // Translate the chip to be pinned to the left side of the item's mask
-                            translationX = carouselItemDrawInfo.maskRect.left + 16.dp.toPx()
-                        },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = null,
-                            Modifier.size(AssistChipDefaults.IconSize),
-                            tint = item.contentColor
-                        )
-                    },
-                    colors = AssistChipDefaults.elevatedAssistChipColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        labelColor = item.contentColor,
-                        leadingIconContentColor = item.contentColor
-                    )
-                )
-            }
-        }
-
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = MaterialTheme.colorScheme.outlineVariant
-        )
-
         Column(
             modifier = Modifier
-                .widthIn(max = 1200.dp)
+                .widthIn(max = 840.dp)
+                .fillMaxWidth()
                 .align(Alignment.CenterHorizontally)
-                .padding(horizontal = 16.dp), 
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(horizontal = StepGutter)
         ) {
-            // --- ROW: ANALYTICS + SERVICES ---
-            val stats = StatisticsCalculator.calculateDailyStats(scheduleList, sDateStr)
-            val hasStats = stats.totalOutageMinutes > 0 || stats.totalOnMinutes > 0
-            
-            Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Column 1: Analytics
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxHeight()
-                ) {
-                    Text(
-                        text = "Аналітика", 
-                        style = MaterialTheme.typography.titleMedium, 
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
-                    )
-                    
-                    if (hasStats) {
-                        DailyStatisticsCard(
-                            stats = stats,
-                            modifier = Modifier.fillMaxHeight()
-                        )
-                    } else {
-                        Card(
-                            Modifier.fillMaxWidth().weight(1f), 
-                            shape = MaterialTheme.shapes.extraLarge,
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                        ) { 
-                            Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) { 
-                                Text("Немає даних", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) 
-                            } 
-                        }
-                    }
-                }
-
-                // ... (previous code)
-                val services = listOf(
-                    ServiceItem("Сайт ZTOE", Icons.Default.Language, "https://www.ztoe.com.ua"), 
-                    ServiceItem("Графік онлайн", Icons.Default.OpenInBrowser, "https://www.ztoe.com.ua/unhooking-search.php")
-                )
-                
-                Column(
-// ... (rest of code)
-                    modifier = Modifier.weight(1f).fillMaxHeight()
-                ) {
-                    Text(
-                        text = "Сервіси", 
-                        style = MaterialTheme.typography.titleMedium, 
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
-                    )
-                    
-                    Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        services.forEachIndexed { index, item ->
-                            SettingsGroupItem(
-                                index = index,
-                                totalCount = services.size,
-                                modifier = Modifier.weight(1f),
-                                headlineContent = { 
-                                    Text(
-                                        text = item.title, 
-                                        style = MaterialTheme.typography.titleSmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    ) 
-                                },
-                                leadingContent = {
-                                    Surface(
-                                        modifier = Modifier.size(32.dp),
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(item.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                                        }
-                                    }
-                                },
-                                trailingContent = {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                },
-                                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, item.url.toUri())) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
+            // The top bar already separates the first section, so no extra gap here
+            SectionHeader(title = "Сьогодні", topPadding = 8.dp)
+            TodayCard(
+                stats = stats,
+                hasStats = hasStats,
+                addressLabel = addressLabel.ifBlank { currentAddressCityName }
             )
 
-            // --- SECTION 3: SYSTEM ---
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.fillMaxWidth()
+            SectionHeader("Застосунок")
+            // Equal-height tiles even when one title wraps
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SettingsGroupItem(
-                    index = 0,
-                    totalCount = 1,
-                    leadingContent = {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Settings, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    },
-                    headlineContent = { Text("Налаштування", style = MaterialTheme.typography.titleMedium) },
-                    supportingContent = { Text("Сповіщення, тема та інше", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                    onClick = { onNavigateToSettings() }
-                )
+                shortcuts.forEach { item ->
+                    ShortcutTile(item, Modifier.weight(1f).fillMaxHeight())
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            SettingsGroupItem(
+                index = 0,
+                totalCount = 1,
+                headlineContent = { Text("Налаштування", fontWeight = FontWeight.SemiBold) },
+                supportingContent = { Text("Сповіщення, тема та інше") },
+                leadingContent = {
+                    StepLeadingIcon(
+                        icon = Icons.Default.Settings,
+                        containerColor = colorScheme.primary,
+                        contentColor = colorScheme.onPrimary
+                    )
+                },
+                trailingContent = {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = colorScheme.onSurfaceVariant)
+                },
+                onClick = onNavigateToSettings
+            )
+
+            SectionHeader("Сервіси ZTOE")
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                services.forEachIndexed { index, item ->
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = services.size,
+                        headlineContent = { Text(item.title, fontWeight = FontWeight.SemiBold) },
+                        supportingContent = { Text(item.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        leadingContent = { StepLeadingIcon(item.icon) },
+                        trailingContent = {
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = "Відкрити в браузері",
+                                tint = colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, item.url.toUri())) }
+                    )
+                }
             }
         }
     }
 }
 
-private data class ServiceItem(val title: String, val icon: ImageVector, val url: String)
-private data class PromoItem(val title: String, val subtitle: String, val icon: ImageVector, val containerColor: Color, val contentColor: Color, val onClick: () -> Unit)
+@Composable
+private fun SectionHeader(title: String, topPadding: androidx.compose.ui.unit.Dp = 24.dp) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = topPadding, bottom = 12.dp)
+    )
+}
+
+/** Share of the day with power for the current address, as a wavy ring plus totals. */
+@Composable
+private fun TodayCard(stats: DailyStats, hasStats: Boolean, addressLabel: String) {
+    val colorScheme = MaterialTheme.colorScheme
+    Surface(
+        color = colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+      Column {
+        if (addressLabel.isNotBlank()) {
+            Row(
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Place,
+                    contentDescription = null,
+                    tint = colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = addressLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (!hasStats) {
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StepLeadingIcon(Icons.Default.EventBusy)
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text("Немає даних", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Графік на сьогодні ще не опубліковано",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            return@Column
+        }
+
+        val knownMinutes = stats.totalOnMinutes + stats.totalOutageMinutes + stats.totalProbableMinutes
+        val withPower = if (knownMinutes > 0) (stats.totalOnMinutes.toFloat() / knownMinutes).coerceIn(0f, 1f) else 0f
+        val strokeWidth = with(LocalDensity.current) { 10.dp.toPx() }
+        val stroke = remember(strokeWidth) { Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round) }
+
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(112.dp)) {
+                CircularWavyProgressIndicator(
+                    progress = { withPower },
+                    modifier = Modifier.fillMaxSize(),
+                    color = colorScheme.primary,
+                    trackColor = colorScheme.errorContainer,
+                    stroke = stroke,
+                    trackStroke = stroke,
+                    waveSpeed = WavyProgressIndicatorDefaults.CircularWavelength / 4
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "${(withPower * 100).toInt()}%",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "зі світлом",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.width(20.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatLine(Icons.Default.Bolt, "Світло", formatMinutes(stats.totalOnMinutes), colorScheme.primary)
+                StatLine(Icons.Default.PowerOff, "Без світла", formatMinutes(stats.totalOutageMinutes), colorScheme.error)
+                if (stats.totalProbableMinutes > 0) {
+                    StatLine(Icons.Default.Warning, "Можливо без світла", formatMinutes(stats.totalProbableMinutes), colorScheme.tertiary)
+                }
+            }
+        }
+      }
+    }
+}
+
+@Composable
+private fun StatLine(icon: ImageVector, label: String, value: String, accent: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(accent.copy(alpha = 0.16f), androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun ShortcutTile(item: Shortcut, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = item.onClick,
+        color = item.containerColor,
+        contentColor = item.contentColor,
+        shape = RoundedCornerShape(28.dp),
+        modifier = modifier
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(item.contentColor, item.shape.toShape()),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(item.icon, contentDescription = null, tint = item.containerColor, modifier = Modifier.size(22.dp))
+            }
+            // Pushes the labels to the bottom so tiles of equal height line up
+            Spacer(Modifier.weight(1f).heightIn(min = 16.dp))
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = item.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+private fun formatMinutes(totalMinutes: Int): String {
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours > 0 && minutes > 0 -> "$hours год $minutes хв"
+        hours > 0 -> "$hours год"
+        else -> "$minutes хв"
+    }
+}
+
+private data class ServiceItem(val title: String, val subtitle: String, val icon: ImageVector, val url: String)
+
+private data class Shortcut(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val shape: androidx.graphics.shapes.RoundedPolygon,
+    val containerColor: Color,
+    val contentColor: Color,
+    val onClick: () -> Unit
+)

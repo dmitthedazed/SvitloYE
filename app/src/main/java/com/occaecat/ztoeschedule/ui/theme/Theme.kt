@@ -20,87 +20,103 @@ import com.occaecat.ztoeschedule.data.model.DisplayMode
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 
-val LocalCornerRadius = staticCompositionLocalOf { 24 }
 val LocalDisplayMode = staticCompositionLocalOf { DisplayMode.Comfortable }
 val LocalLiquidGlass = staticCompositionLocalOf { false }
-val LocalGlassBackdrop = staticCompositionLocalOf<com.kyant.backdrop.Backdrop?> { null }
+
+/*
+ * Static palette used when dynamic colour is off (or unavailable).
+ * Material "fidelity" scheme generated from seed #FFB300: amber light-bulb primary
+ * with an electric-cyan tertiary; warm neutrals so surfaces stay calm.
+ */
+val LightColorScheme = lightColorScheme(
+    primary = Color(0xFF7E5700),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFFB300),
+    onPrimaryContainer = Color(0xFF6B4900),
+    inversePrimary = Color(0xFFFFBA38),
+    secondary = Color(0xFF795920),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFFFD38F),
+    onSecondaryContainer = Color(0xFF795921),
+    tertiary = Color(0xFF00677E),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFF00D2FE),
+    onTertiaryContainer = Color(0xFF00566A),
+    background = Color(0xFFFFF8F3),
+    onBackground = Color(0xFF211B11),
+    surface = Color(0xFFFFF8F3),
+    onSurface = Color(0xFF211B11),
+    surfaceVariant = Color(0xFFF3E0C7),
+    onSurfaceVariant = Color(0xFF514532),
+    surfaceTint = Color(0xFF7E5700),
+    inverseSurface = Color(0xFF372F24),
+    inverseOnSurface = Color(0xFFFDEFDE),
+    error = Color(0xFFBA1A1A),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF93000A),
+    outline = Color(0xFF847560),
+    outlineVariant = Color(0xFFD6C4AC),
+    scrim = Color(0xFF000000),
+    surfaceBright = Color(0xFFFFF8F3),
+    surfaceContainer = Color(0xFFFAECDB),
+    surfaceContainerHigh = Color(0xFFF4E6D6),
+    surfaceContainerHighest = Color(0xFFEEE0D0),
+    surfaceContainerLow = Color(0xFFFFF2E2),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceDim = Color(0xFFE5D8C8)
+)
 
 val DarkColorScheme = darkColorScheme(
-    primary = PrimaryDark,
-    onPrimary = OnPrimaryDark,
-    primaryContainer = PrimaryContainerDark,
-    onPrimaryContainer = OnPrimaryContainerDark,
-    secondary = SecondaryDark,
-    onSecondary = OnSecondaryDark,
-    secondaryContainer = SecondaryContainerDark,
-    onSecondaryContainer = OnSecondaryContainerDark,
-    tertiary = TertiaryDark,
-    onTertiary = OnTertiaryDark,
-    tertiaryContainer = TertiaryContainerDark,
-    onTertiaryContainer = OnTertiaryContainerDark,
-    error = Color(0xFFF2B8B5),
-    onError = Color(0xFF601410),
-    errorContainer = Color(0xFF8C1D18),
-    onErrorContainer = Color(0xFFF9DEDC),
-    surface = Color(0xFF1C1B1F),
-    onSurface = Color(0xFFE6E1E5),
-    surfaceVariant = Color(0xFF49454F),
-    onSurfaceVariant = Color(0xFFCAC4D0),
-    outline = Color(0xFF938F99),
-    outlineVariant = Color(0xFF49454F),
-    inverseSurface = Color(0xFFE6E1E5),
-    inverseOnSurface = Color(0xFF313033),
-    inversePrimary = Color(0xFF6750A4),
+    primary = Color(0xFFFFD79B),
+    onPrimary = Color(0xFF432C00),
+    primaryContainer = Color(0xFFFFB300),
+    onPrimaryContainer = Color(0xFF6B4900),
+    inversePrimary = Color(0xFF7E5700),
+    secondary = Color(0xFFEAC07D),
+    onSecondary = Color(0xFF432C00),
+    secondaryContainer = Color(0xFF61440C),
+    onSecondaryContainer = Color(0xFFDBB270),
+    tertiary = Color(0xFFA4E7FF),
+    onTertiary = Color(0xFF003543),
+    tertiaryContainer = Color(0xFF00D2FE),
+    onTertiaryContainer = Color(0xFF00566A),
+    background = Color(0xFF181209),
+    onBackground = Color(0xFFEEE0D0),
+    surface = Color(0xFF181209),
+    onSurface = Color(0xFFEEE0D0),
+    surfaceVariant = Color(0xFF514532),
+    onSurfaceVariant = Color(0xFFD6C4AC),
+    surfaceTint = Color(0xFFFFBA38),
+    inverseSurface = Color(0xFFEEE0D0),
+    inverseOnSurface = Color(0xFF372F24),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    outline = Color(0xFF9E8E78),
+    outlineVariant = Color(0xFF514532),
     scrim = Color(0xFF000000),
-    surfaceTint = PrimaryDark
+    surfaceBright = Color(0xFF40382D),
+    surfaceContainer = Color(0xFF251F15),
+    surfaceContainerHigh = Color(0xFF30291E),
+    surfaceContainerHighest = Color(0xFF3B3429),
+    surfaceContainerLow = Color(0xFF211B11),
+    surfaceContainerLowest = Color(0xFF130D05),
+    surfaceDim = Color(0xFF181209)
 )
 
-val LightColorScheme = lightColorScheme(
-    primary = PrimaryLight,
-    onPrimary = OnPrimaryLight,
-    primaryContainer = PrimaryContainerLight,
-    onPrimaryContainer = OnPrimaryContainerLight,
-    secondary = SecondaryLight,
-    onSecondary = OnSecondaryLight,
-    secondaryContainer = SecondaryContainerLight,
-    onSecondaryContainer = OnSecondaryContainerLight,
-    tertiary = TertiaryLight,
-    onTertiary = OnTertiaryLight,
-    tertiaryContainer = TertiaryContainerLight,
-    onTertiaryContainer = OnTertiaryContainerLight
-)
-
-val AmoledColorScheme = darkColorScheme(
-    primary = PrimaryDark,
-    onPrimary = OnPrimaryDark,
-    primaryContainer = PrimaryContainerDark,
-    onPrimaryContainer = OnPrimaryContainerDark,
-    secondary = SecondaryDark,
-    onSecondary = OnSecondaryDark,
-    secondaryContainer = SecondaryContainerDark,
-    onSecondaryContainer = OnSecondaryContainerDark,
-    tertiary = TertiaryDark,
-    onTertiary = OnTertiaryDark,
-    tertiaryContainer = TertiaryContainerDark,
-    onTertiaryContainer = OnTertiaryContainerDark,
-    error = Color(0xFFF2B8B5),
-    onError = Color(0xFF601410),
-    errorContainer = Color(0xFF8C1D18),
-    onErrorContainer = Color(0xFFF9DEDC),
+/** True-black variant for OLED: base layers black, containers lifted just enough to stay distinct. */
+fun androidx.compose.material3.ColorScheme.toAmoled() = copy(
     background = Color.Black,
     surface = Color.Black,
-    surfaceVariant = Color(0xFF121212),
-    onBackground = Color.White,
-    onSurface = Color.White,
-    onSurfaceVariant = Color(0xFFCAC4D0),
-    outline = Color(0xFF333333),
-    outlineVariant = Color(0xFF49454F),
-    inverseSurface = Color.White,
-    inverseOnSurface = Color.Black,
-    inversePrimary = Color(0xFF6750A4),
-    scrim = Color(0xFF000000),
-    surfaceTint = PrimaryDark
+    surfaceDim = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF0B0B0B),
+    surfaceContainer = Color(0xFF121212)
 )
+
+val AmoledColorScheme = DarkColorScheme.toAmoled()
 
 val ContrastColorScheme = lightColorScheme(
     primary = Color.Black,
@@ -122,7 +138,6 @@ val ContrastColorScheme = lightColorScheme(
 @Composable
 fun SvitloYeZhytomyrTheme(
     themePreference: ColorTheme = ColorTheme.System,
-    cornerRadius: Int = -1,
     displayMode: DisplayMode = DisplayMode.Comfortable,
     liquidGlass: Boolean = false,
     // Dynamic color is available on Android 12+
@@ -134,29 +149,6 @@ fun SvitloYeZhytomyrTheme(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val systemDark = isSystemInDarkTheme()
     val isDynamicSupported = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-
-    // Detect system corner radius or fallback to 24
-    val finalCornerRadius = remember(cornerRadius) {
-        if (cornerRadius == -1) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val activity = context as? android.app.Activity
-                val radius = if (activity != null) {
-                    val insets = activity.window.decorView.rootWindowInsets
-                    // POSITION_TOP_LEFT is a safe bet for generic radius
-                    insets?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)?.radius
-                } else null
-                
-                radius?.let { 
-                    with(density) { it.toDp().value.toInt() } 
-                } ?: 24
-            }
-            else {
-                24
-            }
-        } else {
-            cornerRadius
-        }
-    }
 
     val effectiveTheme = if (isAmoled && (themePreference == ColorTheme.Dark || (themePreference == ColorTheme.System && systemDark))) {
         ColorTheme.Amoled
@@ -179,28 +171,16 @@ fun SvitloYeZhytomyrTheme(
             if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
         }
         ColorTheme.Amoled -> {
-            // Force disable dynamic color for background/surface in AMOLED mode, but maybe keep accents?
-            // Current implementation ignores dynamic colors for Amoled background
-            val base = if (isDynamicSupported) dynamicDarkColorScheme(context) else DarkColorScheme
-            base.copy(
-                background = Color.Black,
-                surface = Color.Black,
-                surfaceVariant = Color(0xFF121212),
-                onBackground = Color.White,
-                onSurface = Color.White,
-                outline = Color(0xFF333333)
-            )
+            if (isDynamicSupported) dynamicDarkColorScheme(context).toAmoled() else AmoledColorScheme
         }
         ColorTheme.Contrast -> ContrastColorScheme
     }
 
-    val customShapes = materialShapesForCornerRadius(finalCornerRadius)
-
-    CompositionLocalProvider(LocalCornerRadius provides finalCornerRadius, LocalDisplayMode provides displayMode, LocalLiquidGlass provides liquidGlass) {
+    CompositionLocalProvider(LocalDisplayMode provides displayMode, LocalLiquidGlass provides liquidGlass) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography, // Use standard typography
-            shapes = customShapes,
+            shapes = ExpressiveShapes,
             motionScheme = MotionScheme.expressive(),
             content = content
         )

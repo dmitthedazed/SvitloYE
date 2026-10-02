@@ -6,230 +6,328 @@
 package com.occaecat.ztoeschedule.presentation.ui.settings
 
 import android.Manifest
+import android.app.AlarmManager
+import android.app.TimePickerDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.occaecat.ztoeschedule.domain.notification.NotificationScheduler
-import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.occaecat.ztoeschedule.data.model.NotificationSettings
+import java.util.Calendar
 
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NotificationSettingsScreen(
     state: SettingsState,
     onAction: (SettingsAction) -> Unit
 ) {
     val context = LocalContext.current
-    val scrollState = rememberScrollState()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val settings = state.notifications
+    fun update(transform: (NotificationSettings) -> NotificationSettings) =
+        onAction(SettingsAction.UpdateNotifications(transform))
 
-    // Permission handling
-    val hasNotificationPermission = remember(context) {
-        {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            } else {
-                true
+    // Permissions live in system settings: re-check every time we come back
+    val alarmManager = remember { context.getSystemService(AlarmManager::class.java) }
+    fun canPost() = (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+    fun canScheduleExact() = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+    var canPost by remember { mutableStateOf(canPost()) }
+    var canScheduleExact by remember { mutableStateOf(canScheduleExact()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                canPost = canPost()
+                canScheduleExact = canScheduleExact()
             }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            onAction(SettingsAction.SetNotificationsEnabled(true))
-            NotificationScheduler.schedulePowerMonitoring(context)
-        }
+    // Turning something on without permission asks for it first, then applies the change
+    var pendingChange by remember { mutableStateOf<((NotificationSettings) -> NotificationSettings)?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        canPost = canPost()
+        if (granted) pendingChange?.let(::update)
+        pendingChange = null
     }
-
-    fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    fun enable(transform: (NotificationSettings) -> NotificationSettings) {
+        if (!canPost() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pendingChange = transform
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            onAction(SettingsAction.SetNotificationsEnabled(true))
-            NotificationScheduler.schedulePowerMonitoring(context)
+            update(transform)
         }
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text("Сповіщення") },
-                navigationIcon = {
-                    IconButton(onClick = { onAction(SettingsAction.GoBack) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .consumeWindowInsets(padding)
-                .verticalScroll(scrollState)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // General Notifications
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                SettingsGroupItem(
-                    index = 0,
-                    totalCount = 1,
-                    headlineContent = { Text("Сповіщення про відключення") },
-                    supportingContent = { Text("Отримувати повідомлення коли світло зникає або з'являється") },
-                    leadingContent = {
-                        Icon(Icons.Default.NotificationsActive, null)
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = state.notificationsEnabled,
-                            onCheckedChange = { enabled ->
-                                if (enabled && !hasNotificationPermission()) {
-                                    requestNotificationPermission()
-                                } else {
-                                    onAction(SettingsAction.SetNotificationsEnabled(enabled))
-                                }
-                            }
-                        )
-                    },
-                    onClick = {
-                        if (!state.notificationsEnabled && !hasNotificationPermission()) {
-                            requestNotificationPermission()
-                        } else {
-                            onAction(SettingsAction.SetNotificationsEnabled(!state.notificationsEnabled))
+    var showLeadDialog by remember { mutableStateOf(false) }
+    if (showLeadDialog) {
+        LeadMinutesDialog(
+            selected = settings.leadMinutes,
+            onSelect = { minutes -> update { it.copy(leadMinutes = minutes) }; showLeadDialog = false },
+            onDismiss = { showLeadDialog = false }
+        )
+    }
+
+    fun pickTime(minuteOfDay: Int, onPicked: (Int) -> Unit) {
+        TimePickerDialog(
+            context,
+            { _, hour, minute -> onPicked(hour * 60 + minute) },
+            minuteOfDay / 60, minuteOfDay % 60,
+            DateFormat.is24HourFormat(context)
+        ).show()
+    }
+
+    val alerts = settings.alertsEnabled
+    val quiet = settings.quietHours
+
+    SettingsPage(
+        title = "Сповіщення",
+        subtitle = if (alerts) "Увімкнено" else "Вимкнено",
+        onBack = { onAction(SettingsAction.GoBack) }
+    ) {
+        settingsSection(
+            null,
+            buildList {
+                if (!canPost) add(
+                    SettingsRow(
+                        title = "Сповіщення заборонені",
+                        subtitle = "Android не показує сповіщення застосунку. Натисніть, щоб дозволити",
+                        icon = Icons.Default.NotificationsOff,
+                        accent = SettingsAccent.Error,
+                        trailing = SettingsTrailing.External,
+                        onClick = { context.startActivity(appNotificationSettingsIntent(context.packageName)) }
+                    )
+                )
+                add(
+                    SettingsRow(
+                        title = "Сповіщення про світло",
+                        subtitle = "Попередження, зміни стану й оновлення графіка",
+                        icon = Icons.Default.NotificationsActive,
+                        accent = SettingsAccent.Primary,
+                        trailing = SettingsTrailing.Toggle(alerts) { on ->
+                            if (on) enable { it.copy(alertsEnabled = true) } else update { it.copy(alertsEnabled = false) }
                         }
-                    }
+                    )
                 )
             }
+        )
 
-            // Permanent Status
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                val showLiveUpdates = Build.VERSION.SDK_INT >= 36
-                val totalItems = if (showLiveUpdates) 2 else 1
-                
-                SettingsGroupItem(
-                    index = 0,
-                    totalCount = totalItems,
-                    headlineContent = { Text("Постійний статус") },
-                    supportingContent = { Text("Закріплене повідомлення в шторці з поточним станом") },
-                    leadingContent = {
-                        Icon(Icons.Default.Bolt, null)
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = state.statusNotificationEnabled,
-                            onCheckedChange = { onAction(SettingsAction.SetStatusNotificationEnabled(it)) }
-                        )
-                    },
-                    onClick = { onAction(SettingsAction.SetStatusNotificationEnabled(!state.statusNotificationEnabled)) }
+        settingsSection(
+            "Що сповіщати",
+            listOf(
+                SettingsRow(
+                    title = "Попередження",
+                    subtitle = "Нагадування перед відключенням",
+                    icon = Icons.Default.Alarm,
+                    accent = SettingsAccent.Secondary,
+                    enabled = alerts && settings.outageAlerts,
+                    trailing = SettingsTrailing.Value(leadLabel(settings.leadMinutes)),
+                    onClick = { showLeadDialog = true }
+                ),
+                SettingsRow(
+                    title = "Відключення",
+                    subtitle = "Коли світло зникає за графіком",
+                    icon = Icons.Default.PowerOff,
+                    accent = SettingsAccent.Error,
+                    enabled = alerts,
+                    trailing = SettingsTrailing.Toggle(settings.outageAlerts) { on -> update { it.copy(outageAlerts = on) } }
+                ),
+                SettingsRow(
+                    title = "Увімкнення",
+                    subtitle = "Коли світло має з'явитися",
+                    icon = Icons.Default.Power,
+                    accent = SettingsAccent.Tertiary,
+                    enabled = alerts,
+                    trailing = SettingsTrailing.Toggle(settings.restoreAlerts) { on -> update { it.copy(restoreAlerts = on) } }
+                ),
+                SettingsRow(
+                    title = "Оновлення графіка",
+                    subtitle = "Коли графік на сьогодні чи завтра змінився",
+                    icon = Icons.Default.EditCalendar,
+                    accent = SettingsAccent.Secondary,
+                    enabled = alerts,
+                    trailing = SettingsTrailing.Toggle(settings.scheduleChangeAlerts) { on -> update { it.copy(scheduleChangeAlerts = on) } }
                 )
+            )
+        )
 
-                if (showLiveUpdates) {
-                    SettingsGroupItem(
-                        index = 1,
-                        totalCount = totalItems,
-                        headlineContent = { Text("Live Updates") },
-                        supportingContent = { Text("Налаштувати відображення на заблокованому екрані") },
-                        onClick = {
-                            val intent = Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS").apply {
-                                data = Uri.fromParts("package", context.packageName, null)
-                                putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName)
-                            }
-                            context.startActivity(intent)
+        settingsSection(
+            "Тихі години",
+            buildList {
+                add(
+                    SettingsRow(
+                        title = "Тихі години",
+                        subtitle = "Без попереджень, решта сповіщень — без звуку",
+                        icon = Icons.Default.Bedtime,
+                        accent = SettingsAccent.Neutral,
+                        enabled = alerts,
+                        trailing = SettingsTrailing.Toggle(quiet.enabled) { on ->
+                            update { it.copy(quietHours = it.quietHours.copy(enabled = on)) }
                         }
+                    )
+                )
+                if (quiet.enabled) {
+                    add(
+                        SettingsRow(
+                            title = "Початок",
+                            icon = Icons.Default.NightsStay,
+                            accent = SettingsAccent.Neutral,
+                            enabled = alerts,
+                            trailing = SettingsTrailing.Value(formatMinuteOfDay(context, quiet.startMinute)),
+                            onClick = {
+                                pickTime(quiet.startMinute) { m -> update { it.copy(quietHours = it.quietHours.copy(startMinute = m)) } }
+                            }
+                        )
+                    )
+                    add(
+                        SettingsRow(
+                            title = "Кінець",
+                            icon = Icons.Default.WbSunny,
+                            accent = SettingsAccent.Neutral,
+                            enabled = alerts,
+                            trailing = SettingsTrailing.Value(formatMinuteOfDay(context, quiet.endMinute)),
+                            onClick = {
+                                pickTime(quiet.endMinute) { m -> update { it.copy(quietHours = it.quietHours.copy(endMinute = m)) } }
+                            }
+                        )
                     )
                 }
             }
+        )
 
-            // System Settings Link
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                SettingsGroupItem(
-                    index = 0,
-                    totalCount = 1,
-                    headlineContent = { Text("Відкрити системні налаштування") },
-                    leadingContent = { Icon(Icons.Default.Settings, null) },
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        settingsSection(
+            "У шторці",
+            buildList {
+                add(
+                    SettingsRow(
+                        title = "Постійний статус",
+                        subtitle = "Закріплене сповіщення з поточним станом і таймером",
+                        icon = Icons.Default.Bolt,
+                        accent = SettingsAccent.Tertiary,
+                        trailing = SettingsTrailing.Toggle(settings.statusNotification) { on ->
+                            if (on) enable { it.copy(statusNotification = true) } else update { it.copy(statusNotification = false) }
                         }
-                        context.startActivity(intent)
-                    }
+                    )
+                )
+                // Android 16+: promoted "Live Update" notifications on the lock screen and status bar
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) add(
+                    SettingsRow(
+                        title = "Live Updates",
+                        subtitle = "Таймер у рядку стану й на заблокованому екрані",
+                        icon = Icons.Default.Timelapse,
+                        accent = SettingsAccent.Tertiary,
+                        enabled = settings.statusNotification,
+                        trailing = SettingsTrailing.External,
+                        onClick = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
+                                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            )
+                        }
+                    )
                 )
             }
+        )
 
-            // Exact Alarms (Android 12+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val alarmManager = remember { context.getSystemService(android.app.AlarmManager::class.java) }
-                var canScheduleExact by remember {
-                    mutableStateOf(alarmManager.canScheduleExactAlarms())
-                }
-
-                // Check again when user returns to app
-                val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-                DisposableEffect(lifecycleOwner) {
-                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                            canScheduleExact = alarmManager.canScheduleExactAlarms()
+        settingsSection(
+            "Система",
+            buildList {
+                if (!canScheduleExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(
+                    SettingsRow(
+                        title = "Точні будильники вимкнено",
+                        subtitle = "Без них сповіщення можуть запізнюватись. Натисніть, щоб дозволити",
+                        icon = Icons.Default.AlarmOff,
+                        accent = SettingsAccent.Error,
+                        trailing = SettingsTrailing.External,
+                        onClick = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                    .setData(Uri.fromParts("package", context.packageName, null))
+                            )
                         }
-                    }
-                    lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose {
-                        lifecycleOwner.lifecycle.removeObserver(observer)
-                    }
-                }
+                    )
+                )
+                add(
+                    SettingsRow(
+                        title = "Системні налаштування",
+                        subtitle = "Канали, звук і вібрація",
+                        icon = Icons.Default.Settings,
+                        accent = SettingsAccent.Neutral,
+                        trailing = SettingsTrailing.External,
+                        onClick = { context.startActivity(appNotificationSettingsIntent(context.packageName)) }
+                    )
+                )
+            }
+        )
+    }
+}
 
-                if (!canScheduleExact) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        SettingsGroupItem(
-                            index = 0,
-                            totalCount = 1,
-                            headlineContent = { Text("Точні сповіщення") },
-                            supportingContent = { Text("Дозвіл на точний час необхідний для вчасної відправки повідомлень") },
-                            leadingContent = {
-                                Icon(Icons.Default.Notifications, null)
-                            },
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                    data = Uri.fromParts("package", context.packageName, null)
-                                }
-                                context.startActivity(intent)
-                            }
-                        )
+@Composable
+private fun LeadMinutesDialog(selected: Int, onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Попередження") },
+        text = {
+            Column {
+                NotificationSettings.LeadMinuteOptions.forEach { minutes ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(minutes) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = minutes == selected, onClick = { onSelect(minutes) })
+                        Text(leadLabel(minutes))
                     }
                 }
             }
-        }
-    }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Скасувати") } }
+    )
 }
+
+private fun leadLabel(minutes: Int): String = when {
+    minutes == 0 -> "Вимкнено"
+    minutes >= 60 && minutes % 60 == 0 -> "За ${minutes / 60} год"
+    else -> "За $minutes хв"
+}
+
+private fun formatMinuteOfDay(context: android.content.Context, minuteOfDay: Int): String {
+    val calendar = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, minuteOfDay / 60)
+        set(Calendar.MINUTE, minuteOfDay % 60)
+    }
+    return DateFormat.getTimeFormat(context).format(calendar.time)
+}
+
+private fun appNotificationSettingsIntent(packageName: String) =
+    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)

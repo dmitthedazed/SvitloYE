@@ -1,10 +1,8 @@
 package com.occaecat.ztoeschedule.domain
 
 import com.occaecat.ztoeschedule.data.model.Schedule
+import com.occaecat.ztoeschedule.domain.time.ScheduleZone
 import java.util.Calendar
-import java.util.TimeZone
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 /**
  * Mapper для группировки интервалов графика.
@@ -58,7 +56,9 @@ object ScheduleMapper {
         val minutes = totalMinutes % 60
 
         val startMs = parseDateTimeToMs(first.date, startTime)
-        val endMs = startMs + (totalMinutes * 60 * 1000L)
+        // Wall-clock end, so a DST switch inside the group doesn't shift it by an hour
+        val endMs = wallClockEndMs(last).takeIf { startMs > 0 && it > startMs }
+            ?: (startMs + totalMinutes * 60 * 1000L)
 
         return GroupedSchedule(
             date = first.date,
@@ -77,10 +77,24 @@ object ScheduleMapper {
         )
     }
 
+    /** End of one interval in epoch ms; "24:00" and spans crossing midnight end on the next day. */
+    private fun wallClockEndMs(item: Schedule): Long {
+        val (start, end) = item.span.split("-").map { it.trim() }.takeIf { it.size == 2 } ?: return 0L
+        val startMs = parseDateTimeToMs(item.date, start)
+        var endMs = parseDateTimeToMs(item.date, end) // lenient Calendar rolls 24:00 over
+        if (startMs == 0L || endMs == 0L) return 0L
+        if (endMs <= startMs) {
+            endMs = Calendar.getInstance(ScheduleZone.timeZone).apply {
+                timeInMillis = endMs
+                add(Calendar.DAY_OF_YEAR, 1)
+            }.timeInMillis
+        }
+        return endMs
+    }
+
     private fun parseDateTimeToMs(date: String, time: String): Long {
         return try {
-            val kyivZone = TimeZone.getTimeZone("Europe/Kyiv")
-            val cal = Calendar.getInstance(kyivZone)
+            val cal = Calendar.getInstance(ScheduleZone.timeZone)
             val dateParts = date.split(".")
             val timeParts = time.split(":")
             cal.set(dateParts[2].toInt(), dateParts[1].toInt() - 1, dateParts[0].toInt(), timeParts[0].toInt(), timeParts[1].toInt(), 0)
@@ -99,8 +113,8 @@ object ScheduleMapper {
                 val start = parseTimeToMinutes(parts[0].trim())
                 val end = parseTimeToMinutes(parts[1].trim())
                 var duration = end - start
-                if (duration <= 0 && parts[1].trim() == "24:00") duration = 1440 - start
-                else if (duration < 0) duration += 1440
+                // "24:00" parses to 1440; a non-positive span wraps past midnight ("00:00-00:00" is a whole day)
+                if (duration <= 0) duration += 1440
                 total += duration
             } catch (e: Exception) {}
         }

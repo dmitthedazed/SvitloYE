@@ -16,6 +16,7 @@ import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.presentation.ui.onboarding.OnboardingScreen
 import com.occaecat.ztoeschedule.presentation.viewmodel.EnergyScheduleViewModel
 import com.occaecat.ztoeschedule.ui.theme.SvitloYeZhytomyrTheme
+import com.occaecat.ztoeschedule.ui.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,18 +36,9 @@ class OnboardingActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            val colorTheme by preferencesManager.colorThemeFlow.collectAsStateWithLifecycle(initialValue = ColorTheme.System)
-            val cornerRadius by preferencesManager.cornerRadiusFlow.collectAsStateWithLifecycle(initialValue = 24)
-            val dynamicColors by preferencesManager.dynamicColorsFlow.collectAsStateWithLifecycle(initialValue = true)
-            val isAmoled by preferencesManager.isAmoledFlow.collectAsStateWithLifecycle(initialValue = false)
             val scope = rememberCoroutineScope()
 
-            SvitloYeZhytomyrTheme(
-                themePreference = colorTheme,
-                cornerRadius = cornerRadius,
-                dynamicColor = dynamicColors,
-                isAmoled = isAmoled
-            ) {
+            AppTheme(preferencesManager) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

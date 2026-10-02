@@ -1,13 +1,17 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package com.occaecat.ztoeschedule.presentation.ui.info
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,213 +19,186 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.occaecat.ztoeschedule.presentation.ui.components.StepHeroIcon
+import com.occaecat.ztoeschedule.presentation.ui.components.StepLeadingIcon
+import com.occaecat.ztoeschedule.presentation.ui.components.StepPrimaryButton
+import com.occaecat.ztoeschedule.presentation.ui.settings.SettingsPage
+import com.occaecat.ztoeschedule.presentation.ui.settings.SettingsSectionHeader
 
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.foundation.shape.CircleShape
-import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
-
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun GeminiChatScreen(onBack: () -> Unit) {
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text("Gemini Assistant") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .consumeWindowInsets(padding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Surface(
-                modifier = Modifier.size(120.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.tertiaryContainer
+    val colorScheme = MaterialTheme.colorScheme
+    SettingsPage(title = "ШІ-підтримка", onBack = onBack) {
+        item(key = "hero") {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
+                StepHeroIcon(
+                    icon = Icons.Default.AutoAwesome,
+                    shape = MaterialShapes.Sunny.toShape(),
+                    containerColor = colorScheme.tertiaryContainer,
+                    contentColor = colorScheme.onTertiaryContainer,
+                    rotate = true
+                )
+                Spacer(Modifier.height(32.dp))
+                Text(
+                    "Помічник уже в дорозі",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Ми працюємо над розумним помічником, який відповідатиме на питання про графіки та стан енергосистеми.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    color = colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
-            Spacer(Modifier.height(32.dp))
-            Text(
-                "ШІ-підтримка в розробці",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Ми працюємо над інтеграцією розумного помічника, який зможе відповідати на питання про графіки та стан енергосистеми.",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+private data class Faq(val icon: ImageVector, val question: String, val answer: String)
+
+private val faqs = listOf(
+    Faq(
+        Icons.Default.CloudDownload,
+        "Звідки застосунок бере дані?",
+        "Безпосередньо з офіційного сайту АТ «Житомиробленерго». Дані оновлюються автоматично кожні кілька хвилин."
+    ),
+    Faq(
+        Icons.Default.SyncProblem,
+        "Чому графік не збігається з реальністю?",
+        "Графіки погодинних відключень — це план. Диспетчер може змінювати їх у реальному часі залежно від стану енергосистеми. Застосунок показує найсвіжішу доступну версію."
+    ),
+    Faq(
+        Icons.Default.Tag,
+        "Як дізнатися свою чергу?",
+        "Під час першого запуску оберіть РЕМ, населений пункт, вулицю й будинок — застосунок сам визначить чергу та підчергу."
+    ),
+    Faq(
+        Icons.Default.WifiOff,
+        "Чи працює застосунок без інтернету?",
+        "Так, останній завантажений графік зберігається на пристрої. Але пам'ятайте: офлайн дані можуть бути застарілими."
+    ),
+    Faq(
+        Icons.Default.NotificationsActive,
+        "Як працюють сповіщення?",
+        "Застосунок надсилає нагадування до початку відключення або ввімкнення світла за вашою адресою. Для точного часу дозвольте точні будильники в налаштуваннях."
+    ),
+    Faq(
+        Icons.Default.WarningAmber,
+        "Що таке «можливе відключення»?",
+        "Періоди, коли світло можуть вимкнути лише у разі критичного дефіциту потужності. Зазвичай у ці години світло є, але варто бути готовими."
+    )
+)
+
 @Composable
 fun FaqScreen(onBack: () -> Unit) {
-    val scrollState = rememberScrollState()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text("Питання та відповіді") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
-            )
+    val context = LocalContext.current
+    val colorScheme = MaterialTheme.colorScheme
+
+    SettingsPage(
+        title = "Питання та відповіді",
+        onBack = onBack
+    ) {
+        item(key = "faq_header") { SettingsSectionHeader("Часті запитання") }
+        item(key = "faq_list") {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                faqs.forEachIndexed { index, faq -> FaqItem(faq, index, faqs.size) }
+            }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .consumeWindowInsets(padding)
-                .verticalScroll(scrollState)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                "Часті запитання",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-            )
 
-            FaqItem(
-                question = "Звідки додаток бере дані?", 
-                answer = "Ми отримуємо інформацію безпосередньо з офіційного сайту АТ «Житомиробленерго». Дані синхронізуються автоматично кожні кілька хвилин."
-            )
-            
-            FaqItem(
-                question = "Чому графік не співпадает з реальністю?", 
-                answer = "Графіки ГПВ — це лише план. Оператор системи розподілу (диспетчер) може вносити зміни в реальному часі залежно от стану енергосистеми. Наш додаток показує найсвіжішу доступну версію графіку."
-            )
-            
-            FaqItem(
-                question = "Як знайти свою чергу?", 
-                answer = "При першому запуску ви обираєте свій РЕМ, місто та адресу. Додаток автоматично визначить вашу чергу та підчергу на основі цих даних."
-            )
-
-            FaqItem(
-                question = "Чи працює додаток без інтернету?", 
-                answer = "Так, додаток зберігає останній завантажений графік. Ви зможете переглянути його навіть офлайн, але пам'ятайте, что дані можуть бути застарілими."
-            )
-
-            FaqItem(
-                question = "Як працюють сповіщення?", 
-                answer = "Додаток надсилає пуш-повідомлення за 15-30 хвилин (можна налаштувати) до початку відключення або ввімкнення світла за вашою адресою."
-            )
-
-            FaqItem(
-                question = "Що таке «Можливе відключение» (жовта зона)?", 
-                answer = "Це періоди, коли світло може бути вимкнено лише у разі критичного дефіциту потужності. Зазвичай у ці години світло є, но варто бути готовим."
-            )
-
-            Spacer(Modifier.height(32.dp))
-            
+        item(key = "more") {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                color = colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp)
             ) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.AutoMirrored.Filled.HelpOutline, null, tint = MaterialTheme.colorScheme.primary)
+                    StepLeadingIcon(Icons.AutoMirrored.Filled.HelpOutline)
                     Spacer(Modifier.height(12.dp))
+                    Text("Залишилися питання?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        "Залишилися питання?", 
-                        style = MaterialTheme.typography.titleMedium, 
-                        fontWeight = FontWeight.Bold
+                        "Напишіть нам — обов'язково допоможемо.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
                     )
-                    Text(
-                        "Напишіть нам на пошту, ми обов'язково допоможемо.", 
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(Modifier.height(16.dp))
+                    StepPrimaryButton(text = "Написати нам", icon = Icons.Default.Email, onClick = { openFeedbackEmail(context) })
                 }
             }
         }
     }
 }
 
+/** Accordion row in a grouped list: the question, and the answer revealed underneath. */
 @Composable
-fun FaqItem(question: String, answer: String) {
+private fun FaqItem(faq: Faq, index: Int, count: Int) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        SettingsGroupItem(
-            index = 0,
-            totalCount = if (expanded) 2 else 1,
-            headlineContent = { Text(question, fontWeight = FontWeight.Bold) },
-            trailingContent = {
-                Icon(
-                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null
+    val colorScheme = MaterialTheme.colorScheme
+    val top by animateDpAsState(if (index == 0 || expanded) 24.dp else 4.dp, label = "faq_top")
+    val bottom by animateDpAsState(if (index == count - 1 || expanded) 24.dp else 4.dp, label = "faq_bottom")
+    val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "faq_chevron")
+
+    Surface(
+        onClick = { expanded = !expanded },
+        color = if (expanded) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
+        contentColor = if (expanded) colorScheme.onSecondaryContainer else colorScheme.onSurface,
+        shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                stateDescription = if (expanded) "Розгорнуто" else "Згорнуто"
+            }
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StepLeadingIcon(faq.icon)
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    faq.question,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
                 )
-            },
-            onClick = { expanded = !expanded }
-        )
-        
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            SettingsGroupItem(
-                index = 1,
-                totalCount = 2,
-                headlineContent = { 
-                    Text(
-                        answer, 
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    ) 
-                },
-                onClick = { expanded = false }
-            )
+                Icon(
+                    Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.rotate(chevron)
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Text(
+                    faq.answer,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(start = 56.dp, top = 12.dp, end = 8.dp)
+                )
+            }
         }
     }
 }

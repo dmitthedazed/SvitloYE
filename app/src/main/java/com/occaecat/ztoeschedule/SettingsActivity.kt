@@ -27,7 +27,8 @@ class SettingsActivity : ComponentActivity() {
 
             SvitloYeZhytomyrTheme(
                 themePreference = state.colorTheme,
-                cornerRadius = state.cornerRadius,
+                displayMode = state.displayMode,
+                liquidGlass = state.liquidGlass,
                 dynamicColor = state.dynamicColors,
                 isAmoled = state.isAmoled
             ) {

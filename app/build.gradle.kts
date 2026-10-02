@@ -11,7 +11,7 @@ plugins {
 
 android {
     namespace = "com.occaecat.ztoeschedule"
-    compileSdk = 36
+    compileSdk = 37
 
     val keystorePropertiesFile = rootProject.file("keystore.properties")
     val keystoreProperties = Properties()
@@ -31,9 +31,9 @@ android {
     defaultConfig {
         applicationId = "com.occaecat.svitloye"
         minSdk = 26
-        targetSdk = 36
-        versionCode = 1
-        versionName = "1.3"
+        targetSdk = 37
+        versionCode = 20
+        versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -75,7 +75,6 @@ android {
 }
 
 dependencies {
-    implementation(platform(libs.firebase.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.car.app)
     implementation(libs.androidx.core.splashscreen)

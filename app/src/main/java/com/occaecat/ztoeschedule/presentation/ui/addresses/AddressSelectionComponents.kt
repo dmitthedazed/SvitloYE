@@ -32,171 +32,136 @@ import androidx.compose.ui.res.stringResource
 import com.occaecat.ztoeschedule.R
 import com.occaecat.ztoeschedule.presentation.ui.components.SettingsGroupItem
 import com.occaecat.ztoeschedule.presentation.ui.components.ShimmerItem
+import com.occaecat.ztoeschedule.presentation.ui.components.StepGutter
+import com.occaecat.ztoeschedule.presentation.ui.components.StepLeadingIcon
+import com.occaecat.ztoeschedule.presentation.ui.components.StepListHeader
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
+
+/**
+ * Shared layout for the REM / city / street steps: header, search, grouped list.
+ */
+@Composable
+private fun <T> SearchableSelectionPage(
+    title: String,
+    subtitle: String?,
+    searchHint: String,
+    items: List<T>,
+    isLoading: Boolean,
+    key: (T) -> Any,
+    label: (T) -> String,
+    icon: ImageVector,
+    onSelected: (T) -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    // The API can return the same entry twice; duplicate keys crash LazyColumn
+    val uniqueItems = remember(items) { items.distinctBy(key) }
+    val filteredList = remember(query, uniqueItems) {
+        if (query.isBlank()) uniqueItems else uniqueItems.filter { label(it).contains(query, ignoreCase = true) }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        StepListHeader(title = title, subtitle = subtitle)
+        SearchField(
+            query = query,
+            onQueryChange = { query = it },
+            placeholder = searchHint
+        )
+
+        when {
+            isLoading && items.isEmpty() -> ListSkeleton()
+            filteredList.isEmpty() && query.isNotBlank() -> EmptyListMessage(stringResource(R.string.house_not_found))
+            else -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = StepGutter),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                itemsIndexed(filteredList, key = { _, item -> key(item) }) { index, item ->
+                    SettingsGroupItem(
+                        index = index,
+                        totalCount = filteredList.size,
+                        headlineContent = { Text(label(item)) },
+                        leadingContent = { StepLeadingIcon(icon) },
+                        trailingContent = {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        onClick = { onSelected(item) },
+                        modifier = Modifier.animateItem()
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun RemSelectionPage(
     rems: List<Rem>,
     isLoading: Boolean,
-    onRemSelected: (Rem) -> Unit
+    onRemSelected: (Rem) -> Unit,
+    subtitle: String? = null
 ) {
-    var query by remember { mutableStateOf("") }
-    val filteredList = remember(query, rems) {
-        if (query.isBlank()) rems else rems.filter { it.name.contains(query, ignoreCase = true) }
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Spacer(modifier = Modifier.height(16.dp))
-        SearchField(
-            query = query,
-            onQueryChange = { query = it },
-            placeholder = stringResource(R.string.search_rem_hint)
-        )
-
-        if (isLoading && rems.isEmpty()) {
-            ListSkeleton()
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .animateContentSize(spring())
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                itemsIndexed(filteredList, key = { _, item -> item.id }) { index, rem ->
-                    SettingsGroupItem(
-                        index = index,
-                        totalCount = filteredList.size,
-                        headlineContent = { Text(rem.name) },
-                        leadingContent = { Icon(Icons.Default.Business, null) },
-                        onClick = { onRemSelected(rem) }
-                    )
-                }
-            }
-        }
-        
-        if (!isLoading && query.isEmpty()) {
-            Text(
-                "Оберіть ваш район зі списку або скористайтесь пошуком",
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    SearchableSelectionPage(
+        title = "Оберіть район",
+        subtitle = subtitle,
+        searchHint = stringResource(R.string.search_rem_hint),
+        items = rems,
+        isLoading = isLoading,
+        key = { it.id },
+        label = { it.name },
+        icon = Icons.Default.Business,
+        onSelected = onRemSelected
+    )
 }
 
 @Composable
 fun CitySelectionPage(
     cities: List<City>,
     isLoading: Boolean,
-    onCitySelected: (City) -> Unit
+    onCitySelected: (City) -> Unit,
+    subtitle: String? = null
 ) {
-    var query by remember { mutableStateOf("") }
-    val filteredList = remember(query, cities) {
-        if (query.isBlank()) cities else cities.filter { it.name.contains(query, ignoreCase = true) }
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Spacer(modifier = Modifier.height(16.dp))
-        SearchField(
-            query = query,
-            onQueryChange = { query = it },
-            placeholder = stringResource(R.string.search_city_hint)
-        )
-
-        if (isLoading && cities.isEmpty()) {
-            ListSkeleton()
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .animateContentSize(spring())
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                itemsIndexed(filteredList, key = { _, item -> item.id }) { index, city ->
-                    SettingsGroupItem(
-                        index = index,
-                        totalCount = filteredList.size,
-                        headlineContent = { Text(city.name) },
-                        leadingContent = { Icon(Icons.Default.LocationCity, null) },
-                        onClick = { onCitySelected(city) }
-                    )
-                }
-            }
-        }
-
-        if (!isLoading && query.isEmpty()) {
-            Text(
-                "Оберіть ваше місто або населений пункт",
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    SearchableSelectionPage(
+        title = "Оберіть населений пункт",
+        subtitle = subtitle,
+        searchHint = stringResource(R.string.search_city_hint),
+        items = cities,
+        isLoading = isLoading,
+        key = { it.id },
+        label = { it.name },
+        icon = Icons.Default.LocationCity,
+        onSelected = onCitySelected
+    )
 }
 
 @Composable
 fun StreetSelectionPage(
     streets: List<Street>,
     isLoading: Boolean,
-    onStreetSelected: (Street) -> Unit
+    onStreetSelected: (Street) -> Unit,
+    subtitle: String? = null
 ) {
-    var query by remember { mutableStateOf("") }
-    val filteredList = remember(query, streets) {
-        if (query.isBlank()) streets else streets.filter { it.name.contains(query, ignoreCase = true) }
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Spacer(modifier = Modifier.height(16.dp))
-        SearchField(
-            query = query,
-            onQueryChange = { query = it },
-            placeholder = stringResource(R.string.search_street_hint)
-        )
-
-        if (isLoading && streets.isEmpty()) {
-            ListSkeleton()
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .animateContentSize(spring())
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                itemsIndexed(filteredList, key = { _, item -> item.id }) { index, street ->
-                    SettingsGroupItem(
-                        index = index,
-                        totalCount = filteredList.size,
-                        headlineContent = { Text(street.name) },
-                        leadingContent = { Icon(Icons.Default.Signpost, null) },
-                        onClick = { onStreetSelected(street) }
-                    )
-                }
-            }
-        }
-
-        if (!isLoading && query.isEmpty()) {
-            Text(
-                "Почніть вводити назву вулиці для швидкого пошуку",
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    SearchableSelectionPage(
+        title = "Оберіть вулицю",
+        subtitle = subtitle,
+        searchHint = stringResource(R.string.search_street_hint),
+        items = streets,
+        isLoading = isLoading,
+        key = { it.id },
+        label = { it.name },
+        icon = Icons.Default.Signpost,
+        onSelected = onStreetSelected
+    )
 }
-
 
 @Composable
 fun HouseNumberSelectionPage(
@@ -207,10 +172,14 @@ fun HouseNumberSelectionPage(
     onSearchQueryChange: (String) -> Unit,
     onCategorySelected: (ConsumerCategory?) -> Unit = {},
     onClearSearch: () -> Unit,
-    onHouseSelected: (ParsedHouseNumber) -> Unit
+    onHouseSelected: (ParsedHouseNumber) -> Unit,
+    subtitle: String? = null
 ) {
+    // Several house numbers can share an address id (and repeat), so de-duplicate by the
+    // full key: a duplicate key in LazyColumn throws and crashed the add-address flow
+    val uniqueHouses = remember(houseNumbers) { houseNumbers.distinctBy { houseKey(it) } }
     Column(modifier = Modifier.fillMaxSize()) {
-        Spacer(modifier = Modifier.height(16.dp))
+        StepListHeader(title = "Оберіть будинок", subtitle = subtitle)
         SearchField(
             query = searchQuery,
             onQueryChange = onSearchQueryChange,
@@ -219,48 +188,39 @@ fun HouseNumberSelectionPage(
         
         CategoryFilterRow(
             selectedCategory = selectedCategory,
-            onCategorySelected = onCategorySelected
+            onCategorySelected = onCategorySelected,
+            modifier = Modifier.padding(top = 4.dp)
         )
 
-        if (isLoading && houseNumbers.isEmpty()) {
+        if (isLoading && uniqueHouses.isEmpty()) {
             ListSkeleton()
-        } else if (houseNumbers.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = if (searchQuery.isEmpty() && selectedCategory == null) stringResource(R.string.house_empty) else stringResource(R.string.house_not_found),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        } else if (uniqueHouses.isEmpty()) {
+            EmptyListMessage(
+                if (searchQuery.isEmpty() && selectedCategory == null) stringResource(R.string.house_empty) else stringResource(R.string.house_not_found)
+            )
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .animateContentSize(spring())
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 12.dp),
+                    .padding(horizontal = StepGutter),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                itemsIndexed(houseNumbers, key = { _, item -> "${item.originalAddressId}_${item.houseNumber}" }) { index, house ->
+                itemsIndexed(uniqueHouses, key = { _, item -> houseKey(item) }) { index, house ->
                     SettingsGroupItem(
                         index = index,
-                        totalCount = houseNumbers.size,
-                        headlineContent = { Text(house.houseNumber) },
-                        supportingContent = {
-                            @OptIn(ExperimentalLayoutApi::class)
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(top = 4.dp)
-                            ) {
-                                if (selectedCategory == null) {
-                                    ReadOnlyChip(text = house.category.label)
-                                }
-                                ReadOnlyChip(text = "Черга: ${house.cherga}.${house.pidcherga}")
-                            }
-                        },
-                        leadingContent = { Icon(Icons.Default.Home, null) },
-                        onClick = { onHouseSelected(house) }
+                        totalCount = uniqueHouses.size,
+                        headlineContent = { Text(house.houseNumber, fontWeight = FontWeight.SemiBold) },
+                        supportingContent = if (selectedCategory == null) {
+                            { Text(house.category.label) }
+                        } else null,
+                        leadingContent = { StepLeadingIcon(Icons.Default.Home) },
+                        trailingContent = if (house.cherga > 0) {
+                            { QueueBadge(cherga = house.cherga, pidcherga = house.pidcherga) }
+                        } else null,
+                        onClick = { onHouseSelected(house) },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -268,25 +228,56 @@ fun HouseNumberSelectionPage(
     }
 }
 
+private fun houseKey(house: ParsedHouseNumber): String =
+    "${house.originalAddressId}_${house.houseNumber}_${house.cherga}_${house.pidcherga}_${house.category}"
+
+/** Queue number shown at the end of a house row. */
 @Composable
-private fun ReadOnlyChip(text: String) {
+private fun QueueBadge(cherga: Int, pidcherga: Int) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        shape = CircleShape
     ) {
         Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            text = "$cherga.$pidcherga",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         )
+    }
+}
+
+@Composable
+private fun EmptyListMessage(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(StepGutter * 2),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Default.SearchOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
     }
 }
 
 @Composable
 private fun ListSkeleton() {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = StepGutter, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         repeat(8) { index ->
@@ -294,7 +285,7 @@ private fun ListSkeleton() {
                 index = index,
                 totalCount = 8,
                 headlineContent = { ShimmerItem(height = 16.dp, modifier = Modifier.width(120.dp)) },
-                leadingContent = { ShimmerItem(height = 24.dp, modifier = Modifier.width(24.dp), shape = CircleShape) },
+                leadingContent = { ShimmerItem(height = 40.dp, modifier = Modifier.width(40.dp), shape = CircleShape) },
                 onClick = {} // No-op
             )
         }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">#0E1630</color>
+    <color name="splash_letter">#FFFFFF</color>
+    <color name="splash_bolt">#FFC929</color>
+    <color name="splash_ring_on">#FFC929</color>
+    <color name="splash_ring_off">#2EFFFFFF</color>
+</resources>

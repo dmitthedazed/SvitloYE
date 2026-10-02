@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AppLogo layer: the Є (tinted at runtime). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="400"
+    android:viewportHeight="400">
+    <group
+        android:translateX="-56"
+        android:translateY="-56">
+        <path
+            android:pathData="M320.24,184.66A96,96 0 1 0 320.24,327.34"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="36" />
+    </group>
+</vector>

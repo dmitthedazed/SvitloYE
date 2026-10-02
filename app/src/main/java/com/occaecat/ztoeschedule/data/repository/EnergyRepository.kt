@@ -10,9 +10,9 @@ import com.occaecat.ztoeschedule.data.model.Street
 import com.occaecat.ztoeschedule.data.model.ColorTheme
 import com.occaecat.ztoeschedule.data.model.DisplayMode
 import com.occaecat.ztoeschedule.data.model.FontScale
-import com.occaecat.ztoeschedule.data.model.SmartNotificationSettings
 import com.occaecat.ztoeschedule.data.network.GpvApiService
 import com.occaecat.ztoeschedule.domain.ScheduleDomainLogic
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.supervisorScope
@@ -23,7 +23,6 @@ import com.occaecat.ztoeschedule.data.local.entity.ScheduleCacheEntity
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 
 /**
  * Repository for managing energy outage data
@@ -45,10 +44,12 @@ class EnergyRepository(
     /**
      * Check if address already exists based on addressId (unique API identifier)
      */
-    suspend fun isAddressAlreadyAdded(addressId: String): Boolean {
-        return addressStorage.getAddresses().any { 
-            it.addressId == addressId 
-        }
+    /**
+     * One API address record covers several houses ("1, 3, 5А"), so a saved address is
+     * the record plus the chosen house name.
+     */
+    suspend fun isAddressAlreadyAdded(addressId: String, addressName: String): Boolean {
+        return addressStorage.getAddresses().any { it.isSameHouse(addressId, addressName) }
     }
 
     suspend fun saveNewAddress(address: com.occaecat.ztoeschedule.data.model.SavedAddress) {
@@ -196,6 +197,14 @@ class EnergyRepository(
         pidcherga: Int
     ): Result<ScheduleWithMessages> = try {
         // Check if this is a demo/test location
+        if (com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.isPreviewLocation(cherga, pidcherga)) {
+            return Result.success(
+                ScheduleWithMessages(
+                    com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generatePreviewSchedule(),
+                    com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generatePreviewMessages()
+                )
+            )
+        }
         if (com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.isDemoLocation(cherga, pidcherga)) {
             val mockSchedules = com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generateMockSchedule()
             val mockMessages = listOf(
@@ -214,48 +223,48 @@ class EnergyRepository(
             val scheduleResponse = try { scheduleDeferred.await() } catch (e: Exception) { null }
             val messagesResponse = try { messagesDeferred.await() } catch (e: Exception) { null }
 
-            val schedules = scheduleResponse?.takeIf { it.isSuccessful }?.body()
+            val freshSchedules = scheduleResponse?.takeIf { it.isSuccessful }?.body()
             val messages = messagesResponse?.takeIf { it.isSuccessful }?.body()
 
-            val scheduleHeader = scheduleResponse?.headers()?.get("Last-Modified-Shedules-Date")
-            val messagesHeader = messagesResponse?.headers()?.get("Last-Modified-Shedules-Date")
-            val serverUpdatedMs = parseServerLastModified(scheduleHeader)
-                ?: parseServerLastModified(messagesHeader)
+            // The header dates the schedule, so only trust it when the schedule itself came through
+            val serverUpdatedMs = scheduleResponse?.takeIf { freshSchedules != null }
+                ?.headers()?.get("Last-Modified-Shedules-Date")
+                ?.let(::parseServerLastModified)
+
+            val cached = scheduleDao.getScheduleOnce(cherga, pidcherga)
+            val cachedSchedules = cached?.let { parseSchedules(it.scheduleJson) }.orEmpty()
+            val cachedMessages = cached?.let { parseMessages(it.messagesJson) }.orEmpty()
+
+            // An empty answer next to a non-empty cache is almost always an API hiccup:
+            // dropping the schedule would also silently drop every planned alert
+            val schedules = freshSchedules?.takeUnless { it.isEmpty() && cachedSchedules.isNotEmpty() }
 
             if (schedules == null && messages == null) {
-                // Both failed - load from cache
+                // Nothing usable from the network - load from cache
                 loadFromCache(cherga, pidcherga)
             } else {
-                // At least one succeeded - merge with cached data for partial fails
-                val cached = scheduleDao.getScheduleOnce(cherga, pidcherga)
-                val cachedData = if (cached != null) {
-                    val typeS = object : TypeToken<List<Schedule>>() {}.type
-                    val typeM = object : TypeToken<List<ScheduleMessagePart>>() {}.type
-                    ScheduleWithMessages(
-                        gson.fromJson(cached.scheduleJson, typeS) ?: emptyList(),
-                        gson.fromJson(cached.messagesJson, typeM) ?: emptyList()
-                    )
-                } else null
-                
-                // Use fresh data where available, fall back to cached
-                val finalSchedules = schedules ?: cachedData?.schedules ?: emptyList()
-                val finalMessages = messages ?: cachedData?.messages ?: emptyList()
-                
-                val result = ScheduleWithMessages(finalSchedules, finalMessages)
-                
-                // Only update cache with non-empty data
-                val entity = ScheduleCacheEntity(
-                    cherga = cherga,
-                    pidcherga = pidcherga,
-                    scheduleJson = if (schedules != null) gson.toJson(schedules) else cached?.scheduleJson ?: "[]",
-                    messagesJson = if (messages != null) gson.toJson(messages) else cached?.messagesJson ?: "[]",
-                    lastUpdated = serverUpdatedMs ?: cached?.lastUpdated ?: System.currentTimeMillis()
+                val result = ScheduleWithMessages(
+                    schedules = schedules ?: cachedSchedules,
+                    messages = messages ?: cachedMessages,
+                    fromCache = schedules == null
                 )
-                scheduleDao.insertSchedule(entity)
+                scheduleDao.insertSchedule(
+                    ScheduleCacheEntity(
+                        cherga = cherga,
+                        pidcherga = pidcherga,
+                        scheduleJson = if (schedules != null) gson.toJson(schedules) else cached?.scheduleJson ?: "[]",
+                        messagesJson = if (messages != null) gson.toJson(messages) else cached?.messagesJson ?: "[]",
+                        // A stale schedule keeps its old date even if the messages are fresh
+                        lastUpdated = if (schedules != null) serverUpdatedMs ?: System.currentTimeMillis()
+                        else cached?.lastUpdated ?: 0L
+                    )
+                )
                 serverUpdatedMs?.let { preferencesManager.saveLastScheduleServerUpdatedMs(it) }
                 Result.success(result)
             }
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         loadFromCache(cherga, pidcherga)
     }
@@ -266,6 +275,14 @@ class EnergyRepository(
      */
     suspend fun getCachedScheduleWithMessages(cherga: Int, pidcherga: Int): Result<ScheduleWithMessages> {
         // Check if this is a demo/test location
+        if (com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.isPreviewLocation(cherga, pidcherga)) {
+            return Result.success(
+                ScheduleWithMessages(
+                    com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generatePreviewSchedule(),
+                    com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generatePreviewMessages()
+                )
+            )
+        }
         if (com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.isDemoLocation(cherga, pidcherga)) {
             val mockSchedules = com.occaecat.ztoeschedule.domain.debug.MockScheduleProvider.generateMockSchedule()
             val mockMessages = listOf(
@@ -283,15 +300,19 @@ class EnergyRepository(
     private suspend fun loadFromCache(cherga: Int, pidcherga: Int): Result<ScheduleWithMessages> {
         val cached = scheduleDao.getScheduleOnce(cherga, pidcherga)
         return if (cached != null) {
-            val typeS = object : TypeToken<List<Schedule>>() {}.type
-            val typeM = object : TypeToken<List<ScheduleMessagePart>>() {}.type
-            val schedules: List<Schedule> = gson.fromJson(cached.scheduleJson, typeS)
-            val messages: List<ScheduleMessagePart> = gson.fromJson(cached.messagesJson, typeM)
-            Result.success(ScheduleWithMessages(schedules, messages))
+            Result.success(
+                ScheduleWithMessages(parseSchedules(cached.scheduleJson), parseMessages(cached.messagesJson), fromCache = true)
+            )
         } else {
             Result.failure(Exception("Не вдалося завантажити дані (офлайн)"))
         }
     }
+
+    private fun parseSchedules(json: String): List<Schedule> =
+        runCatching { gson.fromJson<List<Schedule>>(json, object : TypeToken<List<Schedule>>() {}.type) }.getOrNull().orEmpty()
+
+    private fun parseMessages(json: String): List<ScheduleMessagePart> =
+        runCatching { gson.fromJson<List<ScheduleMessagePart>>(json, object : TypeToken<List<ScheduleMessagePart>>() {}.type) }.getOrNull().orEmpty()
 
     suspend fun getCacheLastUpdated(cherga: Int, pidcherga: Int): Long? {
         return scheduleDao.getScheduleOnce(cherga, pidcherga)?.lastUpdated
@@ -300,25 +321,12 @@ class EnergyRepository(
     suspend fun getMessages(): Result<List<ScheduleMessagePart>> = try {
         val response = apiService.getMessages()
         if (response.isSuccessful) {
-            val header = response.headers().get("Last-Modified-Shedules-Date")
-            parseServerLastModified(header)?.let { preferencesManager.saveLastScheduleServerUpdatedMs(it) }
             Result.success(response.body() ?: emptyList())
         } else {
             Result.failure(Exception("HTTP error: ${response.code()}"))
         }
-    } catch (e: Exception) {
-        Result.failure(e)
-    }
-
-    suspend fun getSchedule(cherga: Int, pidcherga: Int): Result<List<Schedule>> = try {
-        val response = apiService.getSchedule(cherga, pidcherga)
-        if (response.isSuccessful) {
-            val header = response.headers().get("Last-Modified-Shedules-Date")
-            parseServerLastModified(header)?.let { preferencesManager.saveLastScheduleServerUpdatedMs(it) }
-            Result.success(response.body() ?: emptyList())
-        } else {
-            Result.failure(Exception("HTTP error: ${response.code()}"))
-        }
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(e)
     }
@@ -337,8 +345,8 @@ class EnergyRepository(
         Result.failure(e)
     }
 
-    fun getCurrentStatus(schedules: List<Schedule>): Schedule? {
-        return ScheduleDomainLogic.getCurrentStatus(schedules)
+    fun getCurrentStatus(schedules: List<Schedule>, nowMs: Long): Schedule? {
+        return ScheduleDomainLogic.getCurrentStatus(schedules, nowMs)
     }
 
     fun getLastScheduleServerUpdatedFlow(): Flow<Long?> = preferencesManager.lastScheduleServerUpdatedFlow
@@ -386,36 +394,37 @@ class EnergyRepository(
     // ========== Theme Settings ==========
     fun getDisplayModeFlow(): Flow<DisplayMode> = preferencesManager.displayModeFlow
     fun getColorThemeFlow(): Flow<ColorTheme> = preferencesManager.colorThemeFlow
-    fun getCornerRadiusFlow(): Flow<Int> = preferencesManager.cornerRadiusFlow
     fun getDynamicColorsFlow(): Flow<Boolean> = preferencesManager.dynamicColorsFlow
     fun getIsAmoledFlow(): Flow<Boolean> = preferencesManager.isAmoledFlow
-    fun getSmartNotificationSettingsFlow(): Flow<SmartNotificationSettings> = preferencesManager.smartNotificationSettingsFlow
     suspend fun setDisplayMode(mode: DisplayMode) = preferencesManager.setDisplayMode(mode)
     suspend fun setColorTheme(theme: ColorTheme) = preferencesManager.setColorTheme(theme)
-    suspend fun setCornerRadius(radius: Int) = preferencesManager.setCornerRadius(radius)
     suspend fun setDynamicColors(enabled: Boolean) = preferencesManager.setDynamicColors(enabled)
     suspend fun setIsAmoled(enabled: Boolean) = preferencesManager.setIsAmoled(enabled)
-    suspend fun saveSmartNotificationSettings(settings: SmartNotificationSettings) = preferencesManager.saveSmartNotificationSettings(settings)
 
     // ========== Notification Settings ==========
     fun getNotificationsEnabledFlow(): Flow<Boolean> = preferencesManager.notificationsEnabledFlow
-    fun getNotificationAdvanceMinutesFlow(): Flow<Int> = preferencesManager.notificationAdvanceMinutesFlow
     fun getStatusNotificationEnabledFlow(): Flow<Boolean> = preferencesManager.statusNotificationEnabledFlow
-    fun getNotificationModeFlow(): Flow<Int> = preferencesManager.notificationModeFlow
 
     suspend fun setNotificationsEnabled(enabled: Boolean) = preferencesManager.setNotificationsEnabled(enabled)
-    suspend fun setNotificationAdvanceMinutes(minutes: Int) = preferencesManager.setNotificationAdvanceMinutes(minutes)
     suspend fun setStatusNotificationEnabled(enabled: Boolean) = preferencesManager.setStatusNotificationEnabled(enabled)
-    suspend fun setNotificationMode(mode: Int) = preferencesManager.setNotificationMode(mode)
 }
 
-data class ScheduleWithMessages(val schedules: List<Schedule>, val messages: List<ScheduleMessagePart>)
+data class ScheduleWithMessages(
+    val schedules: List<Schedule>,
+    val messages: List<ScheduleMessagePart>,
+    /** The schedule is not fresh from the server (offline, API error or a suspicious empty answer). */
+    val fromCache: Boolean = false
+)
+
+fun com.occaecat.ztoeschedule.data.model.SavedAddress.isSameHouse(addressId: String, addressName: String): Boolean =
+    this.addressId == addressId && this.addressName.trim().equals(addressName.trim(), ignoreCase = true)
 
 private fun parseServerLastModified(value: String?): Long? {
     if (value.isNullOrBlank()) return null
     return try {
         val formatter = SimpleDateFormat("yyyy.MM.dd HH:mm:ss", Locale.US).apply {
-            timeZone = TimeZone.getDefault()
+            // The server writes this header in Kyiv time
+            timeZone = com.occaecat.ztoeschedule.domain.time.ScheduleZone.timeZone
         }
         formatter.parse(value)?.time
     } catch (_: ParseException) {

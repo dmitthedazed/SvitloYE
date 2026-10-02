@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget-picker preview for Android 12–14; Android 15+ gets a generated one (PowerStatusWidget.providePreview). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_preview_card"
+    android:backgroundTint="@color/widget_preview_surface"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:ignore="HardcodedText">
+
+    <FrameLayout
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/widget_preview_pill"
+        android:backgroundTint="@color/widget_preview_primary_container">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_bolt"
+            android:tint="@color/widget_preview_on_primary_container" />
+    </FrameLayout>
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/widget_state_on"
+        android:textColor="@color/widget_preview_on_surface"
+        android:textSize="22sp"
+        android:fontFamily="sans-serif-medium" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="Відключення о 17:00"
+        android:textColor="@color/widget_preview_on_surface_variant"
+        android:textSize="14sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:maxLines="1"
+        android:text="Дім · Черга 3.1"
+        android:textColor="@color/widget_preview_on_surface_variant"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-medium" />
+</LinearLayout>
