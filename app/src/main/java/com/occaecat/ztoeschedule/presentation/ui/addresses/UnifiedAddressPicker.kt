@@ -1,5 +1,6 @@
 package com.occaecat.ztoeschedule.presentation.ui.addresses
 
+import com.occaecat.ztoeschedule.presentation.ui.components.predictiveBack
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -347,9 +348,7 @@ private fun UnifiedAddressPicker(
     }
 
     // Handle system back button
-    BackHandler(enabled = step != 0) {
-        navigateBack()
-    }
+    val backModifier = Modifier.predictiveBack(step != 0) { navigateBack() }
 
     LaunchedEffect(selectedRem) { if (selectedRem != null && cityList.isEmpty()) onLoadCity(selectedRem!!.id) }
     LaunchedEffect(selectedCity) { if (selectedCity != null && streetList.isEmpty()) onLoadStreet(selectedCity!!.id) }
@@ -357,7 +356,7 @@ private fun UnifiedAddressPicker(
     LaunchedEffect(Unit) { if (remList.isEmpty()) onLoadRem() }
 
     Scaffold(
-        modifier = modifier
+        modifier = modifier.then(backModifier)
             .fillMaxSize(),
         // A sheet already handles the system bars; applying them again left a gap at the top
         contentWindowInsets = if (inSheet) WindowInsets(0) else WindowInsets.safeDrawing,

@@ -56,21 +56,22 @@ fun SettingsScreenRoot(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val backStack = viewModel.backStack
 
-    BackHandler(enabled = backStack.size > 1) {
-        viewModel.onAction(SettingsAction.GoBack)
-    }
-
-    SettingsScreen(
-        state = state,
-        backStack = backStack,
-        onAction = { action ->
-            if (action is SettingsAction.GoBack && backStack.size <= 1) {
-                onBackClick()
-            } else {
-                viewModel.onAction(action)
+    com.occaecat.ztoeschedule.presentation.ui.components.PredictiveBackContainer(
+        enabled = backStack.size > 1,
+        onBack = { viewModel.onAction(SettingsAction.GoBack) }
+    ) {
+        SettingsScreen(
+            state = state,
+            backStack = backStack,
+            onAction = { action ->
+                if (action is SettingsAction.GoBack && backStack.size <= 1) {
+                    onBackClick()
+                } else {
+                    viewModel.onAction(action)
+                }
             }
-        }
-    )
+        )
+    }
 }
 
 private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)

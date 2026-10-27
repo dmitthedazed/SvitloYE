@@ -194,7 +194,7 @@ private fun DraggableAddressList(addrs: List<SavedAddress>, statuses: Map<String
                             }
                             .pointerInput(Unit) { awaitPointerEventScope { while (true) { val e = awaitPointerEvent(); if (e.type == PointerEventType.Release && e.buttons.isSecondaryPressed) showMenu = true } } }
                     )
-                    DropdownMenu(showMenu, { showMenu = false }) {
+                    DropdownMenu(showMenu, { showMenu = false }, shape = MaterialTheme.shapes.large) {
                         DropdownMenuItem(text = { Text("Зробити головною") }, onClick = { showMenu = false; if (idx != 0) { val nl = list.toMutableList(); val i = nl.removeAt(idx); nl.add(0, i); onUpdate(nl) } }, leadingIcon = { Icon(Icons.Default.Star, null) })
                         DropdownMenuItem(text = { Text("Видалити") }, onClick = { showMenu = false; dId = addr.id }, leadingIcon = { Icon(Icons.Default.Delete, null) })
                     }

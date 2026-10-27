@@ -12,6 +12,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import com.occaecat.ztoeschedule.presentation.ui.components.predictiveBack
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -81,7 +82,7 @@ fun OnboardingScreen(
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
 
     // Back handler
-    BackHandler(enabled = currentStep != OnboardingStep.WELCOME || pickerStep > 0) {
+    val backModifier = Modifier.predictiveBack(enabled = currentStep != OnboardingStep.WELCOME && pickerStep == 0) {
         when {
             currentStep == OnboardingStep.PERMISSIONS -> {
                 currentStep = OnboardingStep.ADD_ADDRESS
@@ -118,6 +119,7 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .then(backModifier)
             .windowInsetsPadding(
                 WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
             )

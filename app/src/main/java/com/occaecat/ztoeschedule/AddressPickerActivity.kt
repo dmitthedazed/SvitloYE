@@ -49,12 +49,6 @@ class AddressPickerActivity : ComponentActivity() {
             }
 
             AppTheme(preferencesManager) {
-                // Handle back press gracefully
-                BackHandler {
-                    setResult(Activity.RESULT_CANCELED)
-                    finish()
-                }
-                
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Scaffold(
                         topBar = {}

@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.SvitloYeZhytomyr" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Main app theme customization -->
+        <item name="android:windowAnimationStyle">@style/Animation.App.SharedAxis</item>
+    </style>
+
+    <!-- Material shared X axis between activities -->
+    <style name="Animation.App.SharedAxis" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/m3_shared_axis_enter_forward</item>
+        <item name="android:activityOpenExitAnimation">@anim/m3_shared_axis_exit_forward</item>
+        <item name="android:activityCloseEnterAnimation">@anim/m3_shared_axis_enter_back</item>
+        <item name="android:activityCloseExitAnimation">@anim/m3_shared_axis_exit_back</item>
     </style>
 
     <!-- Splash Screen Theme -->

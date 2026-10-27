@@ -226,7 +226,7 @@ private fun TodayCard(stats: DailyStats, hasStats: Boolean, addressLabel: String
 
         val knownMinutes = stats.totalOnMinutes + stats.totalOutageMinutes + stats.totalProbableMinutes
         val withPower = if (knownMinutes > 0) (stats.totalOnMinutes.toFloat() / knownMinutes).coerceIn(0f, 1f) else 0f
-        val strokeWidth = with(LocalDensity.current) { 10.dp.toPx() }
+        val strokeWidth = with(LocalDensity.current) { 5.dp.toPx() }
         val stroke = remember(strokeWidth) { Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round) }
 
         Row(

@@ -6,6 +6,7 @@ import android.os.Parcelable
 import android.provider.CalendarContract
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -698,10 +700,9 @@ private fun AddressInfoCard(
         }
     }
     val primaryLine = listOf(streetName, addressName).filter { it.isNotBlank() }.joinToString(", ").ifBlank { cityName }
-    val secondaryLine = listOfNotNull(
-        cityName.takeIf { it.isNotBlank() && primaryLine != cityName },
-        lastUpdateTime.takeIf { it.isNotBlank() }?.let { stringResource(R.string.home_last_updated, it) }
-    ).joinToString(" · ")
+    val cityLine = cityName.takeIf { it.isNotBlank() && primaryLine != cityName }.orEmpty()
+    val updatedLine = lastUpdateTime.takeIf { it.isNotBlank() }?.let { stringResource(R.string.home_last_updated, it) }.orEmpty()
+    var addressHidden by rememberSaveable { mutableStateOf(false) }
     // Demo presets use placeholder queues (9998/9999) that mean nothing to users
     val showQueue = cherga in 1..99
 
@@ -718,17 +719,34 @@ private fun AddressInfoCard(
         ) {
             com.occaecat.ztoeschedule.presentation.ui.components.AddressIconBadge(iconName = iconName, isPrimary = isPrimary, size = 48.dp)
             Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = primaryLine,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-                if (secondaryLine.isNotBlank()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { addressHidden = !addressHidden },
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                AnimatedContent(
+                    targetState = addressHidden,
+                    transitionSpec = {
+                        (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                            scaleIn(initialScale = 0.92f, transformOrigin = TransformOrigin(0f, 0.5f), animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)))
+                            .togetherWith(fadeOut(tween(150)) + scaleOut(targetScale = 1.05f, transformOrigin = TransformOrigin(0f, 0.5f), animationSpec = tween(150)))
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "addressHide"
+                ) { hidden ->
                     Text(
-                        text = secondaryLine,
+                        text = if (hidden) "••••••••" else primaryLine,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+                listOf(cityLine, updatedLine).filter { it.isNotBlank() }.forEach { line ->
+                    Text(
+                        text = line,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -760,7 +778,8 @@ private fun AddressInfoCard(
                 
                 DropdownMenu(
                     expanded = showShareMenu,
-                    onDismissRequest = { showShareMenu = false }
+                    onDismissRequest = { showShareMenu = false },
+                    shape = MaterialTheme.shapes.large
                 ) {
                     DropdownMenuItem(
                         text = { Text("Поділитися графіком (фото)") },
@@ -768,7 +787,7 @@ private fun AddressInfoCard(
                         onClick = {
                             showShareMenu = false
                             scope.launch {
-                                val uri = ScheduleImageGenerator.generateAndShare(context, fullAddress, "$cherga.$pidcherga", groupedSchedule)
+                                val uri = ScheduleImageGenerator.generateAndShare(context, listOf(streetName, addressName).filter { it.isNotBlank() }.joinToString(", "), cityName, "$cherga.$pidcherga", lastUpdateTime, groupedSchedule)
                                 if (uri != null) {
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "image/png"
@@ -873,7 +892,10 @@ private fun QrCodeDialog(
 ) {
     val density = LocalDensity.current
     val sizePx = with(density) { 220.dp.roundToPx() }
-    val qrBitmap = remember(content, sizePx) { QrCodeGenerator.generate(content, sizePx) }
+    val fg = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, Color.Black, 0.5f).toArgb()
+    val qrBitmap = remember(content, sizePx, fg) {
+        QrCodeGenerator.generateStyled(content, sizePx, fg, android.graphics.Color.WHITE)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -885,14 +907,14 @@ private fun QrCodeDialog(
             ) {
                 if (qrBitmap != null) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = MaterialTheme.shapes.medium,
+                        color = Color.White,
+                        shape = RoundedCornerShape(28.dp),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Image(
                             bitmap = qrBitmap.asImageBitmap(),
                             contentDescription = stringResource(R.string.qr_share_content_desc),
-                            modifier = Modifier.padding(12.dp).size(220.dp)
+                            modifier = Modifier.padding(8.dp).size(220.dp)
                         )
                     }
                 } else {
