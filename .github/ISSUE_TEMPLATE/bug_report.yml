@@ -1,0 +1,33 @@
+name: Проблема
+description: Щось працює не так або графік не збігається
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Що сталося
+      description: Що ви бачите і що мало б бути. Скриншот дуже допоможе.
+    validations:
+      required: true
+
+  - type: input
+    id: address
+    attributes:
+      label: Населений пункт і черга
+      description: Якщо проблема з графіком. Повну адресу писати не потрібно.
+      placeholder: Житомир, черга 3.1
+
+  - type: input
+    id: phone
+    attributes:
+      label: Телефон і версія Android
+      placeholder: Samsung A54, Android 14
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Версія застосунку
+      description: Внизу екрана налаштувань
+      placeholder: "2.1"

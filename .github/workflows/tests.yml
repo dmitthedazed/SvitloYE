@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The real google-services.json is not in the repo; a placeholder is enough to build and test.
+      - name: Placeholder google-services.json
+        run: |
+          cat > app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "svitloye-ci",
+              "storage_bucket": "svitloye-ci.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                "android_client_info": { "package_name": "com.occaecat.svitloye" }
+              },
+              "api_key": [{ "current_key": "AIzaSyCI000000000000000000000000000000" }]
+            }],
+            "configuration_version": "1"
+          }
+          EOF
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: app/build/reports/tests/
