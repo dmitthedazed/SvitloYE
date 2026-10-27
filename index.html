@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>СвітлоЄ? — графік відключень світла Житомирщини</title>
+<title>СвітлоЄ? Графік відключень світла Житомирщини</title>
 <meta name="description" content="Неофіційний Android-застосунок для графіків відключень АТ «Житомиробленерго»: статус світла, сповіщення, віджети, Android Auto.">
-<meta property="og:title" content="СвітлоЄ? 2.0">
-<meta property="og:description" content="Чи є світло вдома — одним поглядом. Графіки відключень Житомирщини.">
+<meta property="og:title" content="СвітлоЄ? 2.1">
+<meta property="og:description" content="Чи є світло вдома і коли його вимкнуть. Графіки відключень Житомирщини.">
 <meta property="og:image" content="https://raw.githubusercontent.com/dmitthedazed/SvitloYE/master/docs/banner.png">
 <meta name="theme-color" content="#0D1530">
 <link rel="icon" href="img/svitloye_logo.svg" type="image/svg+xml">
@@ -78,7 +78,9 @@
 
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 26px; }
-  .card .ic { font-size: 26px; }
+  .card .ic { width: 44px; height: 44px; border-radius: 14px; background: var(--chip); color: var(--blue); display: grid; place-items: center; }
+  .card .ic svg { width: 22px; height: 22px; }
+  .btn svg { width: 18px; height: 18px; }
   .card h3 { margin: 12px 0 6px; font-size: 18px; }
   .card p { margin: 0; color: var(--muted); font-size: 15px; }
 
@@ -140,11 +142,11 @@
 
     <header class="hero">
       <div>
-        <span class="tag"><i></i>Версія 2.0 вже доступна</span>
-        <h1>Чи є світло?<br><span>Знаєте першими.</span></h1>
-        <p class="lead">Графіки відключень АТ «Житомиробленерго» для вашої адреси — з таймером до наступної зміни, сповіщеннями та віджетами.</p>
+        <span class="tag"><i></i>Вийшла версія 2.1</span>
+        <h1>Чи є світло?<br><span>Видно одразу.</span></h1>
+        <p class="lead">Графіки відключень АТ «Житомиробленерго» для вашої адреси: скільки до наступної зміни, сповіщення і віджети.</p>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/dmitthedazed/SvitloYE/releases/latest">⬇ Завантажити APK</a>
+          <a class="btn btn-primary" href="https://github.com/dmitthedazed/SvitloYE/releases/latest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Завантажити APK</a>
           <a class="btn btn-ghost" href="https://github.com/dmitthedazed/SvitloYE">Код на GitHub</a>
         </div>
         <div class="meta"><span>Android 8.0+</span><span>Без реклами</span><span>Material You</span><span>Відкритий код</span></div>
@@ -158,12 +160,12 @@
 
   <section id="features">
     <div class="wrap">
-      <h2>Все про світло — на одному екрані</h2>
-      <p class="sub">Без зайвих кроків: відкрили застосунок і одразу бачите стан для своєї черги.</p>
+      <h2>Головне на одному екрані</h2>
+      <p class="sub">Відкрили застосунок і бачите стан для своєї черги.</p>
       <div class="shots">
         <div class="shot"><img src="img/home.png" alt="Головна" loading="lazy"><h3>Статус зараз</h3><p>«Світло є» чи «немає», час до зміни та підсумок дня.</p></div>
         <div class="shot"><img src="img/bell.png" alt="Повідомлення" loading="lazy"><h3>Офіційні новини</h3><p>Оголошення обленерго з посиланням на джерело.</p></div>
-        <div class="shot"><img src="img/addr.png" alt="Мої адреси" loading="lazy"><h3>Кілька адрес</h3><p>Дім, робота, батьки — пошук, геолокація або QR.</p></div>
+        <div class="shot"><img src="img/addr.png" alt="Мої адреси" loading="lazy"><h3>Кілька адрес</h3><p>Дім, робота, батьки. Пошук, геолокація або QR.</p></div>
         <div class="shot"><img src="img/more.png" alt="Додатково" loading="lazy"><h3>Статистика</h3><p>Скільки годин зі світлом і без нього сьогодні.</p></div>
       </div>
     </div>
@@ -171,15 +173,15 @@
 
   <section>
     <div class="wrap">
-      <h2>І навіть не треба відкривати</h2>
-      <p class="sub">СвітлоЄ? працює там, де вам зручно.</p>
+      <h2>Без відкриття застосунку</h2>
+      <p class="sub">Статус видно у шторці, на робочому столі й в авто.</p>
       <div class="grid">
-        <div class="card"><div class="ic">🔔</div><h3>Розумні сповіщення</h3><p>Попередження перед вимкненням і ввімкненням, зміни графіка, статус у шторці.</p></div>
-        <div class="card"><div class="ic">🧩</div><h3>Віджети</h3><p>Компактний статус, картка стану і детальний графік на робочому столі.</p></div>
-        <div class="card"><div class="ic">⚡</div><h3>Швидка плитка</h3><p>Статус світла одним свайпом у шторці налаштувань.</p></div>
-        <div class="card"><div class="ic">🚗</div><h3>Android Auto</h3><p>Графік на екрані автомобіля.</p></div>
-        <div class="card"><div class="ic">🎨</div><h3>Material You</h3><p>Кольори з ваших шпалер, світла й темна теми.</p></div>
-        <div class="card"><div class="ic">🗺️</div><h3>Вся область</h3><p>Житомир, Бердичів, Коростень, Звягель та всі населені пункти ZTOE.</p></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div><h3>Розумні сповіщення</h3><p>Попередження перед вимкненням і ввімкненням, зміни графіка, статус у шторці.</p></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg></div><h3>Віджети</h3><p>Компактний статус, картка стану і детальний графік на робочому столі.</p></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><h3>Швидка плитка</h3><p>Статус світла одним свайпом у шторці налаштувань.</p></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg></div><h3>Android Auto</h3><p>Графік на екрані автомобіля.</p></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.12a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2z"/></svg></div><h3>Material You</h3><p>Кольори з ваших шпалер, світла й темна теми.</p></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.1 5.55a2 2 0 0 0 1.8 0l3.66-1.83A1 1 0 0 1 21 4.62v12.76a1 1 0 0 1-.55.9l-4.56 2.27a2 2 0 0 1-1.78 0l-4.22-2.1a2 2 0 0 0-1.78 0l-3.66 1.83A1 1 0 0 1 3 19.38V6.62a1 1 0 0 1 .55-.9l4.56-2.27a2 2 0 0 1 1.78 0z"/><path d="M15 5.76v15"/><path d="M9 3.24v15"/></svg></div><h3>Вся область</h3><p>Житомир, Бердичів, Коростень, Звягель та всі населені пункти, які обслуговує Житомиробленерго.</p></div>
       </div>
     </div>
   </section>
@@ -187,28 +189,27 @@
   <section id="new">
     <div class="wrap news">
       <div>
-        <h2>Що нового у 2.0</h2>
-        <p class="sub">Найбільше оновлення з моменту запуску: застосунок переписано майже повністю.</p>
+        <h2>Що нового у 2.1</h2>
+        <p class="sub">Красивіший графік, яким можна поділитися, і плавніша навігація.</p>
       </div>
       <ul>
-        <li>Нова система сповіщень: точні будильники та детектор змін графіка</li>
-        <li>Нові віджети на Jetpack Glance</li>
-        <li>Інтерфейс Material 3 Expressive і новий логотип</li>
-        <li>Анімований splash-екран та оновлений онбординг</li>
-        <li>Коректний київський час незалежно від налаштувань телефону</li>
+        <li>Новий вигляд картинки з графіком: картки днів, шкала відключень і логотип</li>
+        <li>Стильніші QR-коди для адрес</li>
+        <li>Жест «назад» з передпереглядом і плавні переходи між екранами</li>
+        <li>Адресу на головній можна сховати дотиком, щоб зробити скриншот без неї</li>
+        <li>Оновлені іконка застосунку і splash-екран</li>
       </ul>
     </div>
   </section>
 
   <div class="wrap">
     <div class="final">
-      <h2>Встановіть СвітлоЄ? 2.0</h2>
+      <h2>Встановіть СвітлоЄ? 2.1</h2>
       <p>Безкоштовно, без реклами, з відкритим кодом. Потрібен Android 8.0 або новіший.</p>
-      <a class="btn btn-primary" href="https://github.com/dmitthedazed/SvitloYE/releases/latest">⬇ Завантажити APK</a>
+      <a class="btn btn-primary" href="https://github.com/dmitthedazed/SvitloYE/releases/latest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Завантажити APK</a>
     </div>
     <footer>
-      Неофіційний застосунок. Дані з відкритих джерел АТ «Житомиробленерго» — у разі розбіжностей орієнтуйтеся на <a href="https://www.ztoe.com.ua">ztoe.com.ua</a>.<br>
-      Зроблено з турботою про енергонезалежність 🇺🇦
+      Неофіційний застосунок. Дані з відкритих джерел АТ «Житомиробленерго». Якщо щось не збігається, орієнтуйтеся на <a href="https://www.ztoe.com.ua">ztoe.com.ua</a>.
     </footer>
   </div>
 </div>
